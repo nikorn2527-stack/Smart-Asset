@@ -5,6 +5,8 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const credit = '<b class="team-credit">POWER BY PNG TEAM</b>';
   let branding = null, logo = '', selected = null;
+  let logoVersion = 0, logoLoading = false, brandingSaving = false, logoError = '';
+  let pendingLogo = Promise.resolve();
   const dialog = document.createElement('dialog');
   dialog.className = 'asset-dialog smart-dialog';
   dialog.setAttribute('aria-label', 'รายละเอียดครุภัณฑ์และ Smart QR');
@@ -76,17 +78,60 @@
     const form=$('#brandingForm');
     ['appName','organization','publicBaseUrl'].forEach(key => form.elements[key].value=b[key] || '');
   }
-  $('#brandingLogo').onchange = async event => {
-    const file=event.target.files[0]; if(!file)return;
-    if(file.size>500000 || !['image/png','image/jpeg','image/webp'].includes(file.type)) { $('#brandingStatus').textContent='เลือกภาพ PNG, JPEG หรือ WebP ขนาดไม่เกิน 500 KB'; event.target.value=''; return; }
-    const reader=new FileReader(); reader.onload=()=>{logo=reader.result;$('#brandingPreview').src=logo;}; reader.readAsDataURL(file);
+  const brandingSubmit=$('#brandingForm button[type="submit"]');
+  const updateBrandingButton=()=>{brandingSubmit.disabled=logoLoading||brandingSaving;$('#brandingLogo').disabled=brandingSaving;$('#removeBrandingLogo').disabled=brandingSaving;};
+  async function prepareLogo(file) {
+    if(file.size>8*1024*1024)throw new Error('เลือกภาพโลโก้ขนาดไม่เกิน 8 MB');
+    const ext=file.name.split('.').at(-1).toLowerCase();
+    const mime=({'png':'image/png','jpg':'image/jpeg','jpeg':'image/jpeg','webp':'image/webp'})[ext] || file.type;
+    if(!['image/png','image/jpeg','image/webp'].includes(mime))throw new Error('เลือกภาพ PNG, JPEG หรือ WebP');
+    const source=await new Promise((resolve,reject)=>{
+      const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('อ่านไฟล์โลโก้ไม่สำเร็จ กรุณาเลือกไฟล์อีกครั้ง'));
+      reader.readAsDataURL(new Blob([file],{type:mime}));
+    });
+    const image=await new Promise((resolve,reject)=>{const value=new Image();value.onload=()=>resolve(value);value.onerror=()=>reject(new Error('ไฟล์ภาพโลโก้ไม่ถูกต้องหรือเปิดอ่านไม่ได้'));value.src=source;});
+    if(!image.naturalWidth||!image.naturalHeight||image.naturalWidth*image.naturalHeight>40000000)throw new Error('ภาพมีความละเอียดสูงเกินไป กรุณาย่อภาพก่อนเลือก');
+    const canvas=document.createElement('canvas');let scale=Math.min(1,1024/image.naturalWidth,1024/image.naturalHeight);
+    for(let attempt=0;attempt<8;attempt++){
+      canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+      canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+      const result=canvas.toDataURL('image/png');
+      if(result.startsWith('data:image/png;base64,')&&atob(result.split(',')[1]).length<=500000)return result;
+      scale*=0.75;
+    }
+    throw new Error('ยังย่อภาพให้จัดเก็บไม่ได้ กรุณาเลือกภาพที่เล็กลง');
+  }
+  $('#brandingLogo').onchange = event => {
+    const file=event.target.files[0];if(!file)return;
+    const version=++logoVersion;logoError='';logoLoading=true;updateBrandingButton();
+    $('#brandingStatus').textContent='กำลังอ่านและปรับขนาดโลโก้…';
+    pendingLogo=prepareLogo(file).then(value=>{
+      if(version!==logoVersion)return;
+      logo=value;$('#brandingPreview').src=value;
+      $('#brandingStatus').textContent='เตรียมโลโก้แล้ว กด “บันทึกการตั้งค่า” เพื่อใช้งาน';
+    }).catch(error=>{
+      if(version!==logoVersion)return;
+      logoError=error.message;$('#brandingStatus').textContent=error.message;event.target.value='';
+    }).finally(()=>{if(version===logoVersion){logoLoading=false;updateBrandingButton();}});
   };
-  $('#removeBrandingLogo').onclick=()=>{logo='';$('#brandingLogo').value='';$('#brandingPreview').src='assets/govasset-mark-optimized.png';};
+  $('#removeBrandingLogo').onclick=()=>{
+    ++logoVersion;logoLoading=false;logoError='';pendingLogo=Promise.resolve();logo='';$('#brandingLogo').value='';
+    $('#brandingPreview').src='assets/govasset-mark-optimized.png';
+    $('#brandingStatus').textContent='เลือกโลโก้เริ่มต้นแล้ว กด “บันทึกการตั้งค่า” เพื่อใช้งาน';updateBrandingButton();
+  };
   $('#brandingForm').elements.appName.addEventListener('input', e => $('#brandingPreviewName').textContent=e.target.value);
   $('#brandingForm').onsubmit=async event=>{
-    event.preventDefault();const button=event.submitter;button.disabled=true;
-    try { const b=await app.api('/api/branding',{method:'PUT',body:JSON.stringify({...Object.fromEntries(new FormData(event.target)),logo,actor:app.getRole()})});applyBranding(b);$('#brandingStatus').textContent='บันทึกแล้ว ชื่อและโลโก้จะใช้ร่วมกับหน้าสแกนและฉลาก QR';app.toast('บันทึกอัตลักษณ์หน่วยงานแล้ว'); }
-    catch(error){$('#brandingStatus').textContent=error.message;}finally{button.disabled=false;}
+    event.preventDefault();
+    if(app.getRole()!=='เจ้าหน้าที่พัสดุ'){$('#brandingStatus').textContent='เลือกบทบาท “เจ้าหน้าที่พัสดุ” ที่มุมขวาบนก่อนบันทึกการตั้งค่าในโหมดทดสอบ';return;}
+    if(brandingSaving)return;
+    brandingSaving=true;updateBrandingButton();
+    try {
+      await pendingLogo;
+      if(logoError)throw new Error(logoError);
+      const form=event.target;
+      const b=await app.api('/api/branding',{method:'PUT',body:JSON.stringify({...Object.fromEntries(new FormData(form)),logo,actor:app.getRole()})});
+      applyBranding(b);$('#brandingLogo').value='';$('#brandingStatus').textContent='บันทึกแล้ว ชื่อและโลโก้จะใช้ร่วมกับหน้าสแกนและฉลาก QR';app.toast('บันทึกอัตลักษณ์หน่วยงานแล้ว');
+    }catch(error){$('#brandingStatus').textContent=error.message;}finally{brandingSaving=false;updateBrandingButton();}
   };
   const heading=$('#view-dashboard .page-heading p'); if(heading)heading.textContent='ทะเบียนที่เป็นปัจจุบัน งานซ่อมที่ติดตามได้ และ Smart QR ที่เชื่อมทุกขั้นตอน';
   const eyebrow=$('#view-dashboard .page-heading .eyebrow');if(eyebrow)eyebrow.textContent=new Date().toLocaleDateString('th-TH',{dateStyle:'full',timeZone:'Asia/Bangkok'});

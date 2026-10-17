@@ -13,8 +13,9 @@ def _one(query: dict, key: str, default: str = "") -> str:
     return str(value[0] if isinstance(value, list) and value else value)
 
 
-def _text(value: Any, label: str, limit: int, required: bool = True) -> str:
-    result = " ".join(str(value or "").strip().split())
+def _text(value: Any, label: str, limit: int, required: bool = True, *, multiline: bool = False) -> str:
+    raw = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    result = "\n".join(" ".join(line.split()) for line in raw.split("\n")).strip() if multiline else " ".join(raw.strip().split())
     if required and not result:
         raise ValueError(f"กรุณาระบุ{label}")
     if len(result) > limit:
@@ -134,7 +135,7 @@ def _event(db: sqlite3.Connection, entity_type: str, entity_id: int, actor: str,
 
 def _save_category(db: sqlite3.Connection, body: dict, category_id: int | None = None):
     name = _text(body.get("name"), "ชื่อหมวด", 300)
-    notes = _text(body.get("notes", ""), "หมายเหตุ", 1000, required=False)
+    notes = _text(body.get("notes", ""), "หมายเหตุ", 1000, required=False, multiline=True)
     parent = body.get("parentCategoryId") or None
     if parent is not None:
         try:

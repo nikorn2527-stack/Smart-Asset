@@ -38,8 +38,8 @@
     const visible = categories.filter(item => (includeInactive || item.isActive) && `${item.name} ${item.source || ''} ${item.parentName || ''}`.toLocaleLowerCase('th-TH').includes(query));
     list.innerHTML = visible.length ? visible.map(item => `<article class="master-data-row ${item.isActive ? '' : 'is-inactive'}">
       <span class="category-mark" aria-hidden="true">▤</span>
-      <div class="master-data-main"><b>${esc(item.name)}</b><small>${item.parentName ? `หมวดแม่: ${esc(item.parentName)} · ` : ''}ต้นทาง: ${esc(item.source || 'หมวดที่เพิ่มเอง')} · ผูกครุภัณฑ์ ${Number(item.linkedAssets || 0).toLocaleString('th-TH')} · ผูกกฎค่าเสื่อม ${Number(item.linkedPolicies || 0).toLocaleString('th-TH')}</small>${item.notes ? `<small>${esc(item.notes)}</small>` : ''}</div>
-      <div class="master-data-actions"><span class="master-state ${item.isActive ? 'active' : ''}">${item.isActive ? 'ใช้งาน' : 'ปิดใช้งาน'}</span><button type="button" class="button outline mini-action" data-master-action="edit-category" data-id="${item.id}">แก้ไข</button>${item.isActive ? `<button type="button" class="button outline mini-action reject" data-master-action="delete-category" data-id="${item.id}">ลบ</button>` : `<button type="button" class="button outline mini-action" data-master-action="restore-category" data-id="${item.id}">กู้คืน</button>`}</div>
+      <div class="master-data-main"><b>${esc(item.name)}</b><small>${item.parentName ? `หมวดแม่: ${esc(item.parentName)} · ` : ''}ต้นทาง: ${esc(item.source || 'หมวดที่เพิ่มเอง')} · ผูกครุภัณฑ์ ${Number(item.linkedAssets || 0).toLocaleString('th-TH')} · ผูกกฎค่าเสื่อม ${Number(item.linkedPolicies || 0).toLocaleString('th-TH')}</small>${item.notes ? `<small class="category-notes-preview">${esc(item.notes)}</small>` : ''}</div>
+      <div class="master-data-actions"><span class="master-state ${item.isActive ? 'active' : ''}">${item.isActive ? 'ใช้งาน' : 'ปิดใช้งาน'}</span><button type="button" class="button outline mini-action" data-master-action="guide-category" data-id="${item.id}">คู่มือหมวด</button><button type="button" class="button outline mini-action" data-master-action="edit-category" data-id="${item.id}">แก้ไข</button>${item.isActive ? `<button type="button" class="button outline mini-action reject" data-master-action="delete-category" data-id="${item.id}">ลบ</button>` : `<button type="button" class="button outline mini-action" data-master-action="restore-category" data-id="${item.id}">กู้คืน</button>`}</div>
     </article>`).join('') : '<div class="category-empty">ไม่พบหมวดที่ตรงกับตัวกรอง · กด “เพิ่มหมวด” เพื่อสร้างรายการ</div>';
     const tag = $('.archive-category-panel .sheet-count');
     if (tag) tag.textContent = `${visible.length} / ${categories.length} หมวด`;
@@ -62,6 +62,19 @@
     </tr>`).join('') : '<tr><td colspan="7" class="empty-cell">ไม่พบรายการ · กด “เพิ่มหลักเกณฑ์” เพื่อสร้างรายการและกำหนดอัตราเอง</td></tr>';
     const count = $('#depreciationCount');
     if (count) count.textContent = `แสดง ${visible.length} จาก ${policies.length} หลักเกณฑ์ · จัดการอัตรา/วิธีคำนวณได้จาก SQLite`;
+  }
+
+  const guideDialog=document.createElement('dialog');
+  guideDialog.className='asset-dialog master-data-dialog category-guide-dialog';
+  guideDialog.setAttribute('aria-labelledby','categoryGuideTitle');
+  document.body.append(guideDialog);
+  function openCategoryGuide(item) {
+    if(!item)return;
+    const linked=policies.filter(policy=>(policy.categoryIds||[]).some(id=>String(id)===String(item.id)));
+    guideDialog.innerHTML=`<div class="dialog-head"><div><div class="eyebrow">แนวทางเลือกหมวดครุภัณฑ์</div><h2 id="categoryGuideTitle">${esc(item.name)}</h2></div><button class="dialog-close" type="button" data-close-category-guide aria-label="ปิดคู่มือหมวด">×</button></div><p>สถานะ: <b>${item.isActive?'ใช้งาน':'ปิดใช้งาน — ตรวจสอบก่อนกู้คืน'}</b> · หมวดแม่: ${esc(item.parentName||'ไม่มีหมวดแม่')}</p><h3>แนวทางที่บันทึกไว้ในหมวดนี้</h3><p class="category-guide-notes">${esc(item.notes||'ยังไม่มีแนวทางเฉพาะหมวด ให้เจ้าหน้าที่พัสดุเพิ่มชนิดอุปกรณ์ที่รวม/ไม่รวม ตัวอย่าง และเอกสารอ้างอิงก่อนใช้เป็นไกด์')}</p><h3>หลักเกณฑ์ค่าเสื่อมที่เชื่อมอยู่</h3>${linked.length?`<ul>${linked.map(policy=>`<li>${esc(policy.ruleNo||'ไม่ระบุเลขที่')} · ${esc(policy.category)}${policy.isActive===false?' (ปิดใช้งาน)':''}</li>`).join('')}</ul>`:'<p>ยังไม่ได้เชื่อมหลักเกณฑ์ ต้องตรวจหลักเกณฑ์ที่หน่วยงานใช้ก่อนบันทึกอายุและค่าเสื่อม</p>'}<p class="field-hint">ใช้ประกอบการจัดหมวด การตัดสินใจให้ยึดบัญชี/หลักเกณฑ์ที่หน่วยงานรับรอง ไม่ใช้ข้อความตัวอย่างเป็นระเบียบกลาง</p><div class="dialog-actions"><button class="button outline" type="button" data-close-category-guide>ปิด</button><button class="button primary" type="button" id="editCategoryGuide">แก้ไขแนวทางหมวดนี้</button></div>`;
+    guideDialog.querySelectorAll('[data-close-category-guide]').forEach(button=>button.onclick=()=>guideDialog.close());
+    $('#editCategoryGuide',guideDialog).onclick=()=>{guideDialog.close();openCategory(item);$('#categoryNotes').focus();};
+    guideDialog.showModal();
   }
 
   function openCategory(item = null) {
@@ -192,6 +205,7 @@
     if (!button) return;
     const id = button.dataset.id;
     const action = button.dataset.masterAction;
+    if (action === 'guide-category') openCategoryGuide(categories.find(item => String(item.id) === String(id)));
     if (action === 'edit-category') openCategory(categories.find(item => String(item.id) === String(id)));
     if (action === 'edit-policy') openPolicy(policies.find(item => String(item.id) === String(id)));
     if (action === 'delete-category') setActive('category', id, false);
@@ -200,6 +214,17 @@
     if (action === 'restore-policy') setActive('policy', id, true);
   });
 
+  $('#showCategoryGuide')?.addEventListener('click',()=>{
+    const guide=$('#categoryGuide');guide.open=!guide.open;
+    if(guide.open)guide.scrollIntoView({behavior:'smooth',block:'start'});
+  });
+  $('#categoryGuide')?.addEventListener('toggle',()=>$('#showCategoryGuide').setAttribute('aria-expanded',String($('#categoryGuide').open)));
+  $('#categoryGuideTemplate')?.addEventListener('click',()=>{
+    const notes=$('#categoryNotes');
+    if(notes.value.trim()){app.toast('มีข้อความเดิมอยู่แล้ว กรุณาแก้ไขหรือคัดลอกเก็บไว้ก่อนใช้แม่แบบ');return;}
+    notes.value='ใช้กับอุปกรณ์ประเภท:\nรวมตัวอย่าง:\nไม่รวม:\nหมวดแม่ / ความเกี่ยวข้อง:\nเอกสารอ้างอิงของหน่วยงาน:\nผู้ตรวจสอบ / วันที่ทบทวน:';
+    notes.focus();
+  });
   $('#addCategoryBtn')?.addEventListener('click', () => openCategory());
   $('#addDepreciationBtn')?.addEventListener('click', () => openPolicy());
   $('#categoryForm')?.addEventListener('submit', saveCategory);
