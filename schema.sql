@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS assets (
   responsible_unit_id INTEGER REFERENCES org_units(id) ON DELETE SET NULL,
   category_id INTEGER REFERENCES asset_categories(id) ON DELETE SET NULL,
   fsn_catalog_item_id INTEGER REFERENCES fsn_catalog_items(id) ON DELETE SET NULL,
+  fsn_code TEXT NOT NULL DEFAULT '',
   old_asset_code TEXT NOT NULL DEFAULT '',
   maintenance_status TEXT NOT NULL DEFAULT '',
   asset_status_source TEXT NOT NULL DEFAULT '',

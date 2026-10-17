@@ -20,14 +20,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
-VERSION = "1.0"
+VERSION = "1.1"
 HERE = Path(__file__).resolve().parent
 SCHEMA = HERE / "schema.sql"
 ARCHIVE_NAME = "ครุภัณฑ์แยกประเภท.rar"
 SCOPE = "ข้อมูลตัวอย่างจากเอกสารที่ผู้ใช้แนบ; ตรวจสอบกับต้นฉบับก่อนใช้งานจริง"
 
 # The 19 supplied workbooks share one 31-column header except for the software
-# workbook, which is headerless. This explicit map preserves its original order;
+# workbook, which may have headings or use a legacy positional layout.
+# Prefer actual headings whenever present; this fallback preserves legacy order;
 # unmapped/raw cells remain available in source_row_records and source_columns.
 SOFTWARE_COLUMNS = {
     0: ("ลำดับ", "source_row_number"),
@@ -69,6 +70,7 @@ HEADER_TO_FIELD = {
     "เลขครุภัณฑ์": "code",
     "สถานะครุภัณฑ์": "asset_status",
     "หน่วยงาน/กอง": "department",
+    "สถานที่ตั้ง": "location",
     "กลุ่มครุภัณฑ์": "group_name",
     "แบบ/ลักษณะ": "detail",
     "ปีงบที่ได้มา": "fiscal_year_th",
@@ -311,6 +313,12 @@ def read_xlsx_software(path: Path) -> tuple[list[str], list[tuple[int, dict[str,
     book = openpyxl.load_workbook(path, read_only=True, data_only=True)
     sheet = book.worksheets[0]
     headers = [SOFTWARE_COLUMNS.get(i, (f"คอลัมน์_{i+1:02d}", ""))[0] for i in range(sheet.max_column)]
+    # Prefer actual workbook headings over the legacy positional fallback.
+    for values in sheet.iter_rows(min_row=1, max_row=8, values_only=True):
+        labels=[clean_text(v) for v in values]
+        if "เลขครุภัณฑ์" in labels and sum(v in HEADER_TO_FIELD for v in labels)>=8:
+            headers=[v or f"คอลัมน์_{i+1:02d}" for i,v in enumerate(labels)]
+            break
     rows: list[tuple[int, dict[str, Any]]] = []
     for row_no, values in enumerate(sheet.iter_rows(values_only=True), 1):
         if not any(v is not None and clean_text(v) for v in values):
@@ -325,7 +333,7 @@ def read_xlsx_software(path: Path) -> tuple[list[str], list[tuple[int, dict[str,
 
 
 def canonical(raw: dict[str, Any], software: bool = False) -> dict[str, Any]:
-    if software:
+    if software and not any(k in raw for k in ("เลขครุภัณฑ์เดิม", "วันที่ปัจจุบัน")):
         return {field: raw.get(header, "") for header, field in SOFTWARE_COLUMNS.values()}
     result: dict[str, Any] = {}
     for header, value in raw.items():
@@ -374,9 +382,9 @@ def main() -> int:
     parser.add_argument("--workbook-dir", type=Path, required=True, help="โฟลเดอร์ที่แตก workbook จาก RAR แล้ว")
     parser.add_argument("--archive", type=Path, help="RAR ต้นฉบับ (ใช้บันทึก hash/ที่มาเท่านั้น)")
     parser.add_argument("--fsn-manual", type=Path, required=True, help="คู่มือการออกเลขครุภัณฑ์.pdf")
-    parser.add_argument("--depreciation-pdf", type=Path, required=True, help="ตารางอายุและอัตราค่าเสื่อม.pdf")
+    parser.add_argument("--depreciation-pdf", type=Path, help="ตารางอายุและอัตราค่าเสื่อม.pdf (ไม่ระบุจะไม่นำเข้าหรือเดากฎค่าเสื่อม)")
     parser.add_argument("--register-pdf", type=Path, help="ทะเบียนคุม PDF ต้นฉบับ")
-    parser.add_argument("--register-json", type=Path, required=True, help="JSON ที่ถอดข้อมูลจากหน้าแบบฟอร์มสแกน")
+    parser.add_argument("--register-json", type=Path, help="JSON ที่ตรวจทานข้อมูลจากหน้าแบบฟอร์มสแกนแล้ว (ไม่บังคับ)")
     parser.add_argument("--db", type=Path, required=True, help="ปลายทาง SQLite; ใช้ path นอก web root")
     parser.add_argument("--replace", action="store_true", help="อนุญาตลบไฟล์ฐานข้อมูลปลายทางเดิมก่อนนำเข้า")
     args = parser.parse_args()
@@ -384,11 +392,13 @@ def main() -> int:
     workbook_dir = args.workbook_dir.expanduser().resolve()
     db_path = args.db.expanduser().resolve()
     for required in (args.fsn_manual, args.depreciation_pdf, args.register_json):
-        if not required.exists():
+        if required is not None and not required.exists():
             parser.error(f"ไม่พบไฟล์: {required}")
     workbooks = sorted([p for p in workbook_dir.iterdir() if p.suffix.lower() in {".xls", ".xlsx"}])
-    if len(workbooks) != 19:
-        parser.error(f"คาด workbook 19 ไฟล์ แต่พบ {len(workbooks)} ไฟล์")
+    if not workbooks:
+        parser.error("ไม่พบ workbook .xls หรือ .xlsx ในโฟลเดอร์ที่ระบุ")
+    if args.register_pdf and not args.register_json:
+        parser.error("การเชื่อมข้อมูลทะเบียน PDF ต้องมี --register-json ที่ตรวจทานแล้ว")
     if db_path.exists() and not args.replace:
         parser.error(f"ฐานข้อมูลปลายทางมีอยู่แล้ว: {db_path}; เลือก path ใหม่หรือระบุ --replace อย่างชัดเจน")
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -420,23 +430,25 @@ def main() -> int:
         for path in workbooks:
             workbook_sources[path.name] = add_source(db, path, title=path.stem, kind="workbook", container=ARCHIVE_NAME, method="xlrd/openpyxl; เก็บค่าใน raw_data_json")
         fsn_path = args.fsn_manual.expanduser().resolve()
-        dep_path = args.depreciation_pdf.expanduser().resolve()
-        register_data = json.loads(args.register_json.read_text(encoding="utf-8"))
-        register_path = args.register_pdf.expanduser().resolve() if args.register_pdf else Path(register_data.get("source_pdf", "")).expanduser().resolve()
-        if not register_path.exists():
-            parser.error("source_pdf ใน register JSON ไม่พบไฟล์ต้นฉบับ")
-        fsn_source = add_source(db, fsn_path, title="คู่มือการออกเลขครุภัณฑ์", kind="fsn_manual", method="pdftotext -layout", notes="เก็บข้อความรายหน้าและแยกรายการรหัสเท่าที่รูปแบบข้อความอ่านได้")
-        dep_source = add_source(db, dep_path, title="ตารางกำหนดอายุการใช้งานและอัตราค่าเสื่อม", kind="depreciation_policy", method="pdftotext -layout", notes="หลักเกณฑ์ในเอกสารระบุขอบเขตสำนักงานปลัดกระทรวงสาธารณสุข")
-        reg_source = add_source(db, register_path, title="ทะเบียนคุมทรัพย์สิน (ตัวอย่างแนบ)", kind="asset_register", method=register_data.get("extraction_method", "manual visual OCR"), notes="ข้อมูลหน้าสแกน; ตรวจทานต้นฉบับก่อนใช้งานจริง")
-
-        organization_name = clean_text(register_data.get("organization_name")) or "หน่วยงานตัวอย่าง"
-        db.execute("INSERT OR IGNORE INTO organizations(name,code,source_document_id) VALUES(?,?,?)", (organization_name, "", reg_source))
+        register_data = json.loads(args.register_json.read_text(encoding="utf-8")) if args.register_json else {}
+        fsn_source = add_source(db, fsn_path, title="คู่มือการออกเลขครุภัณฑ์", kind="fsn_manual", method="pdftotext -layout", notes="เก็บข้อความรายหน้าและรหัสตามต้นฉบับ ไม่สร้างเลขแทนช่องที่ไม่มี")
+        reg_source = None
+        if args.register_json:
+            register_path = args.register_pdf.expanduser().resolve() if args.register_pdf else Path(register_data.get("source_pdf", "")).expanduser().resolve()
+            if not register_path.is_file():
+                raise ValueError("ไม่พบ PDF ทะเบียนต้นฉบับสำหรับข้อมูล JSON")
+            reg_source = add_source(db, register_path, title="ทะเบียนคุมทรัพย์สิน", kind="asset_register", method=register_data.get("extraction_method", "manual visual OCR"), notes="ข้อมูลที่ตรวจทานจากเอกสารสแกน")
+        organization_name = clean_text(register_data.get("organization_name")) or "หน่วยงาน (ยังไม่ระบุชื่อ)"
+        db.execute("INSERT OR IGNORE INTO organizations(name,code,source_document_id) VALUES(?,?,?)", (organization_name, "", reg_source or archive_id))
         org_id = int(db.execute("SELECT id FROM organizations WHERE name=? AND code=''", (organization_name,)).fetchone()[0])
-
-        dep_pages = extract_pdf_pages(dep_path)
-        for page_no, page in enumerate(dep_pages, 1):
-            db.execute("INSERT OR IGNORE INTO source_document_pages(source_document_id,page_no,extracted_text,extraction_method) VALUES(?,?,?,?)", (dep_source, page_no, page, "pdftotext -layout"))
-        rules = parse_policy_rules(dep_pages, dep_source, db)
+        rules = []
+        if args.depreciation_pdf:
+            dep_path = args.depreciation_pdf.expanduser().resolve()
+            dep_source = add_source(db, dep_path, title="ตารางอายุและอัตราค่าเสื่อม", kind="depreciation_policy", method="pdftotext -layout", notes="ตรวจขอบเขตบังคับใช้จากเอกสารต้นฉบับ")
+            dep_pages = extract_pdf_pages(dep_path)
+            for page_no, page in enumerate(dep_pages, 1):
+                db.execute("INSERT OR IGNORE INTO source_document_pages(source_document_id,page_no,extracted_text,extraction_method) VALUES(?,?,?,?)", (dep_source, page_no, page, "pdftotext -layout"))
+            rules = parse_policy_rules(dep_pages, dep_source, db)
         policy_ids = {r["rule_no"]: int(db.execute("SELECT id FROM depreciation_policies WHERE source_document_id=? AND rule_no=?", (dep_source, r["rule_no"])).fetchone()[0]) for r in rules}
 
         fsn_pages = extract_pdf_pages(fsn_path)
@@ -461,14 +473,18 @@ def main() -> int:
             software = path.name.lower() == "สินทรัพย์ software.xlsx"
             headers, rows = read_xlsx_software(path) if software else read_xls(path)
             for idx, header in enumerate(headers):
-                field = SOFTWARE_COLUMNS.get(idx, (header, ""))[1] if software else HEADER_TO_FIELD.get(header.strip(), "")
-                note = "ตำแหน่งคอลัมน์จากรูปแบบ workbook software ที่ไม่มีแถวหัวตาราง" if software else "จับคู่ตามชื่อหัวคอลัมน์"
+                positional = software and not any(h in headers for h in ("เลขครุภัณฑ์เดิม", "วันที่ปัจจุบัน"))
+                field = SOFTWARE_COLUMNS.get(idx, (header, ""))[1] if positional else HEADER_TO_FIELD.get(header.strip(), "")
+                note = "ตำแหน่งคอลัมน์จากรูปแบบ workbook software ที่ไม่มีแถวหัวตาราง" if positional else "จับคู่ตามชื่อหัวคอลัมน์"
                 db.execute("INSERT OR IGNORE INTO source_columns(source_document_id,column_no,source_header,canonical_field,mapping_note) VALUES(?,?,?,?,?)", (source_id, idx + 1, header, field, note))
 
             for source_row_no, raw in rows:
                 total_source_rows += 1
                 norm = canonical(raw, software)
                 code = clean_text(norm.get("code"))
+                if code == "เลขครุภัณฑ์" and sum(clean_text(v) in HEADER_TO_FIELD for v in raw.values()) >= 8:
+                    db.execute("INSERT INTO source_row_records(source_document_id,source_row_no,record_kind,raw_data_json) VALUES(?,?,?,?)", (source_id, source_row_no, "header", json_text(raw)))
+                    continue
                 description = clean_text(norm.get("description"))
                 detail = clean_text(norm.get("detail"))
                 asset_type = clean_text(norm.get("asset_type_detail")) or clean_text(norm.get("asset_type"))
@@ -530,21 +546,22 @@ def main() -> int:
                     db.execute("INSERT OR IGNORE INTO asset_fsn_matches(asset_id,fsn_catalog_item_id,match_method,matched_code) VALUES(?,?,?,?)", (asset_id, fsn_id, method, candidate))
                     db.execute("UPDATE assets SET fsn_catalog_item_id=? WHERE id=?", (fsn_id, asset_id))
 
-        # Link the scanned asset-control-register example to the matching imported asset.
-        match_code = clean_text(register_data.get("asset_code"))
-        matching_ids = code_asset_ids.get(match_code, [])
-        if not matching_ids:
-            db.execute("INSERT INTO import_warnings(source_document_id,severity,warning_code,message,source_page) VALUES(?,?,?,?,?)", (reg_source, "error", "REGISTER_ASSET_NOT_MATCHED", "ไม่พบรหัสจากทะเบียน PDF ใน workbook; รายละเอียดทะเบียนถูกเก็บไว้แต่ไม่มี asset_id", register_data.get("source_page", 1)))
-        else:
-            asset_id = matching_ids[0]
-            if len(matching_ids) > 1:
-                db.execute("INSERT INTO import_warnings(source_document_id,asset_id,severity,warning_code,message,source_page) VALUES(?,?,?,?,?,?)", (reg_source, asset_id, "review", "DUPLICATE_ASSET_CODE", "พบรหัสซ้ำใน workbook; ผูกทะเบียนกับแถวแรกและเก็บทุกรายการไว้แยกกัน", register_data.get("source_page", 1)))
-            reg_acq = db.execute("INSERT INTO asset_acquisitions(asset_id,source_document_id,fiscal_year_th,acquired_on,document_no,gfmis_no,po_no,fund_type,acquisition_method,quantity,unit_price,total_price,vendor_name,vendor_address,vendor_phone,model,serial_number,warranty_end,raw_data_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (asset_id, reg_source, clean_text(register_data.get("fiscal_year_th")), clean_text(register_data.get("acquired_on_iso")), clean_text(register_data.get("document_no")), clean_text(register_data.get("gfmis_no")), clean_text(register_data.get("po_no")), clean_text(register_data.get("fund_type")), clean_text(register_data.get("acquisition_method")), number(register_data.get("quantity")), number(register_data.get("unit_price")), number(register_data.get("total_price")), clean_text(register_data.get("vendor_name")), clean_text(register_data.get("vendor_address")), clean_text(register_data.get("vendor_phone")), clean_text(register_data.get("model")), clean_text(register_data.get("serial_number")), clean_text(register_data.get("warranty_end_original")), json_text(register_data)))
-            acq_id = int(reg_acq.lastrowid)
-            db.execute("INSERT INTO asset_register_details(asset_id,source_document_id,acquisition_id,organization_name,department_name,asset_type,asset_code_printed,description,model,location,vendor_name,vendor_address,vendor_phone,gfmis_no,po_no,serial_number,warranty_end,fiscal_year_th,fund_type,acquisition_method,raw_data_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (asset_id, reg_source, acq_id, organization_name, clean_text(register_data.get("department_name")), clean_text(register_data.get("asset_type")), match_code, clean_text(register_data.get("description")), clean_text(register_data.get("model")), clean_text(register_data.get("location")), clean_text(register_data.get("vendor_name")), clean_text(register_data.get("vendor_address")), clean_text(register_data.get("vendor_phone")), clean_text(register_data.get("gfmis_no")), clean_text(register_data.get("po_no")), clean_text(register_data.get("serial_number")), clean_text(register_data.get("warranty_end_original")), clean_text(register_data.get("fiscal_year_th")), clean_text(register_data.get("fund_type")), clean_text(register_data.get("acquisition_method")), json_text(register_data)))
-            dep_policy = policy_ids.get("11")
-            db.execute("INSERT INTO asset_depreciation_snapshots(asset_id,source_document_id,policy_id,period_date,useful_life_years,monthly_depreciation,annual_depreciation,accumulated_depreciation,net_book_value,raw_data_json) VALUES(?,?,?,?,?,?,?,?,?,?)", (asset_id, reg_source, dep_policy, "", number(register_data.get("useful_life_years")), number(register_data.get("monthly_depreciation_source_value")), number(register_data.get("annual_depreciation_source_value")), number(register_data.get("accumulated_depreciation_source_value")), number(register_data.get("net_book_value_source_value")), "{}"))
-            db.execute("INSERT INTO import_warnings(source_document_id,asset_id,severity,warning_code,message,source_page) VALUES(?,?,?,?,?,?)", (reg_source, asset_id, "review", "SCANNED_REGISTER_VALUES", clean_text(register_data.get("notes")), register_data.get("source_page", 1)))
+        if reg_source is not None:
+            # Link the scanned asset-control-register example to the matching imported asset.
+            match_code = clean_text(register_data.get("asset_code"))
+            matching_ids = code_asset_ids.get(match_code, [])
+            if not matching_ids:
+                db.execute("INSERT INTO import_warnings(source_document_id,severity,warning_code,message,source_page) VALUES(?,?,?,?,?)", (reg_source, "error", "REGISTER_ASSET_NOT_MATCHED", "ไม่พบรหัสจากทะเบียน PDF ใน workbook; รายละเอียดทะเบียนถูกเก็บไว้แต่ไม่มี asset_id", register_data.get("source_page", 1)))
+            else:
+                asset_id = matching_ids[0]
+                if len(matching_ids) > 1:
+                    db.execute("INSERT INTO import_warnings(source_document_id,asset_id,severity,warning_code,message,source_page) VALUES(?,?,?,?,?,?)", (reg_source, asset_id, "review", "DUPLICATE_ASSET_CODE", "พบรหัสซ้ำใน workbook; ผูกทะเบียนกับแถวแรกและเก็บทุกรายการไว้แยกกัน", register_data.get("source_page", 1)))
+                reg_acq = db.execute("INSERT INTO asset_acquisitions(asset_id,source_document_id,fiscal_year_th,acquired_on,document_no,gfmis_no,po_no,fund_type,acquisition_method,quantity,unit_price,total_price,vendor_name,vendor_address,vendor_phone,model,serial_number,warranty_end,raw_data_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (asset_id, reg_source, clean_text(register_data.get("fiscal_year_th")), clean_text(register_data.get("acquired_on_iso")), clean_text(register_data.get("document_no")), clean_text(register_data.get("gfmis_no")), clean_text(register_data.get("po_no")), clean_text(register_data.get("fund_type")), clean_text(register_data.get("acquisition_method")), number(register_data.get("quantity")), number(register_data.get("unit_price")), number(register_data.get("total_price")), clean_text(register_data.get("vendor_name")), clean_text(register_data.get("vendor_address")), clean_text(register_data.get("vendor_phone")), clean_text(register_data.get("model")), clean_text(register_data.get("serial_number")), clean_text(register_data.get("warranty_end_original")), json_text(register_data)))
+                acq_id = int(reg_acq.lastrowid)
+                db.execute("INSERT INTO asset_register_details(asset_id,source_document_id,acquisition_id,organization_name,department_name,asset_type,asset_code_printed,description,model,location,vendor_name,vendor_address,vendor_phone,gfmis_no,po_no,serial_number,warranty_end,fiscal_year_th,fund_type,acquisition_method,raw_data_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (asset_id, reg_source, acq_id, organization_name, clean_text(register_data.get("department_name")), clean_text(register_data.get("asset_type")), match_code, clean_text(register_data.get("description")), clean_text(register_data.get("model")), clean_text(register_data.get("location")), clean_text(register_data.get("vendor_name")), clean_text(register_data.get("vendor_address")), clean_text(register_data.get("vendor_phone")), clean_text(register_data.get("gfmis_no")), clean_text(register_data.get("po_no")), clean_text(register_data.get("serial_number")), clean_text(register_data.get("warranty_end_original")), clean_text(register_data.get("fiscal_year_th")), clean_text(register_data.get("fund_type")), clean_text(register_data.get("acquisition_method")), json_text(register_data)))
+                dep_policy = policy_ids.get("11")
+                db.execute("INSERT INTO asset_depreciation_snapshots(asset_id,source_document_id,policy_id,period_date,useful_life_years,monthly_depreciation,annual_depreciation,accumulated_depreciation,net_book_value,raw_data_json) VALUES(?,?,?,?,?,?,?,?,?,?)", (asset_id, reg_source, dep_policy, "", number(register_data.get("useful_life_years")), number(register_data.get("monthly_depreciation_source_value")), number(register_data.get("annual_depreciation_source_value")), number(register_data.get("accumulated_depreciation_source_value")), number(register_data.get("net_book_value_source_value")), "{}"))
+                db.execute("INSERT INTO import_warnings(source_document_id,asset_id,severity,warning_code,message,source_page) VALUES(?,?,?,?,?,?)", (reg_source, asset_id, "review", "SCANNED_REGISTER_VALUES", clean_text(register_data.get("notes")), register_data.get("source_page", 1)))
 
         # Private-database sticker defaults follow the ITAM template model:
         # mm canvas, absolute-positioned text/QR/rect elements and one label/page.
@@ -557,7 +574,7 @@ def main() -> int:
                 {"id":"e3","type":"text","x":2,"y":7,"width":48,"height":4,"content":"{{AssetNo}}","fontSize":11,"fontWeight":800,"color":"#123d56","align":"left","zIndex":1},
                 {"id":"e4","type":"text","x":2,"y":12,"width":48,"height":7,"content":"{{AssetName}}","fontSize":7,"fontWeight":600,"color":"#243746","align":"left","zIndex":1},
                 {"id":"e5","type":"text","x":2,"y":21,"width":48,"height":4,"content":"{{Location}}","fontSize":6,"fontWeight":500,"color":"#526574","align":"left","zIndex":1},
-                {"id":"e6","type":"qr","x":54,"y":8,"width":18,"height":18,"content":"{{AssetNo}}","zIndex":2}
+                {"id":"e6","type":"qr","x":54,"y":8,"width":18,"height":18,"content":"{{QrUrl}}","zIndex":2}
             ]
         }
         db.execute("INSERT OR IGNORE INTO sticker_templates(id,name,is_default,canvas_width_mm,canvas_height_mm,overflow,elements_json,is_active) VALUES(?,?,?,?,?,?,?,1)", (default_template["id"], default_template["name"], 1, 75.2, 36, "clip", json_text(default_template["elements"])))
@@ -565,10 +582,10 @@ def main() -> int:
 
         # Keep all extracted depreciation and FSN page text as source evidence.
         # Record a manifest without including sensitive cell values in stdout.
-        reg_link_count = len(matching_ids[:1]) if matching_ids else 0
+        reg_link_count = len(matching_ids[:1]) if reg_source is not None and matching_ids else 0
         # FTS triggers indexed every source-row insert during import.
         db.execute("INSERT OR IGNORE INTO schema_migrations(name) VALUES('source-row-trigram-fts-v1')")
-        db.execute("INSERT INTO import_runs(dataset_name,importer_version,source_file_count,asset_record_count,fsn_item_count,depreciation_rule_count,register_link_count,started_at,completed_at,notes) VALUES(?,?,?,?,?,?,?,?,?,?)", ("government-asset-prototype", VERSION, len(workbooks) + 4, total_assets, fsn_items, len(rules), reg_link_count, start, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "ข้อมูลดิบเก็บครั้งเดียวใน source_row_records.raw_data_json; PDF ทะเบียนเป็น OCR ที่ตรวจทานด้วยภาพ; ไม่ใช่ข้อมูล production"))
+        db.execute("INSERT INTO import_runs(dataset_name,importer_version,source_file_count,asset_record_count,fsn_item_count,depreciation_rule_count,register_link_count,started_at,completed_at,notes) VALUES(?,?,?,?,?,?,?,?,?,?)", ("government-asset-prototype", VERSION, len(workbooks) + 2 + bool(args.depreciation_pdf) + bool(args.register_json), total_assets, fsn_items, len(rules), reg_link_count, start, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "ข้อมูลดิบเก็บครั้งเดียวใน source_row_records.raw_data_json; PDF ทะเบียนเป็น OCR ที่ตรวจทานด้วยภาพ; ไม่ใช่ข้อมูล production"))
         db.commit()
         db.execute("PRAGMA optimize")
         summary = {

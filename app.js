@@ -103,7 +103,7 @@ async function refreshData() {
     const [assetData,surveyData,ticketData,config,inventoryData,fsnData,categoryData,depreciationData,pendingData]=await Promise.all([api('/api/assets'),api('/api/survey'),api('/api/tickets'),api('/api/config'),api(`/api/inventory?${inventoryParams}`),api(`/api/catalog/fsn?limit=${fsnLimit}`),api('/api/catalog/categories'),api('/api/catalog/depreciation'),api('/api/assets/pending')]);
     assets=assetData; approvalAssets=pendingData; sheet=surveyData; repairs=ticketData; appConfig=config;
     if(request===inventoryRequest){inventoryRows=inventoryData.items; inventoryTotal=inventoryData.total; inventoryOffset=inventoryData.offset;}
-    fsnRows=fsnData.total?fsnData.items:null; fsnTotal=fsnData.total; fsnOffset=fsnData.offset;
+    fsnRows=fsnData.items; fsnTotal=fsnData.total; fsnOffset=fsnData.offset;
     liveCategories=categoryData.length?categoryData:null;populateAssetCategoryOptions(categoryData);
     liveDepreciationRows=depreciationData.items?.length?depreciationData.items.map(row=>({no:row.ruleNo,category:row.category,years:row.years==null?'พิจารณาเฉพาะกรณี':String(row.years),rate:row.annualRate==null?'พิจารณาเฉพาะกรณี':String(row.annualRate),note:row.note||''})):null;
     setConnected();
@@ -164,10 +164,10 @@ function renderDepreciation() { const source=liveDepreciationRows||depreciationR
 function renderCatalog() { const search=($('#codeSearch')?.value||'').trim().toLowerCase(); const categorySource=liveCategories||archiveCategories; const categories=categorySource.filter(item=>`${item.name} ${item.source||''}`.toLowerCase().includes(search)); const list=$('#archiveCategoryList'); if(list&&!window.govAssetMasterData)list.innerHTML=categories.length?categories.map(item=>`<div class="archive-category"><span class="category-mark" aria-hidden="true">▤</span><div><b>${esc(item.name)}</b><small>ไฟล์ต้นทาง: ${esc(item.source||'ข้อมูลนำเข้า')}</small></div></div>`).join(''):'<div class="category-empty">ไม่พบหมวดหมู่จากชุดข้อมูลแนบ</div>'; const tag=$('.archive-category-panel .sheet-count'); if(tag&&!window.govAssetMasterData)tag.textContent=`${categories.length} หมวด`;
   window.govAssetMasterData?.renderCategories();
   const cards=$('#codeCards'); if(!cards)return;
-  if(fsnRows!==null){cards.innerHTML=fsnRows.length?fsnRows.map(item=>{const code=item.fullCode||[item.categoryCode,item.typeCode].filter(Boolean).join('-')||'—';return `<article class="panel code-card"><div class="code-card-top"><h3>${esc(item.name||'รายการไม่ระบุชื่อ')}</h3><span class="fsn-tag">${esc(code)}</span></div><p>${esc(item.groupTitle||`กลุ่มรหัส ${item.categoryCode||'—'}`)}</p><div class="sample-list"><div class="sample-row"><span>อ้างอิงคู่มือออกเลขครุภัณฑ์</span><code>หน้า ${esc(item.page||'—')}</code></div></div></article>`}).join(''):'<div class="panel code-card">ไม่พบรายการในบัญชี FSN</div>'; let pager=$('#fsnPager');if(!pager){pager=document.createElement('div');pager.id='fsnPager';pager.className='fsn-pager';cards.after(pager);}const page=Math.floor(fsnOffset/fsnLimit)+1,pages=Math.max(1,Math.ceil(fsnTotal/fsnLimit));pager.innerHTML=`<button id="fsnPrev" ${fsnOffset<=0?'disabled':''}>ก่อนหน้า</button><span>หน้า ${page} / ${pages} · ${fsnTotal.toLocaleString('th-TH')} รายการอ้างอิง</span><button id="fsnNext" ${fsnOffset+fsnLimit>=fsnTotal?'disabled':''}>ถัดไป</button>`;$('#fsnPrev')?.addEventListener('click',()=>loadFsn(Math.max(0,fsnOffset-fsnLimit)));$('#fsnNext')?.addEventListener('click',()=>loadFsn(fsnOffset+fsnLimit));
+  if(fsnRows!==null){cards.innerHTML=fsnRows.length?fsnRows.map(item=>{const code=item.fullCode||[item.categoryCode,item.typeCode].filter(Boolean).join('-')||'—';return `<article class="panel code-card"><div class="code-card-top"><h3>${esc(item.name||'รายการไม่ระบุชื่อ')}</h3><span class="fsn-tag">${esc(code)}</span></div><p>${esc(item.groupTitle||`กลุ่มรหัส ${item.categoryCode||'—'}`)}</p><div class="sample-list"><div class="sample-row"><span>${esc(item.sourceTitle||'คู่มือออกเลขครุภัณฑ์')}</span><code>${item.page?`หน้า PDF ${esc(item.page)}`:'หน่วยงานกำหนด'}</code></div></div>${item.reference?`<p>${esc(item.reference)}</p>`:''}${/^[0-9]{4}-[0-9]{3}-[0-9]{4}$/.test(item.fullCode||'')?`<button type="button" class="button outline" data-use-fsn="${esc(item.fullCode)}">ใช้ FSN นี้เพิ่มครุภัณฑ์</button>`:'<p class="field-hint">รหัสอ้างอิงตามต้นฉบับ ยังไม่ใช่รหัสเต็มสำหรับออกเลขประจำชิ้น</p>'}</article>`}).join(''):'<div class="panel code-card">ไม่พบรายการในบัญชี FSN</div>'; let pager=$('#fsnPager');if(!pager){pager=document.createElement('div');pager.id='fsnPager';pager.className='fsn-pager';cards.after(pager);}const page=Math.floor(fsnOffset/fsnLimit)+1,pages=Math.max(1,Math.ceil(fsnTotal/fsnLimit));pager.innerHTML=`<button id="fsnPrev" ${fsnOffset<=0?'disabled':''}>ก่อนหน้า</button><span>หน้า ${page} / ${pages} · ${fsnTotal.toLocaleString('th-TH')} รายการอ้างอิง</span><button id="fsnNext" ${fsnOffset+fsnLimit>=fsnTotal?'disabled':''}>ถัดไป</button>`;$('#fsnPrev')?.addEventListener('click',()=>loadFsn(Math.max(0,fsnOffset-fsnLimit)));$('#fsnNext')?.addEventListener('click',()=>loadFsn(fsnOffset+fsnLimit));
   } else {const filtered=codeCatalog.filter(group=>`${group.code} ${group.title} ${group.desc} ${group.items.map(item=>item.name).join(' ')}`.toLowerCase().includes(search));cards.innerHTML=filtered.length?filtered.map(group=>`<article class="panel code-card"><div class="code-card-top"><h3>${esc(group.title)}</h3><span class="fsn-tag">${esc(group.code)}</span></div><p>${esc(group.desc)}</p><div class="sample-list">${group.items.map(item=>`<div class="sample-row"><span>${esc(item.name)}</span><code>${esc(item.code)}</code></div>`).join('')}</div></article>`).join(''):'<div class="panel code-card">ไม่พบหมวดตัวอย่างตามคู่มือที่ค้นหา</div>';}
 }
-async function loadFsn(offset=0){fsnOffset=Math.max(0,offset);try{const q=$('#codeSearch')?.value||'';const params=new URLSearchParams({q,limit:String(fsnLimit),offset:String(fsnOffset)});const result=await api(`/api/catalog/fsn?${params}`);fsnRows=result.total?result.items:null;fsnTotal=result.total;renderCatalog();}catch(error){showError(error);}}
+async function loadFsn(offset=0){fsnOffset=Math.max(0,offset);try{const q=$('#codeSearch')?.value||'';const params=new URLSearchParams({q,limit:String(fsnLimit),offset:String(fsnOffset)});const result=await api(`/api/catalog/fsn?${params}`);fsnRows=result.items;fsnTotal=result.total;renderCatalog();}catch(error){showError(error);}}
 function switchView(name) {
   if (!document.getElementById(`view-${name}`)) return;
   const parents={register:'assets',survey:'assets',codes:'settings',depreciation:'settings',stickers:'settings'};
@@ -238,7 +238,13 @@ function printTicket(id,size) {
 }
 function applyFontScale(value) { fontScale=Math.min(1.4,Math.max(0.95,Math.round(value*100)/100)); document.documentElement.style.zoom=String(fontScale); setText('#fontScaleLabel',`${Math.round(fontScale*100)}%`); localStorage.setItem('govAssetPrototype.fontScale',String(fontScale)); }
 function switchRole(role) { currentRole=role; localStorage.setItem('govAssetPrototype.role',role); renderAssets(); renderApprovals(); if(activeTicketId&&$('#ticketDialog')?.open)openTicket(activeTicketId); }
-function updateCode() { const group=$('#groupCode').value,type=$('#typeCode').value;$('#generatedCode').textContent=/^[0-9]{4}$/.test(group)&&/^[0-9]{3}$/.test(type)?`${group}-${type}-[ลำดับอัตโนมัติ]`:'กรอกกลุ่ม 4 หลัก และชนิด 3 หลัก'; }
+function updateCode() {
+  const parts=[$('#groupCode').value,$('#typeCode').value,$('#descriptionCode').value];
+  const manual=$('#assetNumberMode').value==='manual';
+  $('#manualAssetCodeField').hidden=!manual;$('#manualAssetCode').required=manual;
+  for(const id of ['groupCode','typeCode','descriptionCode'])$('#'+id).required=!manual;
+  $('#generatedCode').textContent=manual?($('#manualAssetCode').value||'ระบุเลขประจำครุภัณฑ์เดิม'):parts.every((v,i)=>new RegExp(`^[0-9]{${[4,3,4][i]}}$`).test(v))?`${parts.join('-')}-[ลำดับประจำชิ้น]`:'เลือกรหัส FSN ให้ครบ 4-3-4 ก่อน';
+}
 function openAssetDialog() { populateAssetCategoryOptions(liveCategories||[]); $('#assetFormError').textContent='';updateCode(); $('#assetDialog').showModal(); $('#itemName').focus(); }
 function openRepairDialog() { $('#assetSuggestions').innerHTML=assets.map(item=>`<option value="${esc(item.name)}">`).join(''); $('#assetCodes').innerHTML=assets.map(item=>`<option value="${esc(item.code)}">`).join(''); $('#repairForm').reset(); $('#repairForm input[name="assetId"]')?.remove(); $('#repairFormError').textContent=''; $('#repairDialog').showModal(); $('#repairAsset').focus(); }
 
@@ -264,15 +270,18 @@ $('#repairForm').addEventListener('submit',async event=>{
 });
 $('#newAssetTop')?.addEventListener('click',openAssetDialog); $('#newAssetList')?.addEventListener('click',openAssetDialog); $('#newSurvey')?.addEventListener('click',openAssetDialog);
 $('#closeDialog').addEventListener('click',()=>$('#assetDialog').close()); $('#cancelDialog').addEventListener('click',()=>$('#assetDialog').close()); $('#assetDialog').addEventListener('click',event=>{if(event.target===$('#assetDialog'))$('#assetDialog').close();});
-$('#groupCode').addEventListener('input',updateCode); $('#typeCode').addEventListener('input',updateCode);
+$('#groupCode').addEventListener('input',updateCode); $('#typeCode').addEventListener('input',updateCode);$('#descriptionCode').addEventListener('input',updateCode);$('#assetNumberMode').addEventListener('change',updateCode);$('#manualAssetCode').addEventListener('input',updateCode);
+$('#findAssetFsn').addEventListener('click',()=>{$('#assetDialog').close();switchView('codes');$('#codeSearch').focus();});
+document.addEventListener('click',event=>{const button=event.target.closest('[data-use-fsn]');if(!button)return;const parts=button.dataset.useFsn.split('-');['groupCode','typeCode','descriptionCode'].forEach((id,i)=>$('#'+id).value=parts[i]);$('#assetNumberMode').value='auto';openAssetDialog();});
 $('#assetForm').addEventListener('submit',async event=>{
   event.preventDefault();const formElement=event.currentTarget,button=formElement.querySelector('[type="submit"]');if(button.disabled)return;
   const form=new FormData(formElement),categoryId=Number(form.get('categoryId'));
   $('#assetFormError').textContent='';
   if(!liveCategories?.some(item=>Number(item.id)===categoryId&&item.isActive!==false)){$('#assetFormError').textContent='กรุณาเลือกหมวดครุภัณฑ์จากรายการที่ใช้งาน';return;}
+  const parts=[form.get('group'),form.get('type'),form.get('fsnDescription')],fsnCode=parts.some(Boolean)?parts.join('-'):'';
   button.disabled=true;
   try{
-    const asset=await api('/api/assets',{method:'POST',body:JSON.stringify({name:String(form.get('name')).trim(),detail:String(form.get('detail')||'').trim(),fsnGroup:form.get('group'),fsnType:form.get('type'),categoryId,location:String(form.get('location')||'').trim(),actor:currentRole})});
+    const asset=await api('/api/assets',{method:'POST',body:JSON.stringify({code:form.get('numberMode')==='manual'?String(form.get('inventoryCode')||'').trim():'',fsnCode,name:String(form.get('name')).trim(),detail:String(form.get('detail')||'').trim(),categoryId,location:String(form.get('location')||'').trim(),actor:currentRole})});
     $('#assetDialog').close();formElement.reset();updateCode();await refreshData();toast(`ส่งรายการ ${asset.code} เข้าคิวอนุมัติแล้ว`);switchView('approvals');
   }catch(error){$('#assetFormError').textContent=error.message;}finally{button.disabled=false;}
 });
@@ -283,5 +292,5 @@ $('#helpBtn').addEventListener('click',()=>$('#manualDialog').showModal()); $('#
 $('.close-notice')?.addEventListener('click',event=>event.currentTarget.closest('.notice').remove());
 $('#ticketDialog').addEventListener('click',event=>{if(event.target===$('#ticketDialog'))$('#ticketDialog').close();});
 applyFontScale(fontScale);
-window.govAssetApp={api,toast,showError,refreshData,switchView,fmtDate,openTicket,openRepairDialog,getRole:()=>currentRole};
+window.govAssetApp={api,toast,showError,refreshData,switchView,fmtDate,openTicket,openRepairDialog,getRole:()=>currentRole,loadFsn};
 refreshData();

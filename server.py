@@ -117,6 +117,7 @@ def initialize() -> None:
                 "responsible_unit_id": "INTEGER REFERENCES org_units(id) ON DELETE SET NULL",
                 "category_id": "INTEGER REFERENCES asset_categories(id) ON DELETE SET NULL",
                 "fsn_catalog_item_id": "INTEGER REFERENCES fsn_catalog_items(id) ON DELETE SET NULL",
+                "fsn_code": "TEXT NOT NULL DEFAULT ''",
                 "old_asset_code": "TEXT NOT NULL DEFAULT ''",
                 "maintenance_status": "TEXT NOT NULL DEFAULT ''",
                 "asset_status_source": "TEXT NOT NULL DEFAULT ''",
@@ -261,30 +262,23 @@ def initialize() -> None:
         ):
             if column not in ticket_columns:
                 db.execute(f"ALTER TABLE tickets ADD COLUMN {column} {declaration}")
-        if db.execute("SELECT COUNT(*) FROM assets").fetchone()[0] == 0:
+        imported_inventory = bool(db.execute("SELECT 1 FROM source_documents WHERE source_kind='workbook' LIMIT 1").fetchone())
+        if not imported_inventory and db.execute("SELECT COUNT(*) FROM assets").fetchone()[0] == 0:
             stamp = now_iso()
             db.executemany(
                 "INSERT INTO assets(name,detail,code,group_name,location,status,icon,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
                 [(name, detail, code, group, location, status, icon, stamp, stamp) for name, detail, code, group, location, status, icon in SAMPLE_ASSETS],
             )
-        if db.execute("SELECT COUNT(*) FROM survey_items").fetchone()[0] == 0:
+        if not imported_inventory and db.execute("SELECT COUNT(*) FROM survey_items").fetchone()[0] == 0:
             stamp = now_iso()
             db.executemany("INSERT INTO survey_items(name,detail,code,created_at) VALUES(?,?,?,?)", [(*row, stamp) for row in SAMPLE_SHEET])
-        if db.execute("SELECT COUNT(*) FROM tickets").fetchone()[0] == 0:
+        if not imported_inventory and db.execute("SELECT COUNT(*) FROM tickets").fetchone()[0] == 0:
             stamp = datetime.now(TZ)
-            imported_inventory = db.execute("SELECT 1 FROM source_documents WHERE source_kind='workbook' LIMIT 1").fetchone()
-            if imported_inventory:
-                samples = [
-                    ("SR-2569-9001", "", "ครุภัณฑ์ทดสอบ 1 (ข้อมูลจำลอง)", "พื้นที่ทดสอบ", "อาการจำลอง: ตรวจระบบก่อนเปิดใช้งาน", "เร่งด่วน", "ผู้แจ้งทดสอบ", "กำลังซ่อม", 0, "", 0, 0, 0, 0, "", "ช่างทดสอบ", "รายการจำลอง ไม่ผูกกับทะเบียนจริง", 0),
-                    ("SR-2569-9002", "", "ครุภัณฑ์ทดสอบ 2 (ข้อมูลจำลอง)", "พื้นที่ทดสอบ", "อาการจำลอง: ต้องเสนอค่าใช้จ่ายทดสอบ", "เร่งด่วนมาก", "ผู้แจ้งทดสอบ", "รออนุมัติ", 1, "Ticket จำลองเพื่อทดสอบคิวอนุมัติ", 1, 0, 0, 8500, "", "", "รายการจำลอง ไม่ผูกกับทะเบียนจริง", 0),
-                    ("SR-2569-9003", "", "ครุภัณฑ์ทดสอบ 3 (ข้อมูลจำลอง)", "พื้นที่ทดสอบ", "อาการจำลอง: ตรวจการปิดงาน", "ปกติ", "ผู้แจ้งทดสอบ", "ปิดงาน", 0, "", 0, 0, 0, 0, "", "ช่างทดสอบ", "รายการจำลอง ไม่ผูกกับทะเบียนจริง", 0),
-                ]
-            else:
-                samples = [
-                    ("SR-2569-0001", "7430-003-0001", "เครื่องถ่ายเอกสารระบบหมึกผง", "ศูนย์บริการ · ชั้น 1", "กระดาษติดภายในเครื่องบ่อย", "เร่งด่วน", "เจ้าหน้าที่ศูนย์บริการ", "กำลังซ่อม", 0, "", 0, 0, 0, 0, "", "ช่างตัวอย่าง", "กำลังตรวจชุดป้อนกระดาษ", 0),
-                    ("SR-2569-0002", "", "เครื่องปรับอากาศ ห้องประชุม 2", "อาคารสำนักงาน · ชั้น 2", "เครื่องไม่เย็นและมีน้ำหยด", "เร่งด่วนมาก", "งานอาคารสถานที่", "รออนุมัติ", 1, "ต้องจัดซื้ออะไหล่และเสนอค่าใช้จ่าย", 1, 0, 0, 8500, "", "", "", 0),
-                    ("SR-2569-0003", "7110-002-0001", "ตู้เหล็กเก็บเอกสาร 4 ลิ้นชัก", "งานสารบรรณ · ชั้น 2", "รางลิ้นชักติดขัด เปิด-ปิดไม่สะดวก", "ปกติ", "งานสารบรรณ", "ปิดงาน", 0, "", 0, 0, 0, 0, "", "ช่างตัวอย่าง", "ปรับตั้งรางลิ้นชักเรียบร้อย", 0),
-                ]
+            samples = [
+                ("SR-2569-0001", "7430-003-0001", "เครื่องถ่ายเอกสารระบบหมึกผง", "ศูนย์บริการ · ชั้น 1", "กระดาษติดภายในเครื่องบ่อย", "เร่งด่วน", "เจ้าหน้าที่ศูนย์บริการ", "กำลังซ่อม", 0, "", 0, 0, 0, 0, "", "ช่างตัวอย่าง", "กำลังตรวจชุดป้อนกระดาษ", 0),
+                ("SR-2569-0002", "", "เครื่องปรับอากาศ ห้องประชุม 2", "อาคารสำนักงาน · ชั้น 2", "เครื่องไม่เย็นและมีน้ำหยด", "เร่งด่วนมาก", "งานอาคารสถานที่", "รออนุมัติ", 1, "ต้องจัดซื้ออะไหล่และเสนอค่าใช้จ่าย", 1, 0, 0, 8500, "", "", "", 0),
+                ("SR-2569-0003", "7110-002-0001", "ตู้เหล็กเก็บเอกสาร 4 ลิ้นชัก", "งานสารบรรณ · ชั้น 2", "รางลิ้นชักติดขัด เปิด-ปิดไม่สะดวก", "ปกติ", "งานสารบรรณ", "ปิดงาน", 0, "", 0, 0, 0, 0, "", "ช่างตัวอย่าง", "ปรับตั้งรางลิ้นชักเรียบร้อย", 0),
+            ]
             for idx, row in enumerate(samples):
                 created = (stamp - timedelta(days=idx)).isoformat(timespec="seconds")
                 (ticket_no, asset_code, asset_name, location, issue, urgency, requester, status, approval_required, approval_reason, requires_purchase, requires_external, requires_replacement, estimate_cost, approved_by, assigned_to, work_notes, actual_cost) = row
@@ -296,7 +290,7 @@ def initialize() -> None:
 
 
 def asset_dict(row: sqlite3.Row) -> dict:
-    return {"id": row["id"], "name": row["name"], "detail": row["detail"], "code": row["code"], "group": row["group_name"], "categoryId": row["category_id"], "location": row["location"], "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"]}
+    return {"id": row["id"], "name": row["name"], "detail": row["detail"], "code": row["code"], "group": row["group_name"], "categoryId": row["category_id"], "fsnCode": row["fsn_code"], "location": row["location"], "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"]}
 
 
 def survey_dict(row: sqlite3.Row) -> dict:
@@ -590,13 +584,13 @@ class Handler(BaseHTTPRequestHandler):
     def create_asset(self, db: sqlite3.Connection, body: dict):
         name = clean_text(body.get("name"), 300, "ชื่อครุภัณฑ์")
         detail = clean_text(body.get("detail", ""), 1000, "รายละเอียด", required=False)
-        code = clean_text(body.get("code", ""), 80, "รหัส FSN", required=False)
+        code = clean_text(body.get("code", ""), 80, "เลขประจำครุภัณฑ์", required=False)
         auto_code = not code
-        if auto_code:
-            fsn_group = clean_text(body.get("fsnGroup"), 4, "กลุ่ม FSN")
-            fsn_type = clean_text(body.get("fsnType"), 3, "ชนิด FSN")
-            if not re.fullmatch(r"[0-9]{4}", fsn_group) or not re.fullmatch(r"[0-9]{3}", fsn_type):
-                raise ApiError("กลุ่ม FSN ต้องเป็นตัวเลข 4 หลัก และชนิด FSN ต้องเป็นตัวเลข 3 หลัก")
+        fsn_code = clean_text(body.get("fsnCode", ""), 13, "รหัสจำแนก FSN", required=False)
+        if fsn_code and not re.fullmatch(r"[0-9]{4}-[0-9]{3}-[0-9]{4}", fsn_code):
+            raise ApiError("รหัส FSN ต้องเป็น 4-3-4 หลัก ชุดสุดท้ายคือรายละเอียด ไม่ใช่ลำดับทรัพย์สิน")
+        if auto_code and not fsn_code:
+            raise ApiError("กรุณาเลือกรหัส FSN เต็มจากบัญชีรหัส หรือระบุเลขประจำครุภัณฑ์เดิมด้วยตนเอง")
         location = clean_text(body.get("location", ""), 300, "สถานที่", required=False)
         actor = clean_text(body.get("actor", ROLE_OFFICER), 80, "ผู้บันทึก")
         raw_category_id = body.get("categoryId", body.get("category_id"))
@@ -609,10 +603,13 @@ class Handler(BaseHTTPRequestHandler):
         if auto_code:
             # Hold the write lock while choosing and inserting the next code.
             # Use all existing rows, including pending and imported records.
-            prefix = f"{fsn_group}-{fsn_type}-"
-            sequence = db.execute("SELECT MAX(CAST(substr(code, ?) AS INTEGER)) FROM assets WHERE code GLOB ? AND substr(code, ?) NOT GLOB '*[^0-9]*'",
-                (len(prefix) + 1, prefix + "[0-9]*", len(prefix) + 1)).fetchone()[0]
-            code = f"{prefix}{int(sequence or 0) + 1:04d}"
+            if not db.execute("SELECT 1 FROM fsn_catalog_items WHERE canonical_fsn_code=?", (fsn_code,)).fetchone():
+                raise ApiError("ยังไม่มีรหัส FSN นี้ในบัญชี กรุณาเพิ่มพร้อมคำอธิบายและเอกสารอ้างอิงที่ ตั้งค่า → หมวดครุภัณฑ์และรหัส FSN ก่อน")
+            prefix = f"{fsn_code}-"
+            candidates=db.execute("SELECT code FROM assets WHERE code GLOB ?",(prefix+"[0-9]*",))
+            sequence=max((int(match.group(1)) for candidate in candidates
+                if (match := re.fullmatch(re.escape(prefix)+r"([0-9]+)(?:[/\.].*)?",candidate[0]))),default=0)
+            code = f"{prefix}{sequence + 1:04d}"
             if len(code) > 80:
                 raise ApiError("เลขลำดับครุภัณฑ์เกินช่วงที่รองรับ")
         if db.execute("SELECT 1 FROM assets WHERE code=?", (code,)).fetchone():
@@ -621,7 +618,7 @@ class Handler(BaseHTTPRequestHandler):
         if not category:
             raise ApiError("ไม่พบหมวดที่เลือกหรือหมวดถูกปิดใช้งานแล้ว")
         group = category["category_name"]
-        cur = db.execute("INSERT INTO assets(name,detail,code,group_name,location,category_id,status,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)", (name, detail, code, group, location, category_id, "รออนุมัติ", stamp, actor, stamp))
+        cur = db.execute("INSERT INTO assets(name,detail,code,group_name,location,category_id,status,created_at,created_by,updated_at,fsn_code) VALUES(?,?,?,?,?,?,?,?,?,?,?)", (name, detail, code, group, location, category_id, "รออนุมัติ", stamp, actor, stamp, fsn_code))
         db.execute("INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)", (cur.lastrowid, actor, "ส่งขออนุมัติลงทะเบียน", "", "รออนุมัติ", f"เลือกหมวด {group}; รายการใหม่ต้องผ่านการตรวจสอบก่อนเข้าทะเบียนตัวอย่าง", stamp))
         db.execute("INSERT INTO survey_items(name,detail,code,created_at) VALUES(?,?,?,?)", (name, detail, code, stamp))
         return asset_dict(db.execute("SELECT * FROM assets WHERE id=?", (cur.lastrowid,)).fetchone()), 201

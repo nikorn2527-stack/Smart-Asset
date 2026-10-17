@@ -53,7 +53,7 @@ def _template_dict(row: sqlite3.Row) -> dict[str, Any]:
 
 def _inventory_select() -> str:
     return """SELECT a.id,a.name,a.detail,a.code,a.group_name,a.location,a.acquired_year,a.status,a.icon,a.created_at,a.created_by,a.category_id,
-        a.old_asset_code,a.maintenance_status,a.asset_status_source,a.asset_type,a.fiscal_year_th,a.acquisition_date,a.delivery_date,
+        a.fsn_code,a.old_asset_code,a.maintenance_status,a.asset_status_source,a.asset_type,a.fiscal_year_th,a.acquisition_date,a.delivery_date,
         a.acquisition_method,a.purchase_price,a.gfmis_no,a.po_no,a.model,a.serial_number,a.useful_life_years,a.depreciation_policy_id,
         a.depreciation_value,a.accumulated_depreciation,a.net_book_value,a.valuation_date,a.remaining_days,a.is_loaned,a.loan_price,
         a.latest_update,a.delivery_note_no,a.source_document_id,a.source_row_no,
@@ -94,7 +94,7 @@ def _inventory_item(row: sqlite3.Row) -> dict[str, Any]:
         "id": row["id"], "name": name, "detail": row["detail"] or row["register_description"] or "",
         "code": row["code"], "group": row["category_name"] or row["group_name"], "location": location,
         "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"],
-        "categoryId": row["category_id"], "assetType": row["register_asset_type"] or row["asset_type"],
+        "categoryId": row["category_id"], "fsnCode": row["fsn_code"], "assetType": row["register_asset_type"] or row["asset_type"],
         "organization": row["organization_name"] or "", "department": row["department_name"] or "",
         "responsibleUnit": row["responsible_unit"] or "", "gfmisNo": row["linked_gfmis_no"] or "",
         "poNo": row["linked_po_no"] or "", "serialNumber": row["linked_serial_number"] or "",
@@ -115,7 +115,7 @@ def _where(query: dict) -> tuple[str, list[Any]]:
     text = _one(query, "q").strip()
     if text:
         like = f"%{text}%"
-        searchable = ["a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name"]
+        searchable = ["a.fsn_code", "a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name"]
         searchable_terms = [f"COALESCE({column},'') LIKE ?" for column in searchable]
         searchable_terms.append("EXISTS(SELECT 1 FROM asset_register_details rr WHERE rr.asset_id=a.id AND (rr.vendor_name LIKE ? OR rr.description LIKE ?))")
         values.extend([like] * len(searchable))
@@ -382,13 +382,37 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
         return result if result else ({"error":"ยังไม่มีรายการครุภัณฑ์ในฐานข้อมูล"},404)
     if method=="GET" and path=="/api/catalog/categories":
         return [dict(row) for row in db.execute("SELECT id,category_name AS name,source_workbook AS source,notes FROM asset_categories ORDER BY category_name")]
+    if method=="POST" and path=="/api/catalog/fsn":
+        if body.get("actor") != "เจ้าหน้าที่พัสดุ":
+            return {"error":"การเพิ่มบัญชีรหัสต้องใช้บทบาทเจ้าหน้าที่พัสดุในโหมดทดสอบ"},403
+        code=str(body.get("code", "")).strip()
+        name=" ".join(str(body.get("name", "")).split())
+        reference=" ".join(str(body.get("reference", "")).split())
+        if not re.fullmatch(r"[0-9]{4}-[0-9]{3}-[0-9]{4}",code):
+            return {"error":"รหัส FSN ต้องเป็น 4-3-4 หลัก เช่น 7110-002-0001"},400
+        if not name or len(name)>300 or not reference or len(reference)>1000:
+            return {"error":"กรุณาระบุชื่อ/รายละเอียดไม่เกิน 300 ตัวอักษร และหลักฐานอ้างอิงไม่เกิน 1,000 ตัวอักษร"},400
+        db.execute("BEGIN IMMEDIATE")
+        if db.execute("SELECT 1 FROM fsn_catalog_items f JOIN source_documents s ON s.id=f.source_document_id WHERE f.canonical_fsn_code=? AND s.source_kind='agency_fsn'",(code,)).fetchone():
+            return {"error":"มีรหัส FSN นี้ในบัญชีหน่วยงานแล้ว ให้ใช้รหัสเดิมเมื่อเป็นคุณลักษณะเดียวกัน"},409
+        db.execute("INSERT OR IGNORE INTO source_documents(filename,title,source_kind,source_scope,extraction_method) VALUES(?,?,?,?,?)",("agency-fsn-register","บัญชีรหัส FSN ที่หน่วยงานกำหนด","agency_fsn","กำหนดโดยเจ้าหน้าที่หน่วยงาน","บันทึกผ่านหน้าตั้งค่า"))
+        source=db.execute("SELECT id FROM source_documents WHERE filename='agency-fsn-register' AND sha256='' ORDER BY id LIMIT 1").fetchone()[0]
+        group,kind,description=code.split("-")
+        cur=db.execute("INSERT INTO fsn_catalog_items(source_document_id,category_code,type_code,item_name,canonical_fsn_code,raw_line) VALUES(?,?,?,?,?,?)",(source,group,kind,name,code,json.dumps({"reference":reference,"actor":body["actor"]},ensure_ascii=False)))
+        return {"id":cur.lastrowid,"fullCode":code,"name":name,"reference":reference},201
     if method=="GET" and path=="/api/catalog/fsn":
-        q=_one(query,"q").strip();limit=_safe_limit(query,50);offset=_safe_offset(query)
-        where=" WHERE item_name LIKE ? OR category_code LIKE ? OR type_code LIKE ? OR canonical_fsn_code LIKE ?" if q else ""
+        q=_one(query,"q").strip();limit=_safe_limit(query);offset=_safe_offset(query)
+        where=" WHERE f.item_name LIKE ? OR f.category_code LIKE ? OR f.type_code LIKE ? OR f.canonical_fsn_code LIKE ?" if q else ""
         args=[f"%{q}%"]*4 if q else []
-        total=int(db.execute("SELECT COUNT(*) FROM fsn_catalog_items"+where,args).fetchone()[0])
-        rows=db.execute("SELECT id,source_page AS page,group_no AS groupNo,group_title AS groupTitle,category_code AS categoryCode,type_code AS typeCode,item_name AS name,canonical_fsn_code AS fullCode FROM fsn_catalog_items"+where+" ORDER BY category_code,type_code,item_name LIMIT ? OFFSET ?",(*args,limit,offset)).fetchall()
-        return {"items":[dict(row) for row in rows],"total":total,"limit":limit,"offset":offset}
+        total=int(db.execute("SELECT COUNT(*) FROM fsn_catalog_items f"+where,args).fetchone()[0])
+        rows=db.execute("SELECT f.id,f.source_page AS page,f.group_no AS groupNo,f.group_title AS groupTitle,f.category_code AS categoryCode,f.type_code AS typeCode,f.item_name AS name,f.canonical_fsn_code AS fullCode,s.title AS sourceTitle,s.source_kind AS sourceKind,f.raw_line AS referenceData FROM fsn_catalog_items f JOIN source_documents s ON s.id=f.source_document_id"+where+" ORDER BY f.category_code,f.type_code,f.item_name LIMIT ? OFFSET ?",(*args,limit,offset)).fetchall()
+        items=[]
+        for row in rows:
+            item=dict(row)
+            raw=item.pop("referenceData")
+            item["reference"]=json.loads(raw).get("reference", "") if item["sourceKind"]=="agency_fsn" else ""
+            items.append(item)
+        return {"items":items,"total":total,"limit":limit,"offset":offset}
     if method=="GET" and path=="/api/catalog/depreciation":
         rows=db.execute("SELECT id,rule_no AS ruleNo,category_name AS category,useful_life_years AS years,annual_rate_percent AS annualRate,scope,note,source_page AS sourcePage FROM depreciation_policies ORDER BY CAST(rule_no AS REAL),rule_no").fetchall()
         return {"items":[dict(row) for row in rows],"total":len(rows)}
