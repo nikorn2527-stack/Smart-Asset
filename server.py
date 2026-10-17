@@ -376,6 +376,8 @@ class Handler(BaseHTTPRequestHandler):
             extended = handle_asset_api(db, method, path, query, body)
             if extended is not None:
                 return extended
+            if method == "GET" and path == "/api/assets/pending":
+                return [asset_dict(row) for row in db.execute("SELECT * FROM assets WHERE status='รออนุมัติ' ORDER BY id DESC")]
             if method == "GET" and path == "/api/assets":
                 return [asset_dict(row) for row in db.execute("SELECT * FROM assets ORDER BY id DESC LIMIT 150")]
             if method == "GET" and path == "/api/survey":
@@ -554,19 +556,29 @@ class Handler(BaseHTTPRequestHandler):
         max_row = db.execute("SELECT MAX(CAST(substr(ticket_no, ?) AS INTEGER)) FROM tickets WHERE ticket_no LIKE ?", (len(prefix) + 1, prefix + "%")).fetchone()[0]
         ticket_no = f"{prefix}{int(max_row or 0) + 1:04d}"
         if body.get("assetId") is not None:
-            asset = db.execute("SELECT id,code,name FROM assets WHERE id=?", (body["assetId"],)).fetchone()
+            raw_id = body["assetId"]
+            if isinstance(raw_id, bool) or not re.fullmatch(r"[1-9][0-9]*", str(raw_id)):
+                raise ApiError("รหัสอ้างอิงครุภัณฑ์ไม่ถูกต้อง")
+            if len(str(raw_id)) > 19 or int(raw_id) > 9223372036854775807:
+                raise ApiError("รหัสอ้างอิงครุภัณฑ์ไม่ถูกต้อง")
+            asset = db.execute("SELECT id,code,name FROM assets WHERE id=?", (int(raw_id),)).fetchone()
             if asset is None:
                 raise ApiError("ไม่พบครุภัณฑ์ที่แจ้งซ่อม", 404)
             asset_name, asset_code = asset["name"], asset["code"]
         elif asset_code:
-            asset = db.execute("SELECT id,code FROM assets WHERE code=? ORDER BY id LIMIT 1", (asset_code,)).fetchone()
-            if asset is None:
+            matches = db.execute("SELECT id,code,name FROM assets WHERE code=? ORDER BY id LIMIT 2", (asset_code,)).fetchall()
+            if not matches:
                 raise ApiError("ไม่พบรหัสครุภัณฑ์ กรุณาเลือกจากทะเบียน", 404)
+            if len(matches) > 1:
+                raise ApiError("พบรหัสครุภัณฑ์ซ้ำ กรุณาเปิดรายละเอียดรายการที่ต้องการแล้วกดแจ้งซ่อม")
+            asset = matches[0]
         else:
-            matches = db.execute("SELECT id,code FROM assets WHERE name=? ORDER BY id LIMIT 2", (asset_name,)).fetchall()
+            matches = db.execute("SELECT id,code,name FROM assets WHERE name=? ORDER BY id LIMIT 2", (asset_name,)).fetchall()
             if len(matches) > 1:
                 raise ApiError("มีครุภัณฑ์ชื่อซ้ำ กรุณาระบุรหัสครุภัณฑ์")
             asset = matches[0] if matches else None
+        if asset:
+            asset_name, asset_code = asset["name"], asset["code"]
         cur = db.execute("""INSERT INTO tickets(ticket_no,asset_id,asset_code,asset_name,location,issue,urgency,requester,contact,status,created_at,updated_at)
             VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""", (ticket_no, asset["id"] if asset else None, asset["code"] if asset else asset_code, asset_name, location, issue, urgency, requester, contact, "รับแจ้งใหม่", stamp, stamp))
         db.execute("INSERT INTO ticket_events(ticket_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)", (cur.lastrowid, requester, "สร้าง Ticket", "", "รับแจ้งใหม่", "รับคำขอและออกเลข Ticket อัตโนมัติ", stamp))
@@ -578,7 +590,13 @@ class Handler(BaseHTTPRequestHandler):
     def create_asset(self, db: sqlite3.Connection, body: dict):
         name = clean_text(body.get("name"), 300, "ชื่อครุภัณฑ์")
         detail = clean_text(body.get("detail", ""), 1000, "รายละเอียด", required=False)
-        code = clean_text(body.get("code"), 80, "รหัส FSN")
+        code = clean_text(body.get("code", ""), 80, "รหัส FSN", required=False)
+        auto_code = not code
+        if auto_code:
+            fsn_group = clean_text(body.get("fsnGroup"), 4, "กลุ่ม FSN")
+            fsn_type = clean_text(body.get("fsnType"), 3, "ชนิด FSN")
+            if not re.fullmatch(r"[0-9]{4}", fsn_group) or not re.fullmatch(r"[0-9]{3}", fsn_type):
+                raise ApiError("กลุ่ม FSN ต้องเป็นตัวเลข 4 หลัก และชนิด FSN ต้องเป็นตัวเลข 3 หลัก")
         location = clean_text(body.get("location", ""), 300, "สถานที่", required=False)
         actor = clean_text(body.get("actor", ROLE_OFFICER), 80, "ผู้บันทึก")
         raw_category_id = body.get("categoryId", body.get("category_id"))
@@ -588,8 +606,17 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError("กรุณาเลือกหมวดครุภัณฑ์จากรายการ")
         stamp = now_iso()
         db.execute("BEGIN IMMEDIATE")
+        if auto_code:
+            # Hold the write lock while choosing and inserting the next code.
+            # Use all existing rows, including pending and imported records.
+            prefix = f"{fsn_group}-{fsn_type}-"
+            sequence = db.execute("SELECT MAX(CAST(substr(code, ?) AS INTEGER)) FROM assets WHERE code GLOB ? AND substr(code, ?) NOT GLOB '*[^0-9]*'",
+                (len(prefix) + 1, prefix + "[0-9]*", len(prefix) + 1)).fetchone()[0]
+            code = f"{prefix}{int(sequence or 0) + 1:04d}"
+            if len(code) > 80:
+                raise ApiError("เลขลำดับครุภัณฑ์เกินช่วงที่รองรับ")
         if db.execute("SELECT 1 FROM assets WHERE code=?", (code,)).fetchone():
-            raise ApiError("รหัสนี้มีในทะเบียนแล้ว กรุณาตรวจสอบรายการซ้ำ")
+            raise ApiError("รหัสนี้มีในทะเบียนแล้ว กรุณาตรวจสอบรายการซ้ำ", 409)
         category = db.execute("SELECT category_name FROM asset_categories WHERE id=? AND is_active=1", (category_id,)).fetchone()
         if not category:
             raise ApiError("ไม่พบหมวดที่เลือกหรือหมวดถูกปิดใช้งานแล้ว")
