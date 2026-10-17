@@ -602,3 +602,17 @@ CREATE TABLE IF NOT EXISTS line_settings_events (
   after_json TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+-- Classification references only: no asset IDs, locations, prices or contacts.
+CREATE TABLE IF NOT EXISTS starter_catalog_rows (
+  category_id INTEGER NOT NULL REFERENCES asset_categories(id),
+  type_name TEXT NOT NULL,
+  fsn_code TEXT NOT NULL DEFAULT '',
+  source_document_id INTEGER NOT NULL REFERENCES source_documents(id),
+  PRIMARY KEY(category_id,type_name,fsn_code)
+);
+CREATE INDEX IF NOT EXISTS idx_starter_catalog_code ON starter_catalog_rows(category_id,fsn_code);
+CREATE TABLE IF NOT EXISTS starter_number_floors (
+  fsn_code TEXT PRIMARY KEY,
+  sequence_floor INTEGER NOT NULL CHECK(sequence_floor>=0)
+);

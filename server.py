@@ -24,7 +24,8 @@ from smart_assets import base_url, branding, public_asset, public_receipt, qr_ur
 from work_api import handle as handle_work_api, WorkError, generate_due
 from register_forms import handle as handle_register_form
 from notifications import handle as handle_notifications, NotificationError, approval_threshold
-from numbering import valid_for_category, next_code
+from numbering import valid_for_category, next_code, classification_type_exists
+from starter_catalog import seed as seed_starter_catalog
 from line_notifications import handle as handle_line, verify_webhook, dispatch as dispatch_line, WORKER as LINE_WORKER
 
 WORK_SCHEDULER = {"running": False, "lastRun": None, "lastError": None}
@@ -293,9 +294,11 @@ def initialize() -> None:
                 if status != "รับแจ้งใหม่":
                     db.execute("INSERT INTO ticket_events(ticket_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)", (cur.lastrowid, ROLE_OFFICER, "อัปเดตตัวอย่าง", "รับแจ้งใหม่", status, "สถานะเริ่มต้นในชุดข้อมูลสาธิต", created))
 
+        seed_starter_catalog(db)
+
 
 def asset_dict(row: sqlite3.Row) -> dict:
-    return {"id": row["id"], "name": row["name"], "detail": row["detail"], "code": row["code"], "group": row["group_name"], "categoryId": row["category_id"], "fsnCode": row["fsn_code"], "location": row["location"], "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"]}
+    return {"id": row["id"], "name": row["name"], "detail": row["detail"], "code": row["code"], "group": row["group_name"], "categoryId": row["category_id"], "fsnCode": row["fsn_code"], "assetType": row["asset_type"], "location": row["location"], "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"]}
 
 
 def survey_dict(row: sqlite3.Row) -> dict:
@@ -598,6 +601,7 @@ class Handler(BaseHTTPRequestHandler):
         detail = clean_text(body.get("detail", ""), 1000, "รายละเอียด", required=False)
         code = clean_text(body.get("code", ""), 80, "เลขประจำครุภัณฑ์", required=False)
         auto_code = not code
+        asset_type = clean_text(body.get("assetType", ""), 300, "ชนิดครุภัณฑ์", required=False)
         fsn_code = clean_text(body.get("fsnCode", ""), 13, "รหัสจำแนก FSN", required=False)
         if fsn_code and not re.fullmatch(r"[0-9]{4}-[0-9]{3}-[0-9]{4}", fsn_code):
             raise ApiError("รหัส FSN ต้องเป็น 4-3-4 หลัก ชุดสุดท้ายคือรายละเอียด ไม่ใช่ลำดับทรัพย์สิน")
@@ -614,6 +618,8 @@ class Handler(BaseHTTPRequestHandler):
         db.execute("BEGIN IMMEDIATE")
         if fsn_code and not valid_for_category(db, category_id, fsn_code):
             raise ApiError("รหัสนี้ยังไม่ผูกกับหมวดที่เลือก เลือกจากทะเบียนของหมวด หรือกำหนดรหัสพร้อมหลักฐานในตั้งค่าก่อน")
+        if asset_type and not classification_type_exists(db, category_id, fsn_code, asset_type):
+            raise ApiError("ชนิดครุภัณฑ์ไม่ตรงกับหมวดหรือรหัสที่เลือก กรุณาเลือกจากบัญชีเดิม")
         if auto_code:
             # Hold the write lock while choosing and inserting the next code.
             # Use all existing rows, including pending and imported records.
@@ -626,7 +632,7 @@ class Handler(BaseHTTPRequestHandler):
         if not category:
             raise ApiError("ไม่พบหมวดที่เลือกหรือหมวดถูกปิดใช้งานแล้ว")
         group = category["category_name"]
-        cur = db.execute("INSERT INTO assets(name,detail,code,group_name,location,category_id,status,created_at,created_by,updated_at,fsn_code) VALUES(?,?,?,?,?,?,?,?,?,?,?)", (name, detail, code, group, location, category_id, "รออนุมัติ", stamp, actor, stamp, fsn_code))
+        cur = db.execute("INSERT INTO assets(name,detail,code,group_name,location,category_id,status,created_at,created_by,updated_at,fsn_code,asset_type) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (name, detail, code, group, location, category_id, "รออนุมัติ", stamp, actor, stamp, fsn_code, asset_type))
         db.execute("INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)", (cur.lastrowid, actor, "ส่งขออนุมัติลงทะเบียน", "", "รออนุมัติ", f"เลือกหมวด {group}; รายการใหม่ต้องผ่านการตรวจสอบก่อนเข้าทะเบียนตัวอย่าง", stamp))
         db.execute("INSERT INTO survey_items(name,detail,code,created_at) VALUES(?,?,?,?)", (name, detail, code, stamp))
         return asset_dict(db.execute("SELECT * FROM assets WHERE id=?", (cur.lastrowid,)).fetchone()), 201

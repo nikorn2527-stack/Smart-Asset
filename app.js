@@ -289,7 +289,7 @@ $('#assetForm').addEventListener('submit',async event=>{
   const parts=[form.get('group'),form.get('type'),form.get('fsnDescription')],fsnCode=parts.some(Boolean)?parts.join('-'):'';
   button.disabled=true;
   try{
-    const asset=await api('/api/assets',{method:'POST',body:JSON.stringify({code:form.get('numberMode')==='manual'?String(form.get('inventoryCode')||'').trim():'',fsnCode,name:String(form.get('name')).trim(),detail:String(form.get('detail')||'').trim(),categoryId,location:String(form.get('location')||'').trim(),actor:currentRole})});
+    const asset=await api('/api/assets',{method:'POST',body:JSON.stringify({code:form.get('numberMode')==='manual'?String(form.get('inventoryCode')||'').trim():'',fsnCode,assetType:window.govAssetNumbering?.getType()||'',name:String(form.get('name')).trim(),detail:String(form.get('detail')||'').trim(),categoryId,location:String(form.get('location')||'').trim(),actor:currentRole})});
     $('#assetDialog').close();formElement.reset();updateCode();await refreshData();toast(`ส่งรายการ ${asset.code} เข้าคิวอนุมัติแล้ว`);switchView('approvals');
   }catch(error){$('#assetFormError').textContent=error.message;}finally{button.disabled=false;}
 });
