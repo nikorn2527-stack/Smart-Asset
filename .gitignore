@@ -1,122 +1,29 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
+# Runtime SQLite files, WAL/SHM and exports are local prototype data, not source artifacts
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.db
+*.db-shm
+*.db-wal
+*.db-*
+data/
+*.csv
+__pycache__/
 
-# Next.js
-.next/
-out/
-build/
-
-# Production
-dist/
-
-# Environment
+# User data, source attachments and credentials must remain outside version control
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+source-materials/
+attachments/
+*.pdf
+*.xls
+*.xlsx
+*.rar
 
-# Database
-db/*.db
-db/*.db-journal
-db/custom.db
-prisma/*.db
-prisma/*.db-journal
-# Live SQLite database lives in a subdirectory the patterns above miss.
-# Never commit the binary database (only a few KB of 0-byte dev.db was ever tracked).
-prisma/db/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-*.err
-dev.log
-server.log
-
-# Uploads
-upload/
-
-# Agent context
-agent-ctx/
-
-# Scripts output
-scripts/output/
-
-# Skills (development tools)
-skills/
-
-# Tool results / temp
-tool-results/
-
-# Playwright
-/test-results/
-/playwright-report/
-/playwright/.cache/
-db/custom.db
-db/*.db
-.vercel
-.env*
-
-# Credentials — NEVER commit real secrets to Git
-google-service-account.json
-*.pem
-*.key
-backups/
-*.tsbuildinfo
-
-# Build artifacts
-tsconfig.tsbuildinfo
-
-# Compiled Go service binary (9 MB, Linux-only, rebuild with `go build`).
-# The source (main.go, go.mod, go.sum) IS tracked - only the output is not.
-/mini-services/go-sync-service/go-sync-service
-# Catch any future `go build` output from any Go package in this repo.
-mini-services/**/go-sync-service
-*.exe
-
-# Backup files (should be in external storage, not git)
-backups/
-
-# Development handoff context (not needed in production)
-agent-ctx/
-
-# PR/G2 evidence (not needed in production)
-g2-evidence/
-docs/evidence/
-docs/g2-evidence/
-
-# Package manager lockfile (using bun, not npm)
-package-lock.json
-upload/
-
-# transient verification scripts (agent scratch)
-.v.ps1
-
-# dev-server output captured during local smoke testing
-.dev.log
-.dev.err
-
-# generated output dump (screenshots, exports) - not source
-download/*.png
-
-# runtime PID file written by .zscripts/dev.sh
-.zscripts/dev.pid
-
-# local agent tooling, not application code
-.continue/
-
-# Preserved Python prototype runtime files
-legacy/**/__pycache__/
-legacy/**/*.sqlite3
-legacy/**/*.sqlite3-*
+# Local Python development environments
+.venv/
+.venvs/
+.pytest_cache/
+*.pyc

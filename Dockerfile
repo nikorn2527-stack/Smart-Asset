@@ -1,57 +1,10 @@
-# ============================================================
-# ITAM-NextJS Docker Image — Self-host deployment
-# ============================================================
+FROM python:3.12-slim
 
-# ── Stage 1: Build ──
-FROM oven/bun:1 AS builder
 WORKDIR /app
-
-# Copy package files
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
-
-# Copy source
-COPY . .
-
-# Set env for build
-ENV NODE_ENV=production
-ENV SANDBOX_PREVIEW=1
-
-# Generate Prisma client
-RUN bun run db:generate
-
-# Build Next.js
-RUN bun run next build --webpack
-
-# ── Stage 2: Production ──
-FROM oven/bun:1 AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
-
-# Copy standalone build
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-
-# Copy Prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/prisma ./prisma
-
-# Copy migration
-COPY --from=builder /app/prisma/migrations ./prisma/migrations
-
-# Copy package.json for scripts
-COPY --from=builder /app/package.json ./package.json
-
-EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
-
-# Start
-CMD ["node", "server.js"]
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY index.html styles.css stickers.css master-data.css app.js asset-tools.js master-data.js asset_api.py master_data_api.py schema.sql server.py smart_assets.py work_api.py register_forms.py register-form.js work.js work.css register-form.css scan.html scan.js smart.js smart.css MANUAL.md ./
+COPY assets/ ./assets/
+ENV PYTHONUNBUFFERED=1 PORT=8080 ASSET_DB_PATH=/data/govasset.sqlite3
+EXPOSE 8080
+CMD ["python", "server.py"]
