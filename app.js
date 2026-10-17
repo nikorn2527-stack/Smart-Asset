@@ -172,7 +172,7 @@ function renderCatalog() { const search=($('#codeSearch')?.value||'').trim().toL
 async function loadFsn(offset=0){fsnOffset=Math.max(0,offset);try{const q=$('#codeSearch')?.value||'';const params=new URLSearchParams({q,limit:String(fsnLimit),offset:String(fsnOffset)});const result=await api(`/api/catalog/fsn?${params}`);fsnRows=result.items;fsnTotal=result.total;renderCatalog();}catch(error){showError(error);}}
 function switchView(name) {
   if (!document.getElementById(`view-${name}`)) return;
-  const parents={register:'assets',survey:'assets',codes:'settings',depreciation:'settings',stickers:'settings'};
+  const parents={register:'assets',survey:'assets',codes:'settings',numbering:'settings',depreciation:'settings',stickers:'settings'};
   const activeMenu=parents[name]||name;
   $$('.view').forEach(section=>section.classList.toggle('active',section.id===`view-${name}`));
   $$('.nav-item[data-view]').forEach(button=>{
@@ -180,7 +180,7 @@ function switchView(name) {
     button.classList.toggle('active',active);
     if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
   });
-  const titles={work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่า',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตามงาน',approvals:'คิวรออนุมัติ',register:'เอกสารทะเบียนคุมทรัพย์สิน',stickers:'แบบสติกเกอร์และการพิมพ์',depreciation:'อายุใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'หมวดครุภัณฑ์และรหัส FSN'};
+  const titles={work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่า',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตามงาน',approvals:'คิวรออนุมัติ',register:'เอกสารทะเบียนคุมทรัพย์สิน',stickers:'แบบสติกเกอร์และการพิมพ์',depreciation:'อายุใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'หมวดและเอกสารอ้างอิง',numbering:'จัดการเลขครุภัณฑ์'};
   const title=titles[name]||'ภาพรวม';
   $('#crumbCurrent').textContent=parents[name]?`${titles[activeMenu]} / ${title}`:title;
   document.title=`${title} — ${window.govAssetBranding?.appName || 'GovAsset'}`;
@@ -254,7 +254,7 @@ function updateCode() {
   $('#generatedCode').textContent=manual?($('#manualAssetCode').value||'ระบุเลขประจำครุภัณฑ์เดิม'):parts.every((v,i)=>new RegExp(`^[0-9]{${[4,3,4][i]}}$`).test(v))?`${parts.join('-')}-[ลำดับประจำชิ้น]`:'เลือกรหัส FSN ให้ครบ 4-3-4 ก่อน';
   window.govAssetNumbering?.renderPreview();
 }
-function openAssetDialog() { populateAssetCategoryOptions(liveCategories||[]); $('#assetFormError').textContent='';updateCode(); $('#assetDialog').showModal(); document.dispatchEvent(new CustomEvent('govasset:asset-entry-open')); $('#itemName').focus(); }
+function openAssetDialog() { populateAssetCategoryOptions(liveCategories||[]); $('#assetFormError').textContent='';updateCode(); $('#assetDialog').showModal(); document.dispatchEvent(new CustomEvent('govasset:asset-entry-open')); $('#assetCategoryId').focus(); }
 function openRepairDialog() { $('#assetSuggestions').innerHTML=assets.map(item=>`<option value="${esc(item.name)}">`).join(''); $('#assetCodes').innerHTML=assets.map(item=>`<option value="${esc(item.code)}">`).join(''); $('#repairForm').reset(); $('#repairForm input[name="assetId"]')?.remove(); $('#repairFormError').textContent=''; $('#repairDialog').showModal(); $('#repairAsset').focus(); }
 
 $$('.nav-item[data-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.view)));
@@ -280,7 +280,7 @@ $('#repairForm').addEventListener('submit',async event=>{
 $('#newAssetTop')?.addEventListener('click',openAssetDialog); $('#newAssetList')?.addEventListener('click',openAssetDialog); $('#newSurvey')?.addEventListener('click',openAssetDialog);
 $('#closeDialog').addEventListener('click',()=>$('#assetDialog').close()); $('#cancelDialog').addEventListener('click',()=>$('#assetDialog').close()); $('#assetDialog').addEventListener('click',event=>{if(event.target===$('#assetDialog'))$('#assetDialog').close();});
 $('#groupCode').addEventListener('input',updateCode); $('#typeCode').addEventListener('input',updateCode);$('#descriptionCode').addEventListener('input',updateCode);$('#assetNumberMode').addEventListener('change',updateCode);$('#manualAssetCode').addEventListener('input',updateCode);
-$('#findAssetFsn').addEventListener('click',()=>{$('#assetDialog').close();switchView('codes');$('#codeSearch').focus();});
+
 $('#assetForm').addEventListener('submit',async event=>{
   event.preventDefault();const formElement=event.currentTarget,button=formElement.querySelector('[type="submit"]');if(button.disabled)return;
   const form=new FormData(formElement),categoryId=Number(form.get('categoryId'));
@@ -295,7 +295,7 @@ $('#assetForm').addEventListener('submit',async event=>{
 });
 $('#exportCsv').addEventListener('click',async event=>{const button=event.currentTarget;button.disabled=true;try{const all=[];let offset=0,total=Infinity;while(offset<total){const page=await api(`/api/inventory?limit=200&offset=${offset}`);all.push(...page.items);total=page.total;offset+=page.items.length;if(!page.items.length)break;}const rows=[['ชื่อรายการ','รายละเอียด','รหัส FSN','กลุ่ม','หน่วยงาน/ที่ตั้ง','วันที่บันทึก','สถานะ'],...all.map(item=>[item.name,item.detail,item.code,item.group,item.location,fmtDate(item.date),item.status])];const csv='\ufeff'+rows.map(row=>row.map(value=>`"${String(value??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));link.download='ทะเบียนครุภัณฑ์-SQLite.csv';link.click();URL.revokeObjectURL(link.href);toast(`ส่งออก ${all.length.toLocaleString('th-TH')} รายการจาก SQLite แล้ว`);}catch(error){showError(error);}finally{button.disabled=false;}});
 $('#printSheet').addEventListener('click',()=>window.print()); $('#printRegister').addEventListener('click',()=>{document.body.dataset.printing='register';window.addEventListener('afterprint',()=>delete document.body.dataset.printing,{once:true});window.print();});
-$('#manualDialog .manual-content')?.insertAdjacentHTML('afterbegin',`<section><h3>เลือกหมวดครุภัณฑ์</h3><p>ตอนเพิ่มรายการใหม่ ให้เลือกหมวดที่หน่วยงานใช้งาน หากยังไม่มีให้เปิด ตั้งค่า → หมวดครุภัณฑ์และรหัส FSN แล้วอ่านคู่มือก่อนสร้างหมวด การเลือกหมวดไม่ได้เลือกหลักเกณฑ์ค่าเสื่อมให้อัตโนมัติ ต้องตรวจให้ตรงตามเกณฑ์ของหน่วยงาน</p></section><section><h3>ค้นข้อมูลแนบและทะเบียนคุม</h3><p>เปิดทะเบียนครุภัณฑ์ ค้นหารายการ แล้วกดใบทะเบียนคุมเพื่อดูที่มาและพิมพ์เอกสารเฉพาะทรัพย์สินนั้น รายการที่นำเข้าจะแสดงไฟล์และแถวต้นทางที่เชื่อมไว้ ระบบจะแสดงเฉพาะข้อมูลที่มีอยู่ในฐานที่กำลังใช้งาน</p></section><section><h3>ออกแบบสติกเกอร์</h3><p>เข้าเมนูสติกเกอร์ ค้นหา/เลือกทรัพย์สินหลายรายการ เลือกหรือสร้างเทมเพลต กำหนดขนาด 5–500 มม. เพิ่ม/ลากข้อความ QR กรอบหรือภาพ และใช้ตัวแปรอย่าง <code>{{AssetNo}}</code>, <code>{{AssetName}}</code>, <code>{{Location}}</code>, <code>{{QrUrl}}</code> กดบันทึกก่อนพิมพ์; แต่ละรายการพิมพ์หนึ่งฉลากตามขนาดจริง</p></section>`);
+$('#manualDialog .manual-content')?.insertAdjacentHTML('afterbegin',`<section><h3>เลือกหมวดครุภัณฑ์</h3><p>ตอนเพิ่มรายการใหม่ ให้เลือกหมวดที่หน่วยงานใช้งาน หากยังไม่มีให้เปิด ตั้งค่า → หมวดและเอกสารอ้างอิง แล้วอ่านคู่มือก่อนสร้างหมวด การเลือกหมวดไม่ได้เลือกหลักเกณฑ์ค่าเสื่อมให้อัตโนมัติ ต้องตรวจให้ตรงตามเกณฑ์ของหน่วยงาน</p></section><section><h3>ค้นข้อมูลแนบและทะเบียนคุม</h3><p>เปิดทะเบียนครุภัณฑ์ ค้นหารายการ แล้วกดใบทะเบียนคุมเพื่อดูที่มาและพิมพ์เอกสารเฉพาะทรัพย์สินนั้น รายการที่นำเข้าจะแสดงไฟล์และแถวต้นทางที่เชื่อมไว้ ระบบจะแสดงเฉพาะข้อมูลที่มีอยู่ในฐานที่กำลังใช้งาน</p></section><section><h3>ออกแบบสติกเกอร์</h3><p>เข้าเมนูสติกเกอร์ ค้นหา/เลือกทรัพย์สินหลายรายการ เลือกหรือสร้างเทมเพลต กำหนดขนาด 5–500 มม. เพิ่ม/ลากข้อความ QR กรอบหรือภาพ และใช้ตัวแปรอย่าง <code>{{AssetNo}}</code>, <code>{{AssetName}}</code>, <code>{{Location}}</code>, <code>{{QrUrl}}</code> กดบันทึกก่อนพิมพ์; แต่ละรายการพิมพ์หนึ่งฉลากตามขนาดจริง</p></section>`);
 $('#helpBtn').addEventListener('click',()=>$('#manualDialog').showModal()); $('#closeManual').addEventListener('click',()=>$('#manualDialog').close()); $('#manualDialog').addEventListener('click',event=>{if(event.target===$('#manualDialog'))$('#manualDialog').close();});
 $('.close-notice')?.addEventListener('click',event=>event.currentTarget.closest('.notice').remove());
 $('#ticketDialog').addEventListener('click',event=>{if(event.target===$('#ticketDialog'))$('#ticketDialog').close();});
