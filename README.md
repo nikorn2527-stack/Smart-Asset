@@ -51,7 +51,7 @@ node node_modules/eslint/bin/eslint.js src/lib/government src/app/api/government
 - ตรวจ HTTP กับ SQLite จริงผ่าน: anonymous 401, แยก org/site 404, บันทึก/อ่านกลับ, revision conflict 409, read-only และ AuditLog
 - Browser fixtures/PDF ผ่าน; production build/deploy และ end-to-end ทั้งแอปยังไม่ได้รับรอง
 - คู่มือ Local พร้อมตัวช่วยสร้าง `.env`/SQLite: [LOCAL-DEVELOPMENT.md](docs/government/LOCAL-DEVELOPMENT.md)
-- ชุดงาน Smart-Asset ใช้ branch `feature/smart-asset-itam-base` แยกจาก main; ชื่อ repo ใน remote ยังเป็น GovAsset-Prototype จนกว่าจะ rename บน GitHub จริง
+- ชุดงาน Smart-Asset รวมใน branch `main` แล้ว; ชื่อ repo ใน remote ยังเป็น GovAsset-Prototype จนกว่าจะ rename บน GitHub จริง
 
 ## อัปเดต PM / QR
 

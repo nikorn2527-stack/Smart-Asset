@@ -4,10 +4,10 @@
 
 ## ดึงโค้ด
 
-ดึง Smart-Asset จาก branch `feature/smart-asset-itam-base` ด้วยคำสั่งด้านล่าง โค้ดนี้แยกจาก branch main ของ ITAM และไม่ได้เปลี่ยน ITAM ต้นฉบับ
+ดึง Smart-Asset จาก branch `main` ด้วยคำสั่งด้านล่าง โค้ดนี้อยู่ใน repo แยกจาก ITAM และไม่ได้เปลี่ยน ITAM ต้นฉบับ
 
 ```bash
-git clone --branch feature/smart-asset-itam-base https://github.com/nikorn2527-stack/GovAsset-Prototype.git Smart-Asset
+git clone https://github.com/nikorn2527-stack/GovAsset-Prototype.git Smart-Asset
 cd Smart-Asset
 npm install -g bun@1.4.3
 bun install --frozen-lockfile --ignore-scripts
