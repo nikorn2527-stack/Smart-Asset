@@ -8,7 +8,7 @@ from test_smart_workflow import HTTPFixture, OFFICER
 class AssetEntry(HTTPFixture):
     def automatic(self, **changes):
         if not self.call('/api/catalog/fsn?q=9876-123-0001')['items']:
-            self.call('/api/catalog/fsn',{'code':'9876-123-0001','name':'ชนิดตัวอย่าง','reference':'บัญชีทดสอบของหน่วยงาน','actor':OFFICER},expected=201)
+            self.call('/api/catalog/fsn',{'code':'9876-123-0001','name':'ชนิดตัวอย่าง','reference':'บัญชีทดสอบของหน่วยงาน','actor':OFFICER,'categoryId':self.call('/api/catalog/categories')[0]['id']},expected=201)
         return {'name':'ครุภัณฑ์ทดสอบเลขลำดับ', 'fsnCode':'9876-123-0001',
                 'categoryId':self.call('/api/catalog/categories')[0]['id'],
                 'actor':OFFICER, **changes}

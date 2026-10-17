@@ -247,12 +247,41 @@
   window.govAssetMasterData = { load: loadMasterData, renderCategories, renderPolicies };
   loadMasterData();
   const fsnDialog=document.createElement('dialog');fsnDialog.className='asset-dialog';fsnDialog.setAttribute('aria-label','เพิ่มรหัส FSN ของหน่วยงาน');
-  fsnDialog.innerHTML=`<form id="fsnEntryForm"><div class="dialog-head"><h2>เพิ่มรหัสจำแนก FSN</h2><button type="button" class="dialog-close" id="closeFsnEntry" aria-label="ปิด">×</button></div><p>เพิ่มเมื่อเป็นชนิดหรือคุณลักษณะที่ยังไม่มีในบัญชี ซื้อเพิ่มชนิดเดิมให้ใช้ FSN เดิม แล้วออกเลขประจำชิ้นใหม่ กลุ่ม/ประเภทต้องอ้างอิงคู่มือ และเลขรายละเอียดต้องยึดบัญชีของหน่วยงาน</p><label>ชุดที่ 1 · กลุ่ม/ประเภท 4 หลัก<input name="group" pattern="[0-9]{4}" maxlength="4" required placeholder="7110"></label><label>ชุดที่ 2 · ชนิด 3 หลัก<input name="type" pattern="[0-9]{3}" maxlength="3" required placeholder="002"></label><label>ชุดที่ 3 · รายละเอียด 4 หลัก<input name="description" pattern="[0-9]{4}" maxlength="4" required placeholder="0001"></label><label>ชื่อและคุณลักษณะที่เลขนี้หมายถึง<input name="name" maxlength="300" required placeholder="เช่น ตู้เก็บเอกสาร 4 ลิ้นชัก"></label><label>หลักฐาน / ที่มาของเลข<textarea name="reference" maxlength="1000" required rows="3" placeholder="ชื่อคู่มือและหน้า หรือบัญชีรหัสที่หน่วยงานรับรอง"></textarea></label><p id="fsnEntryError" role="alert"></p><div class="dialog-actions"><button type="submit" class="button primary">บันทึกบัญชีรหัส</button></div></form>`;
+  fsnDialog.innerHTML=`<form id="fsnEntryForm"><div class="dialog-head"><h2>กำหนดรหัสจำแนกของหมวด</h2><button type="button" class="dialog-close" id="closeFsnEntry" aria-label="ปิด">×</button></div><p id="fsnEntryHint">เพิ่มเมื่อมีชนิด/คุณลักษณะใหม่ โดยยึดบัญชีและหลักฐานของหน่วยงาน เลขชุดที่ 3 ไม่ใช่ลำดับประจำชิ้น</p><label>หมวดที่ใช้รหัสนี้<select name="categoryId" required></select></label><label>ชุดที่ 1 · กลุ่ม/ประเภท 4 หลัก<input name="group" pattern="[0-9]{4}" maxlength="4" required placeholder="7110" list="fsnGroupHints"></label><datalist id="fsnGroupHints"></datalist><label>ชุดที่ 2 · ชนิด 3 หลัก<input name="type" pattern="[0-9]{3}" maxlength="3" required placeholder="002" list="fsnTypeHints"></label><datalist id="fsnTypeHints"></datalist><small id="fsnReferenceHint" class="field-hint"></small><label>ชุดที่ 3 · รายละเอียด 4 หลัก<input name="description" pattern="[0-9]{4}" maxlength="4" required placeholder="0001"></label><label>ชื่อและคุณลักษณะที่เลขนี้หมายถึงในหน่วยงาน<input name="name" maxlength="300" required placeholder="เช่น ตู้เก็บเอกสาร 4 ลิ้นชัก"></label><label>หลักฐาน / ที่มาของเลขและการใช้กับหมวด<textarea name="reference" maxlength="1000" required rows="3" placeholder="ชื่อคู่มือและหน้า หรือบัญชีรหัสที่หน่วยงานรับรอง"></textarea></label><p id="fsnEntryError" role="alert"></p><div class="dialog-actions"><button type="submit" class="button primary">บันทึกรหัสและผูกหมวด</button></div></form>`;
   document.body.append(fsnDialog);
+  let fsnExistingId=null,referenceRequest=0;
   $('#closeFsnEntry').onclick=()=>fsnDialog.close();
-  $('#addFsnBtn').onclick=()=>{$('#fsnEntryError').textContent='';fsnDialog.showModal();};
+  async function fsnHints(){
+    const request=++referenceRequest,form=$('#fsnEntryForm'),group=form.elements.group.value;
+    try{
+      const data={items:[]};let offset=0,total=Infinity;
+      while(offset<total){const page=await app.api('/api/catalog/fsn?'+new URLSearchParams({q:group,limit:'200',offset:String(offset)}));if(request!==referenceRequest)return;data.items.push(...page.items);total=page.total;offset+=page.items.length;if(!page.items.length)break;}
+      $('#fsnGroupHints').innerHTML=[...new Set(data.items.map(row=>row.categoryCode).filter(code=>/^[0-9]{4}$/.test(code)))].map(code=>`<option value="${esc(code)}"></option>`).join('');
+      const matches=data.items.filter(row=>row.categoryCode===group);
+      $('#fsnTypeHints').innerHTML=matches.filter(row=>/^[0-9]{3}$/.test(row.typeCode)).map(row=>`<option value="${esc(row.typeCode)}">${esc(row.name)} · หน้า PDF ${esc(row.page||'—')}</option>`).join('');
+      const irregular=matches.filter(row=>!/^[0-9]{3}$/.test(row.typeCode));
+      $('#fsnReferenceHint').textContent=irregular.length?'บัญชีต้นฉบับมีชนิดที่ไม่ใช่ 3 หลัก เช่น '+irregular.slice(0,4).map(row=>row.typeCode+' '+row.name).join(' / ')+' ต้องตรวจสอบบัญชีหน่วยงานก่อนกำหนดเลข ไม่ตัดหลักให้อัตโนมัติ':'ตัวเลือกเป็นบัญชีอ้างอิงเท่านั้น ตรวจชื่อ/คุณลักษณะและหลักฐานของหน่วยงานก่อนบันทึก';
+    }catch(error){if(request===referenceRequest)$('#fsnReferenceHint').textContent=error.message;}
+  }
+  function openFsnEntry(button=null){
+    const form=$('#fsnEntryForm');form.reset();fsnExistingId=button?.dataset.fsnKind==='agency_fsn'?Number(button.dataset.fsnId):null;
+    form.elements.categoryId.innerHTML='<option value="">เลือกหมวดที่ใช้รหัสนี้</option>'+categories.filter(item=>item.isActive).map(item=>`<option value="${item.id}">${esc(item.name)}</option>`).join('');
+    for(const name of ['group','type','description','name'])form.elements[name].readOnly=Boolean(fsnExistingId);
+    if(button){const parts=button.dataset.adoptFsn.split('-');['group','type','description'].forEach((name,i)=>form.elements[name].value=parts[i]);form.elements.name.value=button.dataset.fsnName||'';}
+    $('#fsnEntryHint').textContent=fsnExistingId?'รหัสนี้มีในบัญชีหน่วยงานแล้ว เลือกหมวดเพิ่มเติมและระบุหลักฐาน โดยคงความหมายเดิม':'กำหนดความหมายของเลขชุดที่ 3 ตามบัญชีหน่วยงาน ตัวอย่างใน PDF อาจใช้เลขเดียวกันแต่ต่างคุณลักษณะ กรุณาตรวจชื่อและหลักฐานก่อนบันทึก';
+    $('#fsnEntryError').textContent='';fsnDialog.showModal();fsnHints();
+  }
+  $('#addFsnBtn').onclick=()=>openFsnEntry();
+  document.addEventListener('click',event=>{const button=event.target.closest('[data-adopt-fsn]');if(button)openFsnEntry(button);});
+  $('#fsnEntryForm').elements.group.addEventListener('change',fsnHints);
   $('#fsnEntryForm').onsubmit=async event=>{
     event.preventDefault();const form=event.target,button=form.querySelector('[type="submit"]');if(button.disabled)return;button.disabled=true;
-    try{const fields=Object.fromEntries(new FormData(form));await app.api('/api/catalog/fsn',{method:'POST',body:JSON.stringify({code:[fields.group,fields.type,fields.description].join('-'),name:fields.name,reference:fields.reference,actor:app.getRole()})});fsnDialog.close();form.reset();$('#codeSearch').value=fields.name;await app.loadFsn(0);app.toast('เพิ่มรหัสจำแนก FSN แล้ว สามารถใช้กับครุภัณฑ์หลายชิ้นที่มีคุณลักษณะเดียวกัน');}catch(error){$('#fsnEntryError').textContent=error.message;}finally{button.disabled=false;}
+    try{
+      const fields=Object.fromEntries(new FormData(form)),categoryId=Number(fields.categoryId);
+      const body={categoryId,reference:fields.reference,actor:app.getRole()};
+      if(fsnExistingId)body.itemId=fsnExistingId;else Object.assign(body,{code:[fields.group,fields.type,fields.description].join('-'),name:fields.name});
+      await app.api('/api/catalog/fsn'+(fsnExistingId?'/link':''),{method:'POST',body:JSON.stringify(body)});
+      fsnDialog.close();form.reset();$('#codeSearch').value=fields.name;await app.loadFsn(0);document.dispatchEvent(new CustomEvent('govasset:numbering-changed',{detail:{categoryId}}));app.toast('บันทึกรหัสและผูกหมวดแล้ว เลือกใช้ได้ในฟอร์มเพิ่มครุภัณฑ์');
+    }catch(error){$('#fsnEntryError').textContent=error.message;}finally{button.disabled=false;}
   };
 })();

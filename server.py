@@ -24,6 +24,7 @@ from smart_assets import base_url, branding, public_asset, public_receipt, qr_ur
 from work_api import handle as handle_work_api, WorkError, generate_due
 from register_forms import handle as handle_register_form
 from notifications import handle as handle_notifications, NotificationError, approval_threshold
+from numbering import valid_for_category, next_code
 from line_notifications import handle as handle_line, verify_webhook, dispatch as dispatch_line, WORKER as LINE_WORKER
 
 WORK_SCHEDULER = {"running": False, "lastRun": None, "lastError": None}
@@ -611,16 +612,12 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError("กรุณาเลือกหมวดครุภัณฑ์จากรายการ")
         stamp = now_iso()
         db.execute("BEGIN IMMEDIATE")
+        if fsn_code and not valid_for_category(db, category_id, fsn_code):
+            raise ApiError("รหัสนี้ยังไม่ผูกกับหมวดที่เลือก เลือกจากทะเบียนของหมวด หรือกำหนดรหัสพร้อมหลักฐานในตั้งค่าก่อน")
         if auto_code:
             # Hold the write lock while choosing and inserting the next code.
             # Use all existing rows, including pending and imported records.
-            if not db.execute("SELECT 1 FROM fsn_catalog_items WHERE canonical_fsn_code=?", (fsn_code,)).fetchone():
-                raise ApiError("ยังไม่มีรหัส FSN นี้ในบัญชี กรุณาเพิ่มพร้อมคำอธิบายและเอกสารอ้างอิงที่ ตั้งค่า → หมวดครุภัณฑ์และรหัส FSN ก่อน")
-            prefix = f"{fsn_code}-"
-            candidates=db.execute("SELECT code FROM assets WHERE code GLOB ?",(prefix+"[0-9]*",))
-            sequence=max((int(match.group(1)) for candidate in candidates
-                if (match := re.fullmatch(re.escape(prefix)+r"([0-9]+)(?:[/\.].*)?",candidate[0]))),default=0)
-            code = f"{prefix}{sequence + 1:04d}"
+            code = next_code(db, fsn_code)
             if len(code) > 80:
                 raise ApiError("เลขลำดับครุภัณฑ์เกินช่วงที่รองรับ")
         if db.execute("SELECT 1 FROM assets WHERE code=?", (code,)).fetchone():
@@ -774,14 +771,17 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/"):
             try:
                 result = self.handle_api("GET", path, parse_qs(parsed.query), {})
-                self.send_json(result)
+                status = 200
+                if isinstance(result, tuple):
+                    result, status = result
+                self.send_json(result, status)
             except ApiError as exc:
                 self.send_json({"error": str(exc)}, exc.status)
             except Exception as exc:
                 print(f"API error: {exc!r}")
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -820,7 +820,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return

@@ -135,6 +135,16 @@ CREATE TABLE IF NOT EXISTS asset_fsn_matches (
   PRIMARY KEY(asset_id, fsn_catalog_item_id)
 );
 
+CREATE TABLE IF NOT EXISTS category_fsn_codes (
+  category_id INTEGER NOT NULL REFERENCES asset_categories(id),
+  fsn_code TEXT NOT NULL,
+  fsn_catalog_item_id INTEGER NOT NULL REFERENCES fsn_catalog_items(id),
+  reference TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(category_id,fsn_code)
+);
+
 CREATE TABLE IF NOT EXISTS import_warnings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   source_document_id INTEGER REFERENCES source_documents(id) ON DELETE SET NULL,

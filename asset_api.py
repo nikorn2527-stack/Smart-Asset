@@ -9,6 +9,7 @@ import sqlite3
 import time
 from typing import Any
 from master_data_api import handle as handle_master_data
+from numbering import get_catalog, link_code
 from smart_assets import qr_url, branding
 
 try:
@@ -382,6 +383,23 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
         return result if result else ({"error":"ยังไม่มีรายการครุภัณฑ์ในฐานข้อมูล"},404)
     if method=="GET" and path=="/api/catalog/categories":
         return [dict(row) for row in db.execute("SELECT id,category_name AS name,source_workbook AS source,notes FROM asset_categories ORDER BY category_name")]
+    if method=="GET" and path=="/api/catalog/numbering":
+        return get_catalog(db,query)
+    if method=="POST" and path=="/api/catalog/fsn/link":
+        if body.get("actor") != "เจ้าหน้าที่พัสดุ":
+            return {"error":"ใช้บทบาทเจ้าหน้าที่พัสดุเพื่อกำหนดรหัสของหมวด"},403
+        if type(body.get('itemId')) is not int:
+            return {"error":"กรุณาเลือกรหัสจากบัญชีหน่วยงาน"},400
+        row=db.execute("SELECT f.id,f.canonical_fsn_code FROM fsn_catalog_items f JOIN source_documents s ON s.id=f.source_document_id WHERE f.id=? AND s.source_kind='agency_fsn'",(body['itemId'],)).fetchone()
+        reference=str(body.get('reference') or '').strip()
+        if not row or not reference or len(reference)>1000:
+            return {"error":"เลือกรหัสบัญชีหน่วยงานและหลักฐานการใช้กับหมวดนี้"},400
+        db.execute('BEGIN IMMEDIATE')
+        try:
+            link_code(db,body.get('categoryId'),row['canonical_fsn_code'],row['id'],reference,body['actor'])
+        except ValueError as exc:
+            return {"error":str(exc)},400
+        return {"ok":True},201
     if method=="POST" and path=="/api/catalog/fsn":
         if body.get("actor") != "เจ้าหน้าที่พัสดุ":
             return {"error":"การเพิ่มบัญชีรหัสต้องใช้บทบาทเจ้าหน้าที่พัสดุในโหมดทดสอบ"},403
@@ -392,6 +410,9 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
             return {"error":"รหัส FSN ต้องเป็น 4-3-4 หลัก เช่น 7110-002-0001"},400
         if not name or len(name)>300 or not reference or len(reference)>1000:
             return {"error":"กรุณาระบุชื่อ/รายละเอียดไม่เกิน 300 ตัวอักษร และหลักฐานอ้างอิงไม่เกิน 1,000 ตัวอักษร"},400
+        category_id=body.get('categoryId')
+        if category_id is not None and (type(category_id) is not int or not db.execute("SELECT 1 FROM asset_categories WHERE id=? AND is_active=1",(category_id,)).fetchone()):
+            return {"error":"กรุณาเลือกหมวดที่ใช้งานสำหรับรหัสนี้"},400
         db.execute("BEGIN IMMEDIATE")
         if db.execute("SELECT 1 FROM fsn_catalog_items f JOIN source_documents s ON s.id=f.source_document_id WHERE f.canonical_fsn_code=? AND s.source_kind='agency_fsn'",(code,)).fetchone():
             return {"error":"มีรหัส FSN นี้ในบัญชีหน่วยงานแล้ว ให้ใช้รหัสเดิมเมื่อเป็นคุณลักษณะเดียวกัน"},409
@@ -399,7 +420,9 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
         source=db.execute("SELECT id FROM source_documents WHERE filename='agency-fsn-register' AND sha256='' ORDER BY id LIMIT 1").fetchone()[0]
         group,kind,description=code.split("-")
         cur=db.execute("INSERT INTO fsn_catalog_items(source_document_id,category_code,type_code,item_name,canonical_fsn_code,raw_line) VALUES(?,?,?,?,?,?)",(source,group,kind,name,code,json.dumps({"reference":reference,"actor":body["actor"]},ensure_ascii=False)))
-        return {"id":cur.lastrowid,"fullCode":code,"name":name,"reference":reference},201
+        if category_id is not None:
+            link_code(db,category_id,code,cur.lastrowid,reference,body['actor'])
+        return {"id":cur.lastrowid,"fullCode":code,"name":name,"reference":reference,"categoryId":category_id},201
     if method=="GET" and path=="/api/catalog/fsn":
         q=_one(query,"q").strip();limit=_safe_limit(query);offset=_safe_offset(query)
         where=" WHERE f.item_name LIKE ? OR f.category_code LIKE ? OR f.type_code LIKE ? OR f.canonical_fsn_code LIKE ?" if q else ""
