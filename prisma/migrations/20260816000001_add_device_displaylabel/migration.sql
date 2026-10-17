@@ -1,0 +1,22 @@
+-- Migration: Add Device.displayLabel column
+-- Created: 2026-08-16
+-- Task ID: INTEGRATION-DEFECT-1 + REVIEW-P1-4
+--
+-- This migration adds the `displayLabel` column to the Device table.
+--
+-- Background:
+--   The Device POST route (src/app/api/devices/route.ts) writes `displayLabel`
+--   from the request body, and the frontend (devices-page.tsx, csv-import-dialog.tsx,
+--   device-detail-sheet.tsx) has a form field + CSV mapping + detail display for it.
+--   However, the Prisma schema did not declare this field, so authenticated POSTs
+--   returned HTTP 500 ("Unknown field `displayLabel`").
+--
+--   The Prisma schema was updated (commit 508ac1d) to add the field, but NO
+--   migration was created. Production builds run `prisma generate` (not
+--   `prisma db push` or `prisma migrate deploy`), so the physical column is
+--   missing on existing PostgreSQL deployments — reads select a nonexistent
+--   column and writes fail.
+--
+--   This migration is additive (ADD COLUMN IF NOT EXISTS) — no data loss.
+
+ALTER TABLE "Device" ADD COLUMN IF NOT EXISTS "displayLabel" TEXT;

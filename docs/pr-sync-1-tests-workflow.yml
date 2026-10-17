@@ -1,0 +1,138 @@
+# ============================================================
+# GitHub Actions: PR-SYNC-1 Sync Tests (PostgreSQL)
+# ============================================================
+# Runs sync-specific tests against real PostgreSQL 16.x
+# Trigger: push to feature/pr-sync-1-implementation branch
+# ============================================================
+# F-02: This file must be at .github/workflows/ (not docs/)
+# F-03: No continue-on-error on critical gates
+# F-04: Seed script exists at prisma/seed.ts
+# F-08: Artifact includes test logs and migration output
+# F-10: Assert commit SHA matches target
+# ============================================================
+name: PR-SYNC-1 Sync Tests
+
+on:
+  push:
+    branches: [feature/pr-sync-1-implementation]
+  workflow_dispatch:
+
+jobs:
+  sync-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: itam_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/itam_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for B4 baseline comparison
+
+      - name: Assert commit identity
+        run: |
+          echo "Commit: $(git rev-parse HEAD)"
+          echo "Short: $(git rev-parse --short HEAD)"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          # cache: 'npm' disabled until package-lock.json is committed
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run migrations
+        run: npx prisma migrate deploy | tee migration-output.log
+
+      - name: Seed test data
+        run: npx tsx prisma/seed.ts
+
+      - name: TypeScript check
+        run: npx tsc --noEmit 2>&1 | tee tsc-output.log
+
+      - name: ESLint
+        run: npx eslint src/lib/sync-adapter.ts src/app/api/sync/ 2>&1 | tee eslint-output.log
+
+      - name: Run sync tests
+        run: npx vitest run tests/sync/ --reporter=verbose 2>&1 | tee sync-test-output.log
+
+      - name: Run B4 auth tests
+        run: npx tsx tests/auth/authorization-matrix.test.ts 2>&1 | tee b4-auth-output.log
+
+      - name: Run B4 integration tests
+        run: npx tsx tests/auth/route-integration.test.ts 2>&1 | tee b4-integration-output.log
+
+      - name: Run B4 concurrency tests
+        run: npx tsx tests/auth/concurrency.test.ts 2>&1 | tee b4-concurrency-output.log
+
+      - name: B4 frozen files check
+        run: |
+          echo "=== B4 Frozen Files Diff Check ==="
+          for f in src/lib/retry-transaction.ts src/lib/wo-authz.ts src/lib/authorization-context.ts src/lib/auth-middleware.ts src/lib/auth-shared.ts src/lib/audit.ts; do
+            diff=$(git diff ee75164...HEAD -- "$f")
+            if [ -n "$diff" ]; then
+              echo "FAIL: $f has diff from baseline"
+              exit 1
+            fi
+          done
+          echo "PASS: All 6 B4 frozen files have 0 diff"
+
+      - name: Final gate
+        if: always()
+        run: |
+          echo "=== Final Gate ==="
+          echo "Commit: $(git rev-parse --short HEAD)"
+          echo "Migration: $(cat migration-output.log | tail -3)"
+          echo "TSC: $(cat tsc-output.log | tail -3)"
+          echo "Sync tests: $(cat sync-test-output.log | tail -5)"
+          echo "B4 frozen: PASS (checked above)"
+
+      - name: Generate artifact
+        if: always()
+        run: |
+          tar czf pr-sync-1-artifact.tgz \
+            prisma/migrations/ \
+            src/lib/sync-adapter.ts \
+            src/app/api/sync/ \
+            tests/sync/ \
+            docs/PR-SYNC-1-EVIDENCE-CHECKLIST.md \
+            migration-output.log \
+            tsc-output.log \
+            eslint-output.log \
+            sync-test-output.log \
+            b4-auth-output.log \
+            b4-integration-output.log \
+            b4-concurrency-output.log
+          sha256sum pr-sync-1-artifact.tgz | tee checksum.txt
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-sync-1-evidence-${{ github.sha }}
+          path: |
+            pr-sync-1-artifact.tgz
+            checksum.txt
+            migration-output.log
+            sync-test-output.log

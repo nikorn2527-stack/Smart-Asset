@@ -1,0 +1,38 @@
+(() => {
+  const main=document.querySelector('#scanMain');
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const route=location.pathname.match(/^\/(q|t)\/([A-Za-z0-9_-]{32})$/);
+  const date=v=>new Date(v).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Bangkok'});
+  async function api(path,body){const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const data=await response.json();if(!response.ok)throw new Error(data.error||'ไม่สามารถดำเนินการได้');return data;}
+  function error(message){main.innerHTML=`<section class="scan-card"><span class="scan-kicker">ไม่สามารถเปิดรายการ</span><h1>กรุณาตรวจสอบลิงก์</h1><p>${esc(message)}</p><button class="scan-button" id="retryScan">ลองอีกครั้ง</button></section>`;document.querySelector('#retryScan').onclick=init;}
+  function savedReceipts(){try{const list=JSON.parse(localStorage.getItem('govasset.receipts')||'[]');return Array.isArray(list)?list.filter(r=>r&&/^[A-Za-z0-9_-]{32}$/.test(r.token)).slice(0,20):[];}catch{return [];}}
+  async function assetPage(token){
+    const a=await api(`/api/scan/${token}`);
+    document.title=`${a.name} · ข้อมูลครุภัณฑ์`;
+    const receipts=savedReceipts().filter(r=>r.assetToken===token);
+    main.innerHTML=`<div class="scan-breadcrumb">ข้อมูลจาก QR ประจำครุภัณฑ์ <span>✓ ข้อมูลล่าสุด</span></div><section class="scan-card scan-asset-card"><div class="scan-asset-symbol">▤</div><span class="scan-kicker">ASSET INFORMATION</span><h1>${esc(a.name)}</h1><p class="scan-code">${esc(a.code)}</p><span class="scan-badge">${esc(a.status)}</span><dl class="scan-details"><div><dt>สถานที่ตั้ง</dt><dd>${esc(a.location||'ยังไม่ระบุ')}</dd></div><div><dt>หมวดครุภัณฑ์</dt><dd>${esc(a.group||'ยังไม่ระบุ')}</dd></div>${a.serialNumber?`<div><dt>Serial number</dt><dd>${esc(a.serialNumber)}</dd></div>`:''}<div><dt>รายละเอียด</dt><dd>${esc(a.detail||'ไม่มีรายละเอียดเพิ่มเติม')}</dd></div></dl>${a.activeRepairs?`<p class="scan-notice">มีงานซ่อมที่กำลังดำเนินการ ${a.activeRepairs} งาน หากเป็นอาการเดิม โปรดติดตามใบรับแจ้งของคุณก่อนแจ้งซ้ำ</p>`:''}<a class="scan-button" href="#scanRepairForm">แจ้งซ่อมครุภัณฑ์นี้ ↓</a><small class="scan-updated">อัปเดตล่าสุด ${esc(date(a.updatedAt))}</small></section>
+      <section class="scan-card"><span class="scan-kicker">REPAIR REQUEST</span><h2>พบปัญหา ให้เราช่วยดูแล</h2><p>แจ้งอาการและช่องทางติดต่อ เจ้าหน้าที่จะรับเรื่องและประสานงานซ่อมให้</p><form id="scanRepairForm"><label>อาการหรือปัญหาที่พบ <span>*</span><textarea name="issue" required maxlength="3000" rows="4" placeholder="เช่น เปิดเครื่องไม่ติด มีเสียงผิดปกติ เริ่มพบเมื่อใด"></textarea></label>${!a.location?'<label>สถานที่ตั้ง <span>*</span><input name="location" required maxlength="300"></label>':''}<label>ความเร่งด่วน<select name="urgency"><option>ปกติ</option><option>เร่งด่วน</option><option>เร่งด่วนมาก</option></select></label><div class="scan-form-grid"><label>ชื่อผู้แจ้ง <span>*</span><input name="requester" required maxlength="160" autocomplete="name"></label><label>เบอร์โทร / ช่องทางติดต่อ <span>*</span><input name="contact" required maxlength="160" autocomplete="tel"></label></div><p class="scan-privacy">ระบบใช้ข้อมูลนี้เพื่อติดต่อประสานงานซ่อม กรุณาอย่าใส่ข้อมูลอ่อนไหวในรายละเอียดปัญหา</p><button class="scan-button" type="submit">ส่งคำขอแจ้งซ่อม</button><p id="scanFormStatus" role="alert"></p></form></section>${receipts.length?`<section class="scan-card"><h2>ใบรับแจ้งบนอุปกรณ์นี้</h2><p>ลิงก์ติดตามเป็นของผู้แจ้ง โปรดเก็บไว้และไม่เผยแพร่</p>${receipts.map(r=>`<a class="scan-receipt-link" href="/t/${r.token}">${esc(r.number)} <span>ติดตามงาน →</span></a>`).join('')}</section>`:''}`;
+    document.querySelector('#scanRepairForm').onsubmit=async e=>{
+      e.preventDefault();const button=e.submitter;button.disabled=true;button.textContent='กำลังส่งคำขอ…';
+      try{const result=await api(`/api/scan/${token}/repairs`,Object.fromEntries(new FormData(e.target)));
+        try{localStorage.setItem('govasset.receipts',JSON.stringify([{token:result.receiptToken,number:result.ticketNo,assetToken:token},...savedReceipts()].slice(0,20)));}catch{/* Receipt remains available through the navigation URL. */}
+        location.assign(`/t/${result.receiptToken}`);
+      }catch(err){document.querySelector('#scanFormStatus').textContent=err.message;button.disabled=false;button.textContent='ส่งคำขอแจ้งซ่อม';}
+    };
+  }
+  async function receiptPage(token){
+    const t=await api(`/api/receipts/${token}`);document.title=`${t.ticketNo} · ติดตามงานซ่อม`;
+    main.innerHTML=`<div class="scan-breadcrumb">ใบรับแจ้งซ่อม / ติดตามสถานะ</div><section class="scan-card"><div class="scan-success">✓</div><span class="scan-kicker">REPAIR TRACKING</span><h1>${esc(t.ticketNo)}</h1><p>${esc(t.assetName)} · ${esc(t.assetCode)}</p><span class="scan-badge">${esc(t.status)}</span><p class="scan-notice">เก็บลิงก์หน้านี้ไว้เพื่อติดตามและตรวจรับงาน ลิงก์นี้ใช้ดำเนินการกับใบแจ้งของคุณได้ จึงไม่ควรส่งต่อสาธารณะ</p><button class="scan-button secondary" id="copyReceipt">คัดลอกลิงก์ติดตาม</button><p id="receiptCopyStatus" role="status"></p><h2>ความคืบหน้าของงาน</h2><ol class="scan-timeline">${t.events.map((e,i)=>`<li class="${i===t.events.length-1?'current':''}"><b>${esc(e.status)}</b><small>${esc(date(e.createdAt))}</small></li>`).join('')}</ol><button class="scan-button secondary" id="refreshReceipt">อัปเดตสถานะ</button></section>${t.canConfirm?`<section class="scan-card"><span class="scan-kicker">ACCEPTANCE</span><h2>งานซ่อมเสร็จแล้ว กรุณาตรวจรับ</h2><p>ทดลองใช้งานครุภัณฑ์ก่อนยืนยัน หากยังพบอาการเดิมสามารถส่งกลับให้ช่างแก้ไขได้</p><label>ความเห็น / ปัญหาที่พบ<textarea id="acceptanceNote" rows="3" maxlength="1000"></textarea></label><div class="scan-actions"><button class="scan-button" data-receipt-action="confirm">ยืนยันรับงานและปิดงาน</button><button class="scan-button secondary" data-receipt-action="send_back">ส่งกลับให้แก้ไข</button></div><p id="acceptanceStatus" role="alert"></p></section>`:''}`;
+    document.querySelector('#copyReceipt').onclick=async()=>{try{await navigator.clipboard.writeText(location.href);document.querySelector('#receiptCopyStatus').textContent='คัดลอกลิงก์แล้ว';}catch{document.querySelector('#receiptCopyStatus').textContent=location.href;}};
+    document.querySelector('#refreshReceipt').onclick=()=>receiptPage(token).catch(e=>error(e.message));
+    document.querySelectorAll('[data-receipt-action]').forEach(button=>button.onclick=async()=>{
+      const note=document.querySelector('#acceptanceNote').value.trim();
+      if(button.dataset.receiptAction==='send_back'&&!note){document.querySelector('#acceptanceStatus').textContent='กรุณาระบุปัญหาที่ต้องการให้แก้ไข';return;}
+      document.querySelectorAll('[data-receipt-action]').forEach(b=>b.disabled=true);
+      try{await api(`/api/receipts/${token}/action`,{action:button.dataset.receiptAction,note});await receiptPage(token);}catch(e){document.querySelector('#acceptanceStatus').textContent=e.message;document.querySelectorAll('[data-receipt-action]').forEach(b=>b.disabled=false);}
+    });
+  }
+  async function init(){try{if(!route)throw new Error('เปิดหน้านี้ด้วยการสแกน QR บนครุภัณฑ์ หรือลิงก์ใบรับแจ้ง');if(route[1]==='q')await assetPage(route[2]);else await receiptPage(route[2]);}catch(e){error(e.message);}}
+  api('/api/branding').then(b=>{document.querySelector('#scanAppName').textContent=b.appName;document.querySelector('#scanOrganization').textContent=b.organization;if(b.logo)document.querySelector('#scanLogo').src=b.logo;}).catch(()=>{});
+  init();
+})();

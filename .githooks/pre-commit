@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Pre-commit hook — runs Prisma field case-sensitivity checker on staged files.
+#
+# WHY: BUG-KPI-001 (Task 11) — KPI cards showed 0 because code compared
+# `d.status === 'ACTIVE'` but DB stores mixed-case `'Active'`. This hook
+# catches similar case mismatches + snake_case usage before they ship.
+#
+# INSTALL: `git config core.hooksPath .githooks` (run once per clone)
+# UNINSTALL: `git config --unset core.hooksPath`
+# BYPASS: `git commit --no-verify` (use sparingly!)
+
+set -e
+
+# Only check staged .ts/.tsx/.js/.jsx/.mjs files
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|mjs)$' || true)
+
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+# Run the checker (it auto-detects staged files via `git diff --cached`)
+if [ -f "scripts/check-prisma-fields.mjs" ]; then
+  if ! node scripts/check-prisma-fields.mjs --quiet; then
+    echo ""
+    echo "💡 To bypass: git commit --no-verify (use sparingly!)"
+    echo "💡 To fix: see scripts/check-prisma-fields.mjs for canonical field names"
+    exit 1
+  fi
+fi
+
+# ARCH-01 prevention: validate module manifest and sidebar route mapping.
+if [ -f "scripts/check-module-manifest.mjs" ]; then
+  echo "🔍 Running module manifest check..."
+  if ! node scripts/check-module-manifest.mjs; then
+    echo ""
+    echo "❌ Module manifest check failed — fix module route/dependency mapping before committing."
+    exit 1
+  fi
+fi
+
+# BUG-MONTHLY-001 prevention: TypeScript syntax check on staged files.
+# QA recommended: "เพิ่ม npx tsc --noEmit ใน pre-commit hook"
+# This catches syntax errors (missing brackets, typos) before they ship.
+# Runs tsc --noEmit on the whole project (fast with incremental cache).
+if [ -f "tsconfig.json" ]; then
+  echo "🔍 Running TypeScript syntax check..."
+  if ! npx tsc --noEmit --skipLibCheck 2>/dev/null; then
+    echo ""
+    echo "❌ TypeScript syntax check failed — fix errors before committing."
+    echo "💡 To bypass: git commit --no-verify (use sparingly!)"
+    exit 1
+  fi
+  echo "✅ TypeScript syntax OK"
+fi
+
+# Also run ESLint on staged files if available (best-effort, non-blocking)
+if [ -f ".eslintrc.json" ] || [ -f "eslint.config.js" ] || [ -f "eslint.config.mjs" ]; then
+  # Skip if lint would block — we want this hook to focus on Prisma fields only.
+  # Full lint runs in CI.
+  :
+fi
+
+exit 0
+
+# Milestone 3: Module boundary enforcement
+if [ -f "scripts/check-module-boundaries.mjs" ]; then
+  if ! node scripts/check-module-boundaries.mjs --staged 2>/dev/null; then
+    echo ""
+    echo "❌ Module boundary violations detected — fix before committing."
+    echo "💡 To bypass: git commit --no-verify"
+    exit 1
+  fi
+fi

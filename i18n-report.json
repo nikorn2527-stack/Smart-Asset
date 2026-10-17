@@ -1,0 +1,159 @@
+{
+  "timestamp": "2026-10-06T15:27:53.183Z",
+  "glossaryKeys": 1187,
+  "filesScanned": 663,
+  "errors": 0,
+  "warnings": 25,
+  "entries": [
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\work-orders-page.tsx",
+      "message": "379 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\device-detail-sheet.tsx",
+      "message": "279 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\stock-page.tsx",
+      "message": "271 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\monthly-report.tsx",
+      "message": "261 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\mobile\\mobile-my-work.tsx",
+      "message": "174 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\templates-page.tsx",
+      "message": "159 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\stock\\stock-inventory.tsx",
+      "message": "158 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\itam-document-editor.tsx",
+      "message": "136 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\settings-page-v2.tsx",
+      "message": "123 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\itam-paper-analytics.tsx",
+      "message": "120 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\csv-import-dialog.tsx",
+      "message": "118 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\material-cost-report.tsx",
+      "message": "104 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\app\\api\\settings\\options\\route.ts",
+      "message": "103 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\mobile\\mobile-repair-request.tsx",
+      "message": "103 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\itam-audit.tsx",
+      "message": "102 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\itam-sticker-editor.tsx",
+      "message": "97 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\setup-wizard.tsx",
+      "message": "96 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\itam-repairs.tsx",
+      "message": "93 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\template-editor.tsx",
+      "message": "93 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\app\\api\\import\\route.ts",
+      "message": "92 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\pm-schedules-page.tsx",
+      "message": "90 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\cycle-manage-dialog.tsx",
+      "message": "86 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\numbering-schemes-tab.tsx",
+      "message": "86 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\stock\\stock-purchase-orders.tsx",
+      "message": "83 hard-coded Thai text line(s)"
+    },
+    {
+      "check": "strict-literals",
+      "severity": "warning",
+      "file": "src\\components\\itam\\license-management-section.tsx",
+      "message": "76 hard-coded Thai text line(s)"
+    }
+  ]
+}

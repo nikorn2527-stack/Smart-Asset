@@ -1,0 +1,70 @@
+# ============================================================
+# ITAM-NextJS Self-host with PostgreSQL + Next.js
+# ============================================================
+# 
+# Usage:
+#   1. สร้าง .env จาก .env.example (กรอกค่าจริง)
+#   2. docker-compose up -d
+#   3. รัน migration: docker-compose exec app npx prisma migrate deploy
+# 
+# Services:
+#   - app: Next.js (port 3000)
+#   - db: PostgreSQL (port 5432)
+# ============================================================
+
+version: '3.8'
+
+services:
+  # ── PostgreSQL Database ──
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: itam_app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
+      POSTGRES_DB: itam
+    ports:
+      - "5432:5432"
+    volumes:
+      - itam_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U itam_app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Next.js Application ──
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://itam_app:${DB_PASSWORD:-change_me_in_production}@db:5432/itam
+      JWT_SECRET: ${JWT_SECRET:-change_me_to_random_32_chars}
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./prisma:/app/prisma
+      - ./scripts:/app/scripts
+
+  # ── Caddy Reverse Proxy (optional — for HTTPS/LAN) ──
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.selfhost:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  itam_db:
+  caddy_data:
+  caddy_config:

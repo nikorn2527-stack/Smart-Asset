@@ -1,0 +1,35 @@
+# ============================================================
+# Caddy config for self-host (HTTPS auto + LAN access)
+# ============================================================
+# 
+# เปลี่ยน itam.local เป็น hostname หรือ IP ของ server
+# Caddy จะ auto-generate SSL certificate (Let's Encrypt)
+# ============================================================
+
+:80 {
+    # สำหรับ LAN mode (ไม่ต้องมี domain)
+    bind 0.0.0.0
+    
+    reverse_proxy app:3000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+    
+    # Compression
+    encode gzip
+    
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+}
+
+# ถ้ามี domain จริง ใช้แบบนี้ (auto HTTPS):
+# itam.yourdomain.com {
+#     reverse_proxy app:3000
+#     encode gzip
+# }

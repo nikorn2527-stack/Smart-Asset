@@ -1,0 +1,8 @@
+P9-03 R5 clean-checkout test evidence
+Repo: nikorn2527-stack/ITAM-NextJS
+Branch: feature/pr-sync-1-staging-gateway
+PR: https://github.com/nikorn2527-stack/ITAM-NextJS/pull/9
+Head SHA: cc4b8addbf86c3fce6137b8510736c1ea93e3c1e
+Date: 2026-08-17 13:28:59 UTC
+Command: npx vitest run tests/sync/auth-contract.test.ts
+Result: 10 passed (10) | exit 0 | duration 301ms

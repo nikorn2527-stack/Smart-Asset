@@ -1,0 +1,132 @@
+/* ── Responsive Settings Navigation ──────────────────────────
+   Per UX/UI Standards §6.4 (UX-05):
+   - 390px: nav becomes drawer (collapsible)
+   - 768px: nav becomes sidebar (visible)
+   - desktop: two-column layout
+*/
+
+/* Settings nav: collapsible on mobile */
+@media (max-width: 767px) {
+  .settings-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    max-height: 50vh;
+    overflow-y: auto;
+    border-top: 1px solid var(--border, #e2e8f0);
+    background: var(--surface, #ffffff);
+    padding: 0.5rem;
+    transform: translateY(100%);
+    transition: transform 0.2s ease-out;
+  }
+  .settings-nav.open {
+    transform: translateY(0);
+  }
+  .settings-nav-toggle {
+    display: flex;
+  }
+  .settings-content {
+    width: 100%;
+    padding-bottom: 4rem; /* space for nav toggle */
+  }
+}
+
+@media (min-width: 768px) {
+  .settings-nav {
+    position: relative;
+    width: 16rem;
+    flex-shrink: 0;
+    transform: none;
+    transition: none;
+    max-height: none;
+  }
+  .settings-nav-toggle {
+    display: none;
+  }
+  .settings-content {
+    flex: 1;
+    min-width: 0;
+    padding-bottom: 0;
+  }
+}
+
+/* ── Focus visible for keyboard navigation ────────────────── */
+/* Per UX/UI Standards §6.3: accessibility */
+*:focus-visible {
+  outline: 2px solid #f97316;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Screen reader only text */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Reduced motion ───────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Form field consistency ───────────────────────────────── */
+/* Per UX/UI Standards §2.4: form pattern */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.form-field-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+.dark .form-field-label {
+  color: #cbd5e1;
+}
+
+.form-field-required {
+  color: #ef4444;
+  margin-left: 0.125rem;
+}
+
+.form-field-helper {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.dark .form-field-helper {
+  color: #94a3b8;
+}
+
+.form-field-error {
+  font-size: 0.75rem;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dark .form-field-error {
+  color: #f87171;
+}
+
+/* ── Footer not overlapping content (UX-05) ────────────────── */
+main {
+  min-height: calc(100vh - 3.5rem);
+}

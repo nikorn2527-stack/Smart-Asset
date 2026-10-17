@@ -1,0 +1,7 @@
+fastapi==0.115.0
+uvicorn==0.30.6
+reportlab==4.2.4
+pandas==2.2.3
+Pillow==10.4.0
+pytesseract==0.3.13
+pydantic==2.9.2

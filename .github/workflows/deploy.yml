@@ -1,0 +1,101 @@
+# ============================================================
+# Deploy to Vercel production — MANUAL ONLY, one build per run.
+# ============================================================
+# HOW TO USE
+#   Actions tab → "Deploy" → Run workflow → pick branch → Run.
+#   Or:  git tag v1.2.3 && git push origin v1.2.3
+#
+# SETUP (one time, in GitHub: Settings → Secrets and variables → Actions)
+#   VERCEL_TOKEN       — Vercel → Settings → Tokens → Create
+#   VERCEL_ORG_ID      — Vercel → Project → Settings → General → "API Reference"
+#                        → Organization ID
+#   VERCEL_PROJECT_ID  — same page → Project ID
+#   VERCEL_DATABASE_URL — the Supabase connection string, so `prisma generate`
+#                        builds the client for the Postgres provider.
+#
+# IMPORTANT — the repo-wide Vercel auto-deploy must be OFF, otherwise every
+# push to main builds twice (once here, once via the Git integration). See
+# docs/DEPLOY.md.
+#
+# This workflow does NOT run next build: Vercel does the building. CI
+# (ci.yml) already proved the commit typechecks, lints, passes tests and
+# builds, so this job only spends one Vercel build.
+# ============================================================
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why are we deploying? (recorded in the Vercel commit message)'
+        required: false
+        default: 'manual release'
+  push:
+    tags:
+      - 'v*'
+
+# Never let two deploys race — each one costs build quota.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Vercel production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      DATABASE_URL: ${{ secrets.VERCEL_DATABASE_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify required secrets are present
+        # Fail fast, before spending a build on a job that cannot possibly work.
+        run: |
+          missing=''
+          for v in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            eval "val=\$$v"
+            [ -z "$val" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub secret(s):$missing"
+            exit 1
+          fi
+          echo "All required secrets present."
+
+      - name: Guard — refuse to deploy an unverified commit
+        # A deploy should never be able to ship a commit that CI has not
+        # approved. If this fails, either the CI run for this SHA failed, or the
+        # working tree differs from HEAD (unpushed changes).
+        run: |
+          git diff --quiet || { echo "::error::Uncommitted changes present."; exit 1; }
+          echo "Deploying commit: $(git rev-parse HEAD)"
+
+      - name: Deploy
+        run: |
+          npx --yes vercel@latest deploy --prod \
+            --token="$VERCEL_TOKEN" \
+            --scope="$VERCEL_ORG_ID" \
+            --yes \
+            --no-clipboard \
+            --meta="githubCommitSha=$(git rev-parse HEAD)" \
+            --meta="deployReason=${{ github.event.inputs.reason || 'tag release' }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Deploy finished" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Reason: ${{ github.event.inputs.reason || 'tag release' }}" >> "$GITHUB_STEP_SUMMARY"

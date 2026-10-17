@@ -1,0 +1,171 @@
+P9-03 R6 — CI evidence + scope review (Audit APPROVED WITH CONDITIONS response)
+================================================================================
+
+PR: https://github.com/nikorn2527-stack/ITAM-NextJS/pull/9
+Branch: feature/pr-sync-1-staging-gateway
+New head SHA: 9178237d3e7c22f965be52dfd2fc764a73aac76b (9178237)
+Previous head (R5, approved with conditions): cc4b8addbf86c3fce6137b8510736c1ea93e3c1e
+Date: 2026-08-17 13:45 UTC
+
+================================================================================
+CONDITION 1: CI evidence for the final head (directly)
+================================================================================
+
+Workflow: pr-sync-1-tests.yml (has workflow_dispatch trigger)
+Triggered via: POST /actions/workflows/pr-sync-1-tests.yml/dispatches
+                ref=feature/pr-sync-1-staging-gateway (PAT has workflow scope)
+Run ID: 32036293430
+Run URL: https://github.com/nikorn2527-stack/ITAM-NextJS/actions/runs/32036293430
+Head SHA: 9178237d3e7c22f965be52dfd2fc764a73aac76b
+Event: workflow_dispatch
+Status: completed
+Conclusion: success
+Started: 2026-08-17T13:41:33Z
+Completed: 2026-08-17T13:45:12Z (~3m39s)
+
+The workflow runs the FULL PostgreSQL-backed sync suite:
+  - npm ci --legacy-peer-deps (uses package-lock.json, NOT bun.lock)
+  - prisma generate + migrate deploy (PostgreSQL 16 service container)
+  - prisma/seed.ts
+  - tsc strict check on PR-SYNC-1 files (0 errors) + baseline comparison
+  - eslint src/lib/sync-adapter.ts src/app/api/sync/
+  - npx vitest run tests/sync/ --reporter=verbose   <-- FULL sync suite on real Postgres
+  - npx tsx tests/auth/authorization-matrix.test.ts   (B4 auth regression)
+  - dev server + route integration tests
+  - B4 integration + concurrency tests
+
+Local clean-checkout verification (clone at 9178237):
+  $ git clone --branch feature/pr-sync-1-staging-gateway --depth 5 ...
+  $ npm ci --legacy-peer-deps   (works WITHOUT bun.lock — proves revert is safe)
+  $ npx vitest run tests/sync/auth-contract.test.ts
+  -> 10 passed (10) | exit 0 | duration 436ms | no hanging process
+
+================================================================================
+CONDITION 2: Scope review of bun.lock and worklog.md
+================================================================================
+
+--- bun.lock: REVERTED (removed from PR) ---
+R5 (cc4b8ad) added 190 lines to bun.lock. Scope analysis:
+  - Pure additions of platform-specific binaries for devDependencies
+    (vitest@^3.2.1, tsx@^4.19.0) that were declared in package.json but
+    not yet locked, plus transitive deps (@esbuild/*, @rollup/*,
+    tinyrainbow, vite, pathe).
+  - 3 entries (fsevents, js-tokens, tinyexec) rewritten from registry-URL
+    form to inline integrity-hash form (bun lockfile v2 normalization).
+  - NO production dependency version changed. NO version drift.
+
+Why the revert is safe:
+  - CI uses 'npm ci --legacy-peer-deps' which reads package-lock.json,
+    NOT bun.lock. vitest (2 entries) and tsx (4 entries) are present in
+    package-lock.json, so CI resolves them without bun.lock.
+  - bun.lock was a local dev artifact (from running 'bun install' to
+    execute the test locally for evidence collection).
+  - Verified: clean clone at 9178237 + npm ci + npx vitest run → 10/10 pass.
+  - git diff 44e7848 9178237 -- bun.lock = empty (identical to PR parent).
+
+--- worklog.md: KEPT (justified — related, not unrelated) ---
+R5 added 47 lines under a single Task ID 'P9-03-R5'. Scope analysis:
+  - Directly documents THIS fix: root cause, production fix (seam +
+    try/finally), test fix (removed setTimeout mock, added signal
+    guards + 2 PROBEs), verification results.
+  - This is RELATED documentation (the fix's own change log), not an
+    unrelated diff.
+  - Follows the established project pattern: PR-SYNC-1 merge (dfb5e3f)
+    also included worklog.md entries as part of the handover record.
+  - Tightly scoped: 47 lines, 1 Task ID, no unrelated content.
+
+================================================================================
+Constraints preserved at 9178237
+================================================================================
+- B4 frozen files 0-diff from ee75164 (verified: empty diff on all 6 files)
+- SYNC_SOURCE_MAX_RETRIES=3 (not reduced)
+- Request-timeout semantics intact (try/finally cleanup)
+- No token in URL/header/query string
+- CSV upload fallback unchanged
+- PR #9 now contains ONLY 3 files: sync-adapter.ts, auth-contract.test.ts,
+  worklog.md (bun.lock reverted)
+
+================================================================================
+Final PR #9 diff at 9178237 vs parent 44e7848
+================================================================================
+ src/lib/sync-adapter.ts          |  74 ++++++++++--
+ tests/sync/auth-contract.test.ts | 240 +++++++++++++++++++++++++++++----------
+ worklog.md                       |  47 ++++++++
+ 3 files changed, 295 insertions(+), 66 deletions(-)
+
+================================================================================
+UPDATE: Second CI run on the final head 66c4a66 (docs-only commit on top of 9178237)
+================================================================================
+The R5 evidence file + R6 CI evidence file + worklog updates were committed
+on top of 9178237 as docs-only commits (no source-code changes). To provide
+point evidence on the exact final head, a second workflow_dispatch was
+triggered on 66c4a66.
+
+Run ID: 32036936893
+Run URL: https://github.com/nikorn2527-stack/ITAM-NextJS/actions/runs/32036936893
+Head SHA: 66c4a660761f7030c1a35f80dcb42d591694c167
+Event: workflow_dispatch
+Status: completed
+Conclusion: success
+Started: 2026-08-17T13:51:28Z
+Completed: 2026-08-17T13:54:59Z (~3m31s)
+
+Both CI runs (9178237 and 66c4a66) pass. PR #9 final head 66c4a66 is fully
+green on the pr-sync-1-tests.yml workflow against real PostgreSQL 16.
+
+================================================================================
+FINAL: Third CI run on the final head 85e5b42 (evidence-file update commit)
+================================================================================
+After pushing the evidence-file update commit (85e5b42, docs-only), a third
+workflow_dispatch was triggered to confirm the final head is green.
+
+Run ID: 32037300778
+Run URL: https://github.com/nikorn2527-stack/ITAM-NextJS/actions/runs/32037300778
+Head SHA: 85e5b4201dbf0a427ed31705981eb1e1b4c0af1d
+Event: workflow_dispatch
+Status: completed
+Conclusion: success
+Started: 2026-08-17T13:57:13Z
+Completed: 2026-08-17T14:00:46Z (~3m33s)
+
+================================================================================
+COMPLETE CI EVIDENCE TABLE (all 3 runs on PR #9 heads)
+================================================================================
+Run ID        | Head SHA  | Conclusion | Duration
+--------------+----------+------------+---------
+32036293430   | 9178237  | success    | ~3m39s  (R6 code revert head)
+32036936893   | 66c4a66  | success    | ~3m31s  (R6 docs commit)
+32037300778   | 85e5b42  | success    | ~3m33s  (final head)
+
+All three heads run the full pr-sync-1-tests.yml suite against real
+PostgreSQL 16 and pass. PR #9 final head 85e5b42 is the merge candidate.
+
+================================================================================
+AUDIT CONDITION COMPLIANCE SUMMARY
+================================================================================
+Condition 1 (CI evidence for final head directly): SATISFIED
+  - 3 workflow_dispatch runs, all success, all on PR #9 branch heads
+  - Final head 85e5b42: run 32037300778, success, ~3m33s
+  - Run URLs captured above
+
+Condition 2 (scope review of bun.lock + worklog.md): SATISFIED
+  - bun.lock: REVERTED in R6 (9178237). Local dev artifact; CI uses
+    npm ci/package-lock.json. git diff 44e7848 85e5b42 -- bun.lock = empty.
+  - worklog.md: KEPT (justified). 138 lines, 3 Task IDs (P9-03-R5,
+    P9-03-R5-PUSH, P9-03-R6-CI-EVIDENCE), all documenting THIS fix.
+    Follows established pattern (PR-SYNC-1 merge dfb5e3f included worklog).
+
+Final PR #9 diff at 85e5b42 vs parent 44e7848 (5 files, +508/-66):
+  src/lib/sync-adapter.ts           +74  (P9-03 fix: retry-delay seam + try/finally)
+  tests/sync/auth-contract.test.ts +240  (P9-03 fix: 10 tests + 2 PROBEs + global guard)
+  worklog.md                       +138  (R5 + R5-PUSH + R6-CI-EVIDENCE records)
+  docs/P9-03-R5-CLEAN-CHECKOUT-EVIDENCE.txt  +8   (clean-checkout evidence)
+  docs/P9-03-R6-CI-EVIDENCE.txt  +114  (this file)
+  bun.lock                            0  (REVERTED — identical to parent)
+
+Constraints preserved at 85e5b42:
+  - B4 frozen files 0-diff from ee75164 (verified)
+  - SYNC_SOURCE_MAX_RETRIES=3 (not reduced)
+  - Request-timeout semantics intact (try/finally)
+  - No token in URL/header/query
+  - CSV upload fallback unchanged

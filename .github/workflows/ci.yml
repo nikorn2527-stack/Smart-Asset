@@ -1,0 +1,182 @@
+# ============================================================
+# CI Quality Gate — runs on EVERY push and PR. Never deploys.
+# ============================================================
+# WHY THIS EXISTS
+#   Vercel was connected to GitHub, which built (and spent build quota) on every
+#   push to `main`. That link has now been DISCONNECTED (Vercel → Project →
+#   Settings → Git → Disconnect), so pushes no longer trigger a Vercel build at
+#   all. This workflow is the remaining safety net: typecheck → lint →
+#   unit/contract tests → a real `next build`.
+#
+#   GitHub Actions minutes and Vercel build quota are SEPARATE budgets, so
+#   catching a broken commit here costs nothing on Vercel. Only code that
+#   passes everything here is worth spending a Vercel build on.
+#
+#   To deploy: Actions tab → "Deploy" → Run workflow. See deploy.yml.
+# ============================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A rapid series of pushes only pays for the newest run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck + Lint + Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # tests/sync/sync-adapter.test.ts gates its DB-backed suites on
+    # `!!process.env.DATABASE_URL` - which only asks whether the variable is
+    # SET, not whether a server is reachable. With a postgres:// URL configured
+    # but no server, those suites run and fail with
+    # "Can't reach database server at localhost:5432". Giving the job a real
+    # PostgreSQL 16 (same major version as Supabase runs) is what makes those
+    # suites genuinely exercise the production database engine instead of
+    # being skipped or silently passing against SQLite.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: itam_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U user -d itam_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # A real database URL: the DB-backed test suites below connect to it.
+      DATABASE_URL: postgresql://user:pass@localhost:5432/itam_ci
+      # schema.prisma declares directUrl; Prisma fails every command with
+      # P1012 if the variable is absent, even for SQLite.
+      DIRECT_DATABASE_URL: postgresql://user:pass@localhost:5432/itam_ci
+      JWT_SECRET: ci-placeholder-secret-not-used-in-production
+      NODE_ENV: test
+      # Matches vercel.json installCommand so CI resolves the same tree.
+      NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No `cache: npm` — this repo tracks bun.lock and gitignores
+      # package-lock.json, so there is no npm lockfile to key a cache on and
+      # `npm ci` aborts immediately ("can only install with an existing
+      # package-lock.json"). `npm install` is also exactly what vercel.json's
+      # installCommand runs, so CI resolves the same tree the Vercel build will.
+      #
+      # --include=dev is REQUIRED, not cosmetic: this job sets NODE_ENV=production,
+      # which makes npm skip devDependencies — but postcss.config.mjs loads
+      # @tailwindcss/postcss and next build type-checks with typescript, both of
+      # which live there. Without this the build dies with
+      # "Cannot find module '@tailwindcss/postcss'".
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --include=dev
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # Create the schema before the tests. `db push` (not `migrate deploy`)
+      # because this job's job is to verify the code under test; validating
+      # migration history is postgres-verification.yml's responsibility, and
+      # drift there would fail this run for reasons unrelated to the commit.
+      - name: Apply schema to CI database
+        run: npx prisma db push --skip-generate --accept-data-loss
+
+      - name: TypeScript
+        # The `typecheck` script already sets --max-old-space-size=4096; the
+        # default 2GB heap OOMs on this codebase.
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Unit & contract tests
+        # tests/runtime/** and tests/auth/** are excluded in vitest.config.ts —
+        # they are standalone scripts, not vitest suites.
+        #
+        # Hard failure (no continue-on-error). The two stale assertions in
+        # tests/meter-lifecycle-active-boundary.test.ts have been re-triaged
+        # against current intent, so the suite is green again.
+        run: npx vitest run --reporter=dot
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "### Test result" >> "$GITHUB_STEP_SUMMARY"
+          npx vitest run --reporter=json --outputFile=vitest-report.json || true
+          node -e "
+            const r = require('./vitest-report.json');
+            console.log('| total | ' + r.numTotalTests + ' |');
+            console.log('| passed | ' + r.numPassedTests + ' |');
+            console.log('| failed | ' + r.numFailedTests + ' |');
+          " >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || \
+            echo '(vitest json report unavailable)' >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: verify
+
+    env:
+      DATABASE_URL: postgresql://user:pass@localhost:5432/itam_ci
+      # Required by schema.prisma's directUrl — Prisma errors with P1012 on any
+      # command when it is missing, regardless of provider.
+      DIRECT_DATABASE_URL: postgresql://user:pass@localhost:5432/itam_ci
+      JWT_SECRET: ci-placeholder-secret-not-used-in-production
+      NODE_ENV: production
+      NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      # next.config.ts only emits `output: 'standalone'` when VERCEL is unset,
+      # so without this CI would build a DIFFERENT artifact than Vercel and
+      # waste memory bundling standalone output that deployment never uses.
+      # Setting VERCEL=1 makes this job build exactly what Vercel will build.
+      VERCEL: '1'
+      # next build runs its own TypeScript pass; the default heap OOMs on this
+      # codebase (see the `build` npm script, which already sets 4096).
+      NODE_OPTIONS: '--max-old-space-size=4096'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --include=dev
+
+      - name: Generate Prisma client
+        # schema.prisma is committed with provider = "postgresql" (production's
+        # value) and this job's DATABASE_URL is postgres://, so the generated
+        # client matches what Vercel will produce.
+        run: npx prisma generate
+
+      - name: next build (webpack — same flag vercel.json uses)
+        # Matching the flag matters: a green CI build is only evidence that the
+        # Vercel build will pass if CI built the same way.
+        run: npx next build --webpack

@@ -1,0 +1,9 @@
+{
+  "name": "python-service",
+  "version": "1.0.0",
+  "description": "Python mini-service for PDF generation, analytics, and OCR",
+  "scripts": {
+    "dev": "uvicorn index:app --host 0.0.0.0 --port 3030 --reload",
+    "start": "uvicorn index:app --host 0.0.0.0 --port 3030"
+  }
+}

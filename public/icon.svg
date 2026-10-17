@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f172a"/>
+  <rect x="24" y="24" width="464" height="464" rx="80" fill="none" stroke="#f97316" stroke-width="6" opacity="0.4"/>
+  <!-- Package / box icon -->
+  <g transform="translate(96 116)">
+    <path d="M160 0 L320 80 L320 240 L160 320 L0 240 L0 80 Z" fill="#f97316"/>
+    <path d="M0 80 L160 160 L320 80" fill="none" stroke="#0f172a" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M160 160 L160 320" fill="none" stroke="#0f172a" stroke-width="10"/>
+    <!-- Tag label -->
+    <circle cx="160" cy="80" r="14" fill="#0f172a"/>
+  </g>
+  <!-- ITAM text -->
+  <text x="256" y="466" text-anchor="middle" font-family="Arial, sans-serif" font-size="64" font-weight="700" fill="#f97316" letter-spacing="8">ITAM</text>
+</svg>

@@ -1,0 +1,9 @@
+{
+  "name": "staging-apps-script",
+  "version": "1.0.0",
+  "description": "Staging Apps Script-compatible service — implements SyncApi.gs doPost contract for G2 real-token testing (separate from production Apps Script deployment)",
+  "scripts": {
+    "dev": "bun --hot index.ts",
+    "start": "bun index.ts"
+  }
+}

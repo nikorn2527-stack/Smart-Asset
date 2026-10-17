@@ -1,0 +1,35 @@
+# Caddyfile.dev — DEV/SANDBOX ONLY
+# ============================================================
+# ⚠️  DO NOT USE IN PRODUCTION — contains SSRF vulnerability
+#
+# This config retains the @transform_port_query handler that allows
+# routing to mini-services (websocket on port 3003, etc.) via
+# ?XTransformPort=<port> query string.
+#
+# Use Caddyfile (production) for all real deployments.
+# Use this file ONLY in the dev sandbox environment.
+# ============================================================
+
+:81 {
+	@transform_port_query {
+		query XTransformPort=*
+	}
+
+	handle @transform_port_query {
+		reverse_proxy localhost:{query.XTransformPort} {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3000 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}

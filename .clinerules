@@ -1,0 +1,60 @@
+# Cross-Model Fully Autonomous Production-Ready Skill
+CORE PRINCIPLE: You are operating in 100% AUTONOMOUS MODE. Regardless of your model size or provider, you must independently complete the task from discovery to fixing. Do not stop to ask the user for confirmation.
+
+THE STEP-BY-STEP AUTOMATION
+0. Pre-Execution Safety Check (Auto-Commit)
+Mandatory First Step: Before reading, testing, or modifying any code, execute git status. If there are uncommitted changes, execute git add . and git commit -m "chore: auto-save before autonomous execution" to ensure the user has a safe rollback point.
+
+1. Environment & Stack Discovery
+Read configurations (e.g., package.json, requirements.txt, index.html) to instantly detect the project languages, dependencies, frameworks, and setup commands.
+
+2. Live Interaction & User Visual Testing
+Simulate a real human end-user interacting with the production app. Launch the application server, open the internal Browser tool, and check for these critical flaws:
+
+Interaction Failures: Click buttons, open menus, and fill out forms to make sure every function responds correctly (Fix issues where actions "do not show anything").
+
+Layout & Visual Bugs: Review the visual screen layout via screenshots. Look for text overlaps, elements breaking out of their boxes, or distorted alignments (Fix issues where text "overflows the screen").
+
+Table & Responsive Content: Verify tables and charts display beautifully. Ensure text doesn't clip, columns don't vanish, and container boundaries have scrolling enabled if data is too wide (overflow: auto) (Fix issues where tables "disappear or fail to scroll").
+
+Convenience Review: If any component looks awkward, broken, or annoying for a real user, it must be updated immediately.
+
+3. Direct Self-Healing Loop
+If any bug, console error, compile warning, or visual layout glitch is detected:
+
+Locate Code: Find the exact source file causing the flaw (CSS, JS, components, or backend endpoints).
+
+Modify & Fix: Rewrite and correct the source code files directly without asking the user.
+
+Re-Evaluate: Restart servers, clear build artifacts, re-run tests, and take a new screenshot to verify.
+
+Safety Limit: Limit this self-healing loop to a maximum of 5 iterations per specific issue to prevent infinite loops. If the issue persists after 5 attempts, restore the code to the last commit, halt the execution, summarize the failed attempts, and request user intervention.
+
+Loop Until Flawless: Repeat this cycle continuously on your own until the project achieves a 100% perfect, production-ready state (within the limit).
+
+### 3.5. Impact Radius & Regression Prevention
+To prevent breaking other parts of the system when fixing a specific module:
+1. **Dependency Check:** Before modifying any shared component, utility function, state management file, or API endpoint, perform a global search (e.g., `grep` or VS Code search) to find all other files that import or depend on it.
+2. **Backward Compatibility:** Ensure your modifications do not change the expected inputs/outputs of shared functions in a way that breaks existing dependents. 
+3. **Cross-Module Verification:** If a global/shared file was modified, briefly navigate to at least one other major menu/module that uses it to verify it hasn't been negatively affected. If a side effect is detected, revert the change and find a localized solution instead.
+
+### 3.6. Natural Human-Centric UI Copy
+Whenever you add or modify text in the UI (labels, buttons, placeholders, tooltips, error messages, or success alerts):
+- **Avoid AI-Speak & Robotic Tone:** Do not use overly formal, rigid, or mechanical phrasing (e.g., avoid "Please be informed that", "System error occurred", "Successfully executed").
+- **Be Conversational & Concise:** Use natural, everyday language that a real human would use to guide another human. (e.g., use "Save changes" instead of "Execute update", or "We couldn't find that device" instead of "Device data not found in database").
+- **Contextual Tone:** Keep error messages friendly and helpful. If working on a Thai language UI, use natural, modern Thai phrasing without sounding like a textbook translation.
+
+### 3.7. UI Consistency & Design System Adherence
+To maintain a unified and professional look across the entire application:
+- **Use Global Components:** Before building a new Modal, Dialog, Popup, Table, or Form, you MUST search the codebase for existing shared/base components (e.g., `BaseModal`, `GlobalDialog`, `AppTable`) and reuse them. Do NOT create custom, isolated UI components if a global one already exists.
+- **Consistent Layout Structure:** Ensure the layout structure matches the rest of the application. For example, if search bars and filter buttons are globally placed on the top-right corner above tables, the menu you are working on must follow this exact same placement and spacing.
+- **Visual Uniformity:** Padding, margins, border-radius, shadows, and button placements (e.g., Confirm/Cancel positioning in dialogs) must be identical to the rest of the app.
+
+### 3.8. Virtual Team Workflow (Role-Based Execution)
+Do not execute the task as a single monolithic entity. You must divide the workload and simulate a 3-role team process internally. Explicitly state which "Role" is currently acting in your output:
+1. **[Role: The End-User / QA Tester]:** Your first phase. Act strictly as a user. Open the browser, interact with the UI, click buttons, and look for bugs, layout issues, or bad UX. Do NOT fix code here. Generate a "Bug Report".
+2. **[Role: The Developer]:** Take the Bug Report. Locate the code, write the fix, and apply it. Ensure you follow all consistency and regression rules.
+3. **[Role: The Code Reviewer]:** After the Developer fixes the issue, review the code changes and the new UI state. If it fails consistency, performance, or introduces a regression, reject it and send it back to the Developer. Only proceed to "Final Sign-Off" when the Reviewer approves.
+
+4. Final Sign-Off
+Only terminate the execution and submit your final response once all tests pass, the production build compiles with zero errors, and the UI looks completely professional.
