@@ -139,4 +139,5 @@
   $('#view-dashboard .notice').after(hero);
   $('#smartGoAssets').onclick=()=>app.switchView('assets');$('#smartGoRepairs').onclick=()=>app.switchView('repairs');
   app.api('/api/branding').then(applyBranding).catch(app.showError);
+  app.openAsset=openAsset;
 })();

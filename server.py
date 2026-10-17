@@ -23,6 +23,7 @@ from asset_api import handle as handle_asset_api
 from smart_assets import base_url, branding, public_asset, public_receipt, qr_url, token_for
 from work_api import handle as handle_work_api, WorkError, generate_due
 from register_forms import handle as handle_register_form
+from notifications import handle as handle_notifications, NotificationError, approval_threshold
 
 WORK_SCHEDULER = {"running": False, "lastRun": None, "lastError": None}
 
@@ -148,6 +149,7 @@ def initialize() -> None:
                 if column not in columns:
                     db.execute(f"ALTER TABLE assets ADD COLUMN {column} {declaration}")
         db.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        db.execute("INSERT OR IGNORE INTO workflow_settings(id,approval_threshold,reminder_days,updated_at,updated_by) VALUES(1,?,3,?,?)", (APPROVAL_THRESHOLD,now_iso(),"ค่าเริ่มต้นระบบ"))
         plan_columns = {r["name"] for r in db.execute("PRAGMA table_info(work_plans)")}
         for column, definition in {"schedule_unit": "TEXT NOT NULL DEFAULT 'day'", "interval_count": "INTEGER NOT NULL DEFAULT 30", "anchor_day": "INTEGER NOT NULL DEFAULT 0"}.items():
             if column not in plan_columns:
@@ -259,6 +261,7 @@ def initialize() -> None:
             ("final_cost_status", "TEXT NOT NULL DEFAULT ''"),
             ("final_cost_approved_by", "TEXT NOT NULL DEFAULT ''"),
             ("data_origin", "TEXT NOT NULL DEFAULT 'prototype'"),
+            ("approval_threshold_snapshot", "REAL"),
         ):
             if column not in ticket_columns:
                 db.execute(f"ALTER TABLE tickets ADD COLUMN {column} {declaration}")
@@ -302,6 +305,7 @@ def ticket_dict(row: sqlite3.Row) -> dict:
         "id": row["id"], "ticketNo": row["ticket_no"], "assetId": row["asset_id"], "assetCode": row["asset_code"],
         "assetName": row["asset_name"], "location": row["location"], "issue": row["issue"], "urgency": row["urgency"],
         "requester": row["requester"], "contact": row["contact"], "status": row["status"],
+        "approvalThreshold": row["approval_threshold_snapshot"],
         "approvalRequired": bool(row["approval_required"]), "approvalReason": row["approval_reason"],
         "requiresPurchase": bool(row["requires_purchase"]), "requiresExternal": bool(row["requires_external"]),
         "requiresReplacement": bool(row["requires_replacement"]), "estimateCost": row["estimate_cost"], "approvedBy": row["approved_by"],
@@ -349,11 +353,14 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET" and path == "/api/work/status":
                 return {**WORK_SCHEDULER, "timezone": "Asia/Bangkok"}
             try:
+                notification_result = handle_notifications(db, method, path, query, body)
+                if notification_result is not None:
+                    return notification_result
                 form = handle_register_form(db, method, path, body)
                 if form is not None:
                     return form
                 work = handle_work_api(db, method, path, query, body)
-            except WorkError as exc:
+            except (WorkError, NotificationError) as exc:
                 raise ApiError(str(exc), exc.status)
             if work is not None:
                 return work
@@ -361,10 +368,10 @@ class Handler(BaseHTTPRequestHandler):
             if smart is not None:
                 return smart
             if method == "GET" and path == "/api/health":
-                return {"ok": True, "database": "sqlite", "approvalThreshold": APPROVAL_THRESHOLD, "assets": db.execute("SELECT COUNT(*) FROM assets").fetchone()[0]}
+                return {"ok": True, "database": "sqlite", "approvalThreshold": approval_threshold(db), "assets": db.execute("SELECT COUNT(*) FROM assets").fetchone()[0]}
             if method == "GET" and path == "/api/config":
                 imported = bool(db.execute("SELECT 1 FROM source_documents WHERE source_kind='workbook' LIMIT 1").fetchone())
-                return {"approvalThreshold": APPROVAL_THRESHOLD, "roles": [ROLE_REQUESTER, ROLE_OFFICER, ROLE_APPROVER, ROLE_TECHNICIAN], "demoOnly": True, "dataMode": "imported-test" if imported else "demo"}
+                return {"approvalThreshold": approval_threshold(db), "roles": [ROLE_REQUESTER, ROLE_OFFICER, ROLE_APPROVER, ROLE_TECHNICIAN], "demoOnly": True, "dataMode": "imported-test" if imported else "demo"}
             if method == "POST" and path in {"/api/sticker/render", "/api/sticker/bulk-render", "/api/sticker/print"}:
                 body = {**body, "baseUrl": self.qr_origin()}
             extended = handle_asset_api(db, method, path, query, body)
@@ -661,12 +668,13 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError("ตรวจรับได้เฉพาะ Ticket ใหม่")
             estimate = safe_money(body.get("estimateCost", 0))
             flags = [bool(body.get("requiresPurchase")), bool(body.get("requiresExternal")), bool(body.get("requiresReplacement"))]
-            mandatory = estimate >= APPROVAL_THRESHOLD and estimate > 0 or any(flags)
+            threshold = approval_threshold(db)
+            mandatory = estimate >= threshold and estimate > 0 or any(flags)
             approval = bool(body.get("approvalRequired")) or mandatory
             reason = note or ("เข้าเงื่อนไขค่าใช้จ่าย/อะไหล่/จ้างภายนอก/ทดแทน" if mandatory else "ซ่อมทั่วไปตามวงเงินทดลอง")
             new = "รออนุมัติ" if approval else "รอมอบหมาย"
-            fields = {"approval_required": int(approval), "approval_reason": reason, "requires_purchase": int(flags[0]), "requires_external": int(flags[1]), "requires_replacement": int(flags[2]), "estimate_cost": estimate}
-            note = reason
+            fields = {"approval_threshold_snapshot": threshold, "approval_required": int(approval), "approval_reason": reason, "requires_purchase": int(flags[0]), "requires_external": int(flags[1]), "requires_replacement": int(flags[2]), "estimate_cost": estimate}
+            note = reason + f" · เกณฑ์ส่งอนุมัติ ณ วันคัดกรอง {threshold:,.2f} บาท"
         elif action in ("approve", "reject"):
             require_role(actor, ROLE_APPROVER)
             if old != "รออนุมัติ":
@@ -698,7 +706,8 @@ class Handler(BaseHTTPRequestHandler):
             require_status(old, "กำลังซ่อม")
             work = clean_text(body.get("workNotes"), 3000, "ผลการซ่อม")
             cost = safe_money(body.get("actualCost", 0))
-            additional_approval = (cost >= APPROVAL_THRESHOLD and cost > 0 and not row["approval_required"]) or (bool(row["approval_required"]) and cost > float(row["estimate_cost"]))
+            threshold = row["approval_threshold_snapshot"] if row["approval_threshold_snapshot"] is not None else approval_threshold(db)
+            additional_approval = (cost >= threshold and cost > 0 and not row["approval_required"]) or (bool(row["approval_required"]) and cost > float(row["estimate_cost"]))
             new = "รออนุมัติค่าใช้จ่ายจริง" if additional_approval else "รอผู้แจ้งยืนยัน"
             fields["work_notes"] = work
             fields["actual_cost"] = cost
@@ -768,7 +777,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}")
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -807,7 +816,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -904,7 +913,8 @@ def main() -> None:
     threading.Thread(target=run_scheduler, name="scheduled-work", daemon=True).start()
     print(f"SQLite prototype listening on http://{HOST}:{PORT}")
     print(f"SQLite database: {DB_PATH}")
-    print(f"Repair approval threshold (demo only): {APPROVAL_THRESHOLD:,.2f} THB")
+    with connect() as db:
+        print(f"Repair approval threshold (demo only): {approval_threshold(db):,.2f} THB")
     ThreadingHTTPServer.allow_reuse_address = True
     with ThreadingHTTPServer((HOST, PORT), Handler) as server:
         server.daemon_threads = True

@@ -85,5 +85,6 @@
     if($('#createWorkRepair'))$('#createWorkRepair').onclick=async()=>{try{await repairFromWork(w,w.note);}catch(error){$('#workDetailError').textContent=error.message;}};
     dialog.showModal();
   }
+  app.openWork=async id=>{app.switchView('work');const work=await app.api(`/api/work/items/${id}`);items=items.filter(item=>item.id!==work.id).concat(work);openWork(work.id);};
   setInterval(()=>{if(view.classList.contains('active')&&!dialog.open)load();},60000);
 })();

@@ -164,6 +164,12 @@ def handle(db, method, path, query, body):
             raise WorkError('สร้างรอบเองได้เฉพาะแผนมอบหมายตามรอบเองที่เปิดใช้งาน')
         due = date_value(body.get('dueOn'))
         return {'created':generate_round(db,plan,due,actor)}
+    item_match=re.fullmatch(r'/api/work/items/(\d+)',path)
+    if item_match and method=='GET':
+        row=db.execute('SELECT w.*,p.kind,p.name AS plan_name,a.code,a.name AS asset_name,a.location FROM scheduled_work w JOIN work_plans p ON p.id=w.plan_id JOIN assets a ON a.id=w.asset_id WHERE w.id=?',(int(item_match[1]),)).fetchone()
+        if row is None:
+            raise WorkError('ไม่พบงาน',404)
+        return work_dict(row)
     if path == '/api/work/items' and method == 'GET':
         where, args = [], []
         for key,column in [('kind','p.kind'),('assignee','w.assignee'),('status','w.status'),('planId','p.id'),('dueOn','w.due_on')]:

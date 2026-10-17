@@ -291,6 +291,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   contact TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL,
   approval_required INTEGER NOT NULL DEFAULT 0,
+  approval_threshold_snapshot REAL,
   approval_reason TEXT NOT NULL DEFAULT '',
   requires_purchase INTEGER NOT NULL DEFAULT 0,
   requires_external INTEGER NOT NULL DEFAULT 0,
@@ -509,3 +510,30 @@ CREATE TABLE IF NOT EXISTS register_forms (
   updated_at TEXT NOT NULL,
   updated_by TEXT NOT NULL
 );
+
+-- Notifications are scoped to the prototype role, not authenticated users.
+CREATE TABLE IF NOT EXISTS notification_reads (
+  recipient_role TEXT NOT NULL,
+  notification_key TEXT NOT NULL,
+  read_at TEXT NOT NULL,
+  PRIMARY KEY(recipient_role,notification_key)
+);
+CREATE TABLE IF NOT EXISTS workflow_settings (
+  id INTEGER PRIMARY KEY CHECK(id=1),
+  approval_threshold REAL NOT NULL CHECK(approval_threshold>=0 AND approval_threshold<=1000000000),
+  reminder_days INTEGER NOT NULL DEFAULT 3 CHECK(reminder_days BETWEEN 0 AND 30),
+  revision INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL,
+  updated_by TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workflow_settings_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor TEXT NOT NULL,
+  before_json TEXT NOT NULL,
+  after_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ticket_events_notification ON ticket_events(ticket_id,id);
+CREATE INDEX IF NOT EXISTS idx_asset_events_notification ON asset_events(asset_id,id);
+CREATE INDEX IF NOT EXISTS idx_work_events_notification ON work_events(work_id,id);
+CREATE INDEX IF NOT EXISTS idx_assets_pending_notification ON assets(status,created_by);

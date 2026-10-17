@@ -83,12 +83,14 @@ let fsnRows=null, fsnTotal=0, fsnOffset=0, fsnLimit=50, liveCategories=null, liv
 let inventorySearchTimer=null, fsnSearchTimer=null, inventoryRequest=0;
 let currentRole=localStorage.getItem('govAssetPrototype.role') || ROLE_REQUESTER;
 let activeTicketId=null;
+const assetApprovalsInFlight=new Set();
 let fontScale=Number(localStorage.getItem('govAssetPrototype.fontScale')) || 1;
 
 async function api(path, options={}) {
   const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
   const payload=await response.json().catch(()=>({error:'ไม่สามารถอ่านผลจาก server ได้'}));
   if(!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  if(options.method&&options.method!=='GET')document.dispatchEvent(new CustomEvent('govasset:data-changed',{detail:{path}}));
   return payload;
 }
 function toast(message) { const el=$('#toast'); el.textContent=message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),3800); }
@@ -203,7 +205,7 @@ async function openTicket(id) {
   try {
     const ticket=await api(`/api/tickets/${id}`); activeTicketId=id;
     const timeline=ticket.events.map(event=>`<li><span class="timeline-dot"></span><div><b>${esc(event.action)} · ${esc(event.actor)}</b><small>${esc(fmtDate(event.createdAt))} ${esc(new Date(event.createdAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}))}</small><p>${esc(event.note||`${event.from_status||'เริ่ม'} → ${event.to_status}`)}</p></div></li>`).join('');
-    $('#ticketDialogContent').innerHTML=`<div class="ticket-dialog-inner"><div class="dialog-head"><div><div class="eyebrow">ติดตาม Ticket · ${esc(ticket.ticketNo)}</div><h2 id="ticketDialogTitle">${esc(ticket.assetName)}</h2></div><button type="button" class="dialog-close" data-close-ticket aria-label="ปิด">×</button></div><div class="ticket-status-row">${repairBadge(ticket.status)} ${urgencyBadge(ticket.urgency)}<span class="ticket-date">เปิด ${esc(fmtDate(ticket.createdAt))}</span></div><div class="ticket-detail-grid"><div><small>เลข Ticket</small><b>${esc(ticket.ticketNo)}</b></div><div><small>รหัสครุภัณฑ์</small><b>${esc(ticket.assetCode||'—')}</b></div><div><small>ผู้แจ้ง / ช่องทางติดต่อ</small><b>${esc(ticket.requester)} · ${esc(ticket.contact||'—')}</b></div><div><small>สถานที่</small><b>${esc(ticket.location)}</b></div><div class="wide"><small>อาการ</small><b>${esc(ticket.issue)}</b></div><div><small>ผู้รับผิดชอบ</small><b>${esc(ticket.assignedTo||'ยังไม่มอบหมาย')}</b></div><div><small>ค่าใช้จ่ายประมาณ / จริง</small><b>${Number(ticket.estimateCost||0).toLocaleString('th-TH')} / ${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท</b></div>${ticket.approvalRequired?`<div class="wide"><small>เหตุผลที่ต้องอนุมัติ</small><b>${esc(ticket.approvalReason)} · ผู้อนุมัติ ${esc(ticket.approvedBy||'รอดำเนินการ')}</b></div>`:''}${ticket.workNotes?`<div class="wide"><small>ผลซ่อม</small><b>${esc(ticket.workNotes)}</b></div>`:''}${ticket.finalCostApprovalRequired?`<div class="wide"><small>อนุมัติค่าใช้จ่ายจริง</small><b>${esc(ticket.finalCostStatus)} · ${esc(ticket.finalCostApprovedBy||'รอผู้อนุมัติ')}</b></div>`:''}</div><div class="ticket-columns"><section class="timeline-panel"><h3>ประวัติการดำเนินงาน</h3><ol class="ticket-timeline">${timeline||'<li>ยังไม่มีเหตุการณ์</li>'}</ol></section><section class="ticket-actions-panel"><h3>ดำเนินการในฐานะ: ${esc(currentRole)}</h3>${actionMarkup(ticket)}<div class="ticket-dialog-buttons"><label>ขนาดพิมพ์<select class="modal-print-size"><option value="a4">A4</option><option value="a5">A5</option><option value="80mm">80 มม.</option><option value="58mm">58 มม.</option></select></label><button class="button outline" data-print-current="${ticket.id}">พิมพ์ใบแจ้งซ่อม</button></div></section></div></div>`;
+    $('#ticketDialogContent').innerHTML=`<div class="ticket-dialog-inner"><div class="dialog-head"><div><div class="eyebrow">ติดตาม Ticket · ${esc(ticket.ticketNo)}</div><h2 id="ticketDialogTitle">${esc(ticket.assetName)}</h2></div><button type="button" class="dialog-close" data-close-ticket aria-label="ปิด">×</button></div><div class="ticket-status-row">${repairBadge(ticket.status)} ${urgencyBadge(ticket.urgency)}<span class="ticket-date">เปิด ${esc(fmtDate(ticket.createdAt))}</span></div><div class="ticket-detail-grid"><div><small>เลข Ticket</small><b>${esc(ticket.ticketNo)}</b></div><div><small>รหัสครุภัณฑ์</small><b>${esc(ticket.assetCode||'—')}</b></div><div><small>ผู้แจ้ง / ช่องทางติดต่อ</small><b>${esc(ticket.requester)} · ${esc(ticket.contact||'—')}</b></div><div><small>สถานที่</small><b>${esc(ticket.location)}</b></div><div class="wide"><small>อาการ</small><b>${esc(ticket.issue)}</b></div><div><small>ผู้รับผิดชอบ</small><b>${esc(ticket.assignedTo||'ยังไม่มอบหมาย')}</b></div><div><small>ค่าใช้จ่ายประมาณ / จริง</small><b>${Number(ticket.estimateCost||0).toLocaleString('th-TH')} / ${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท</b></div>${ticket.approvalRequired?`<div class="wide"><small>เหตุผลที่ต้องอนุมัติ</small><b>${esc(ticket.approvalReason)} · ผู้อนุมัติ ${esc(ticket.approvedBy||'รอดำเนินการ')}</b></div>`:''}${ticket.workNotes?`<div class="wide"><small>ผลซ่อม</small><b>${esc(ticket.workNotes)}</b></div>`:''}${ticket.finalCostApprovalRequired?`<div class="wide"><small>อนุมัติค่าใช้จ่ายจริง</small><b>${esc(ticket.finalCostStatus)} · ${esc(ticket.finalCostApprovedBy||'รอผู้อนุมัติ')}</b></div>`:''}</div><div class="ticket-columns"><section class="timeline-panel"><h3>ประวัติการดำเนินงาน</h3><ol class="ticket-timeline">${timeline||'<li>ยังไม่มีเหตุการณ์</li>'}</ol></section><section class="ticket-actions-panel"><h3>ดำเนินการในฐานะ: ${esc(currentRole)}</h3>${actionMarkup(ticket)}<p id="ticketActionError" role="alert"></p><div class="ticket-dialog-buttons"><label>ขนาดพิมพ์<select class="modal-print-size"><option value="a4">A4</option><option value="a5">A5</option><option value="80mm">80 มม.</option><option value="58mm">58 มม.</option></select></label><button class="button outline" data-print-current="${ticket.id}">พิมพ์ใบแจ้งซ่อม</button></div></section></div></div>`;
     if(!$('#ticketDialog').open) $('#ticketDialog').showModal();
     $('[data-close-ticket]')?.addEventListener('click',()=>$('#ticketDialog').close());
     $('[data-print-current]')?.addEventListener('click',()=>printTicket(id,$('.modal-print-size')?.value));
@@ -211,6 +213,8 @@ async function openTicket(id) {
   } catch(error) { showError(error); }
 }
 async function runTicketAction(id,action) {
+  const panel=$('#ticketDialog .ticket-actions-panel');if(panel?.dataset.saving)return;if(panel)panel.dataset.saving='1';
+  const buttons=[...document.querySelectorAll('#ticketDialog [data-ticket-action]')];buttons.forEach(button=>button.disabled=true);
   const data={action,actor:currentRole};
   if(action==='review') Object.assign(data,{estimateCost:$('#estimateCost')?.value||0,requiresPurchase:$('#requiresPurchase')?.checked,requiresExternal:$('#requiresExternal')?.checked,requiresReplacement:$('#requiresReplacement')?.checked,approvalRequired:$('#approvalRequired')?.checked,note:$('#reviewNote')?.value||''});
   if(action==='approve'||action==='reject') data.note=$('#approvalNote')?.value||'';
@@ -221,12 +225,16 @@ async function runTicketAction(id,action) {
   if(action==='confirm'||action==='send_back') data.note=$('#requesterNote')?.value||'';
   if(action==='cancel') data.note=$('#cancelNote')?.value||'';
   try { await api(`/api/tickets/${id}/action`,{method:'POST',body:JSON.stringify(data)}); await refreshData(); await openTicket(id); toast('บันทึกการดำเนินงานและประวัติแล้ว'); }
-  catch(error) { showError(error); }
+  catch(error) { if($('#ticketActionError'))$('#ticketActionError').textContent=error.message;else toast(error.message); }
+  finally{if(panel)delete panel.dataset.saving;buttons.forEach(button=>button.disabled=false);}
 }
 async function handleAssetApproval(id,action) {
-  let note=''; if(action==='reject'){note=window.prompt('เหตุผลที่ไม่อนุมัติรายการนี้:')||''; if(!note.trim())return;}
-  try { await api(`/api/assets/${id}/action`,{method:'POST',body:JSON.stringify({action,actor:currentRole,note})}); await refreshData(); toast(action==='approve'?'อนุมัติรายการเข้าทะเบียนแล้ว':'ไม่อนุมัติรายการ'); }
-  catch(error) { showError(error); }
+  const key=String(id);if(assetApprovalsInFlight.has(key))return;
+  let note='';if(action==='reject'){note=window.prompt('เหตุผลที่ไม่อนุมัติรายการนี้:')||'';if(!note.trim())return;}
+  assetApprovalsInFlight.add(key);const buttons=$$(`[data-asset-id="${Number(id)}"]`);buttons.forEach(button=>button.disabled=true);
+  try{await api(`/api/assets/${id}/action`,{method:'POST',body:JSON.stringify({action,actor:currentRole,note})});await refreshData();toast(action==='approve'?'อนุมัติรายการเข้าทะเบียนแล้ว':'ไม่อนุมัติรายการ');}
+  catch(error){toast(error.message);}
+  finally{assetApprovalsInFlight.delete(key);buttons.forEach(button=>button.disabled=false);}
 }
 function printTicket(id,size) {
   const ticket=repairs.find(item=>item.id===id); if(!ticket){showError(new Error('ไม่พบ Ticket สำหรับพิมพ์'));return;}
@@ -237,7 +245,7 @@ function printTicket(id,size) {
   document.body.dataset.printing='ticket'; window.addEventListener('afterprint',()=>{delete document.body.dataset.printing;root.innerHTML='';},{once:true}); window.print();
 }
 function applyFontScale(value) { fontScale=Math.min(1.4,Math.max(0.95,Math.round(value*100)/100)); document.documentElement.style.zoom=String(fontScale); setText('#fontScaleLabel',`${Math.round(fontScale*100)}%`); localStorage.setItem('govAssetPrototype.fontScale',String(fontScale)); }
-function switchRole(role) { currentRole=role; localStorage.setItem('govAssetPrototype.role',role); renderAssets(); renderApprovals(); if(activeTicketId&&$('#ticketDialog')?.open)openTicket(activeTicketId); }
+function switchRole(role) { currentRole=role; localStorage.setItem('govAssetPrototype.role',role); renderAssets(); renderApprovals(); if(activeTicketId&&$('#ticketDialog')?.open)openTicket(activeTicketId);document.dispatchEvent(new CustomEvent('govasset:role-changed')); }
 function updateCode() {
   const parts=[$('#groupCode').value,$('#typeCode').value,$('#descriptionCode').value];
   const manual=$('#assetNumberMode').value==='manual';

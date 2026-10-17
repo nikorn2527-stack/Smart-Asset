@@ -75,3 +75,8 @@ body{font-size:16px}.brand strong{font-size:16px}.brand span{font-size:12px}.wor
 }
 @media print{.app-shell,.main-column,main,#view-register.active{min-height:0!important;height:auto!important}.skip-link{display:none!important;visibility:hidden!important}}
 @media(max-width:720px){html,body{overflow-x:hidden}}
+
+/* Header controls must wrap when the user increases the text size. */
+.topbar{height:auto;min-height:60px;flex-wrap:wrap;gap:8px;padding-top:10px;padding-bottom:10px}
+.top-actions{min-width:0;max-width:100%;flex-wrap:wrap;justify-content:flex-end}
+.crumb{min-width:0;max-width:100%;flex-wrap:wrap}
