@@ -119,7 +119,7 @@ function renderAssets() {
   const recent=$('#recentRows'); if(recent) recent.innerHTML=assets.slice(0,4).map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.group)}</td><td>${badge(item.status)}</td></tr>`).join('');
   const search=($('#assetSearch')?.value||'').trim().toLowerCase(), status=$('#statusFilter')?.value||'all';
   const filtered=inventoryRows!==null?inventoryRows:assets.filter(item=>`${item.name} ${item.code} ${item.group} ${item.location} ${item.status}`.toLowerCase().includes(search)&&(status==='all'||item.status===status));
-  const rows=$('#assetRows'); if(rows) rows.innerHTML=filtered.length?filtered.map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.group)}</td><td>${esc(item.location)}</td><td>${esc(fmtDate(item.date))}</td><td>${badge(item.status)}</td><td><button class="button outline mini-action" data-smart-id="${item.id}">รายละเอียด / QR</button> ${item.status==='รออนุมัติ'?(currentRole===ROLE_APPROVER?`<button class="button outline mini-action" data-asset-action="approve" data-asset-id="${item.id}">อนุมัติ</button> <button class="button outline mini-action reject" data-asset-action="reject" data-asset-id="${item.id}">ไม่อนุมัติ</button>`:'<span class="item-meta">รอผู้อนุมัติ</span>'):'—'}</td></tr>`).join(''):'<tr><td colspan="7" class="empty-cell">ไม่พบรายการที่ตรงกับคำค้น</td></tr>';
+  const rows=$('#assetRows'); if(rows) rows.innerHTML=filtered.length?filtered.map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.group)}</td><td>${esc(item.location)}</td><td>${esc(fmtDate(item.date))}</td><td>${badge(item.status)}</td><td><button class="button outline mini-action" data-smart-id="${item.id}">รายละเอียด / QR</button> <button class="button outline mini-action" type="button" data-register-id="${item.id}">ใบทะเบียนคุม</button> ${item.status==='รออนุมัติ'?(currentRole===ROLE_APPROVER?`<button class="button outline mini-action" data-asset-action="approve" data-asset-id="${item.id}">อนุมัติ</button> <button class="button outline mini-action reject" data-asset-action="reject" data-asset-id="${item.id}">ไม่อนุมัติ</button>`:'<span class="item-meta">รอผู้อนุมัติ</span>'):'—'}</td></tr>`).join(''):'<tr><td colspan="7" class="empty-cell">ไม่พบรายการที่ตรงกับคำค้น</td></tr>';
   const shownStart=inventoryTotal?inventoryOffset+1:1, shownEnd=Math.min(inventoryOffset+filtered.length,inventoryTotal||filtered.length);
   const result=$('#resultCount'); if(result) result.textContent=`แสดง ${filtered.length?shownStart:0}–${shownEnd} จาก ${inventoryTotal||assets.length} รายการ`;
   const total=$('#totalCount'); if(total) total.textContent=String(appConfig.overview?.assets ?? inventoryTotal ?? assets.length);
@@ -160,7 +160,24 @@ function renderCatalog() { const search=($('#codeSearch')?.value||'').trim().toL
   } else {const filtered=codeCatalog.filter(group=>`${group.code} ${group.title} ${group.desc} ${group.items.map(item=>item.name).join(' ')}`.toLowerCase().includes(search));cards.innerHTML=filtered.length?filtered.map(group=>`<article class="panel code-card"><div class="code-card-top"><h3>${esc(group.title)}</h3><span class="fsn-tag">${esc(group.code)}</span></div><p>${esc(group.desc)}</p><div class="sample-list">${group.items.map(item=>`<div class="sample-row"><span>${esc(item.name)}</span><code>${esc(item.code)}</code></div>`).join('')}</div></article>`).join(''):'<div class="panel code-card">ไม่พบหมวดตัวอย่างตามคู่มือที่ค้นหา</div>';}
 }
 async function loadFsn(offset=0){fsnOffset=Math.max(0,offset);try{const q=$('#codeSearch')?.value||'';const params=new URLSearchParams({q,limit:String(fsnLimit),offset:String(fsnOffset)});const result=await api(`/api/catalog/fsn?${params}`);fsnRows=result.total?result.items:null;fsnTotal=result.total;renderCatalog();}catch(error){showError(error);}}
-function switchView(name) { $$('.view').forEach(section=>section.classList.toggle('active',section.id===`view-${name}`)); $$('.nav-item[data-view]').forEach(button=>button.classList.toggle('active',button.dataset.view===name)); const title={work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่าระบบ / แบรนด์',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตาม Ticket',approvals:'คิวรออนุมัติ',register:'ทะเบียนคุมทรัพย์สิน',stickers:'ออกแบบและพิมพ์สติกเกอร์',depreciation:'อายุการใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'บัญชีกลุ่มรหัส FSN'}[name]||'ภาพรวม'; $('#crumbCurrent').textContent=title; document.title=`${title} — ${window.govAssetBranding?.appName || 'GovAsset'}`; window.scrollTo({top:0,behavior:'smooth'}); }
+function switchView(name) {
+  if (!document.getElementById(`view-${name}`)) return;
+  const parents={register:'assets',survey:'assets',codes:'settings',depreciation:'settings',stickers:'settings'};
+  const activeMenu=parents[name]||name;
+  $$('.view').forEach(section=>section.classList.toggle('active',section.id===`view-${name}`));
+  $$('.nav-item[data-view]').forEach(button=>{
+    const active=button.dataset.view===activeMenu;
+    button.classList.toggle('active',active);
+    if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+  });
+  const titles={work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่า',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตามงาน',approvals:'คิวรออนุมัติ',register:'เอกสารทะเบียนคุมทรัพย์สิน',stickers:'แบบสติกเกอร์และการพิมพ์',depreciation:'อายุใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'หมวดครุภัณฑ์และรหัส FSN'};
+  const title=titles[name]||'ภาพรวม';
+  $('#crumbCurrent').textContent=parents[name]?`${titles[activeMenu]} / ${title}`:title;
+  document.title=`${title} — ${window.govAssetBranding?.appName || 'GovAsset'}`;
+  document.dispatchEvent(new CustomEvent('govasset:view-changed',{detail:{name}}));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
 function actionMarkup(ticket) {
   const status=ticket.status, role=currentRole;
   if(role===ROLE_OFFICER&&status==='รับแจ้งใหม่') return `<div class="action-form"><p>ตรวจอาการและเลือกว่าต้องขออนุมัติก่อนหรือไม่</p><label>ประมาณการค่าใช้จ่าย (บาท)<input id="estimateCost" type="number" min="0" step="0.01" value="0"></label><label class="check-label"><input id="requiresPurchase" type="checkbox"> ต้องซื้ออะไหล่</label><label class="check-label"><input id="requiresExternal" type="checkbox"> ส่งซ่อม/จ้างภายนอก</label><label class="check-label"><input id="requiresReplacement" type="checkbox"> พิจารณาทดแทน/จำหน่าย</label><label class="check-label"><input id="approvalRequired" type="checkbox"> ส่งขออนุมัติ (ระบุเอง)</label><label>หมายเหตุคัดกรอง<input id="reviewNote" maxlength="500" placeholder="เหตุผลหรือขอบเขตงาน"></label><button class="button primary" data-ticket-action="review">บันทึกผลคัดกรอง</button><small>ระบบจะส่งเข้าคิวอนุมัติเมื่อเข้าเงื่อนไขหรือยอดประมาณการถึงวงเงิน ${Number(appConfig.approvalThreshold).toLocaleString('th-TH')} บาท</small></div>`;
@@ -218,6 +235,7 @@ function openAssetDialog() { populateAssetCategoryOptions(liveCategories||[]); $
 function openRepairDialog() { $('#assetSuggestions').innerHTML=assets.map(item=>`<option value="${esc(item.name)}">`).join(''); $('#assetCodes').innerHTML=assets.map(item=>`<option value="${esc(item.code)}">`).join(''); $('#repairForm').reset(); $('#repairDialog').showModal(); $('#repairAsset').focus(); }
 
 $$('.nav-item[data-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.view)));
+document.addEventListener('click',event=>{const target=event.target.closest('[data-go-view]');if(target)switchView(target.dataset.goView);const record=event.target.closest('[data-register-id]');if(record)window.govAssetApp.openRegister(Number(record.dataset.registerId));});
 $$('[data-open-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.openView)));
 $('#assetSearch')?.addEventListener('input',()=>{clearTimeout(inventorySearchTimer);inventorySearchTimer=setTimeout(()=>loadInventory(0),220);}); $('#statusFilter')?.addEventListener('change',()=>loadInventory(0)); $('#codeSearch')?.addEventListener('input',()=>{renderCatalog();clearTimeout(fsnSearchTimer);fsnSearchTimer=setTimeout(()=>loadFsn(0),220);});
 $('#repairSearch')?.addEventListener('input',renderRepairs); $('#repairStatusFilter')?.addEventListener('change',renderRepairs); $('#depreciationSearch')?.addEventListener('input',renderDepreciation);

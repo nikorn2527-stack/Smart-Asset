@@ -32,7 +32,7 @@
     paper.innerHTML=pages.join('');
     fitText(paper);
   }
-  $('[data-view="register"]').addEventListener('click',()=>{if(state)fitText(paper);});
+  document.addEventListener('govasset:view-changed',event=>{if(event.detail.name==='register'&&state)fitText(paper);});
   function fitText(root){
     let fits=true;
     root.querySelectorAll('.rf-field b').forEach(el=>{
@@ -43,22 +43,39 @@
     root.querySelectorAll('.rf-cell-value').forEach(el=>{let size=10;el.style.fontSize=`${size}pt`;while((el.scrollHeight>el.clientHeight+1||el.scrollWidth>el.clientWidth+1)&&size>8){size-=.25;el.style.fontSize=`${size}pt`;}if(el.scrollHeight>el.clientHeight+1||el.scrollWidth>el.clientWidth+1)fits=false;});
     return fits;
   }
+  printButton.disabled=true;
+  $('#editOfficialRegister').disabled=true;
+  document.addEventListener('govasset:register-loading',()=>{
+    ++epoch;state=null;paper.replaceChildren();printButton.disabled=true;$('#editOfficialRegister').disabled=true;
+    $('#registerFormStatus').textContent='กำลังโหลดเอกสารของครุภัณฑ์ที่เลือก…';
+  });
   document.addEventListener('govasset:register-loaded',async event=>{
     const n=++epoch,data=event.detail;
-    try{const saved=await app.api(`/api/assets/${data.asset.id}/register-form`);if(n!==epoch)return;state={assetId:data.asset.id,revision:saved.revision,form:saved.form||defaultForm(data)};await document.fonts.ready;render();$('#registerFormStatus').textContent=`A4 แนวนอน · ${saved.form?'เอกสารที่บันทึกไว้ ฉบับแก้ไข '+saved.revision:'ข้อมูลจากทะเบียน — ตรวจและเติมช่องว่างก่อนพิมพ์'}`;}catch(error){app.showError(error);}
+    const source=defaultForm(data).fields;
+    const entries=[['วิธีการได้มา',source.method],['แหล่งเงิน',source.fund],['ผู้ขาย / ผู้บริจาค',source.vendor],['เลขที่ GFMIS / PO',[source.gfmis,source.po].filter(Boolean).join(' / ')],['ปีงบประมาณที่ได้มา',source.fiscalYear],['สถานที่ / หน่วยงานรับผิดชอบ',source.location]];
+    $('#registerProvenanceSummary').innerHTML='<h2>ที่มาของครุภัณฑ์จากทะเบียน</h2><dl>'+entries.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value||'ยังไม่ระบุ')}</dd></div>`).join('')+'</dl>';
+    try{
+      const saved=await app.api(`/api/assets/${data.asset.id}/register-form`);
+      if(n!==epoch)return;
+      state={assetId:data.asset.id,revision:saved.revision,form:saved.form||defaultForm(data)};
+      await document.fonts.ready;if(n!==epoch)return;
+      render();printButton.disabled=false;$('#editOfficialRegister').disabled=false;
+      $('#registerFormStatus').textContent=`A4 แนวนอน · ${saved.form?'เอกสารที่บันทึกไว้ ฉบับแก้ไข '+saved.revision:'ตรวจและเติมช่องว่างก่อนพิมพ์'}`;
+    }catch(error){if(n!==epoch)return;$('#registerFormStatus').textContent='โหลดเอกสารไม่สำเร็จ กรุณากลับไปเปิดจากรายการครุภัณฑ์อีกครั้ง';app.showError(error);}
   });
   $('#editOfficialRegister').onclick=()=>{
     if(!state)return app.toast('เลือกรายการครุภัณฑ์ก่อน');
     if(app.getRole()!=='เจ้าหน้าที่พัสดุ')return app.toast('เลือกบทบาทเจ้าหน้าที่พัสดุเพื่อแก้ไขเอกสาร');
+    const editingState=state;
     editor.innerHTML=`<form id="registerEditorForm"><div class="dialog-head"><div><div class="eyebrow">เอกสารราชการ · แก้ไขข้อมูลก่อนพิมพ์</div><h2>ทะเบียนคุมทรัพย์สิน</h2></div><button class="dialog-close" type="button" id="closeRegisterEditor">×</button></div><p>ข้อมูลเอกสารเก็บแยกจากหลักฐานนำเข้า ช่องที่ไม่มีข้อมูลให้เว้นว่าง ไม่สร้างยอดขึ้นเอง</p><div class="register-editor-fields">${fields.map(([key,label])=>`<label>${esc(label)}<input name="${key}" maxlength="500" value="${esc(state.form.fields[key])}"></label>`).join('')}</div><h3>รายการในตาราง</h3><div id="registerRowEditors"></div><button class="button outline" id="addRegisterRow" type="button">＋ เพิ่มแถวรายการ</button><h3>บรรทัดสรุปท้ายตาราง</h3><p>ใช้ค่าสุดท้ายที่มีข้อมูลเป็นค่าเริ่มต้น ตรวจทานกับต้นทางได้เอง ไม่บวกมูลค่าสะสมและมูลค่าสุทธิข้ามปี</p><div class="register-editor-fields">${['annual','accumulated','net'].map(key=>`<label>${esc(columns.find(c=>c[0]===key)[1])}<input name="sum_${key}" type="number" min="0" step="0.0001" value="${esc(summaryValue(key))}"></label>`).join('')}</div><div class="dialog-actions"><button class="button primary" type="submit">บันทึกเอกสาร</button></div><p role="alert" id="registerEditorStatus"></p></form>`;
-    let rows=structuredClone(state.form.rows);
+    let rows=structuredClone(editingState.form.rows);
     function renderRows(){
       $('#registerRowEditors').innerHTML=rows.map((r,i)=>`<fieldset class="register-row-editor" data-row="${i}"><legend>รายการที่ ${i+1}</legend><div class="register-editor-fields">${columns.map(([key,label])=>`<label>${esc(label)}<input data-column="${key}" value="${esc(r[key])}" maxlength="500" ${['quantity','life',...moneyKeys].includes(key)?'type="number" min="0" step="0.0001"':''}></label>`).join('')}</div><button class="button outline" type="button" data-remove-row="${i}" ${rows.length===1?'disabled':''}>ลบแถวนี้</button></fieldset>`).join('');
       $('#registerRowEditors').querySelectorAll('input').forEach(input=>input.oninput=()=>rows[Number(input.closest('[data-row]').dataset.row)][input.dataset.column]=input.value);
       $('#registerRowEditors').querySelectorAll('[data-remove-row]').forEach(b=>b.onclick=()=>{rows.splice(Number(b.dataset.removeRow),1);renderRows();});
     }
     renderRows();$('#closeRegisterEditor').onclick=()=>editor.close();$('#addRegisterRow').onclick=()=>{if(rows.length>=12)return app.toast('รองรับ 12 แถวต่อเอกสาร');rows.push(Object.fromEntries(columns.map(([k])=>[k,''])));renderRows();};
-    $('#registerEditorForm').onsubmit=async event=>{event.preventDefault();const b=event.submitter;b.disabled=true;try{const raw=Object.fromEntries(new FormData(event.target));const form={fields:Object.fromEntries(fields.map(([key])=>[key,raw[key]])),rows,summary:Object.fromEntries(['annual','accumulated','net'].map(key=>[key,raw['sum_'+key]]))};const saved=await app.api(`/api/assets/${state.assetId}/register-form`,{method:'PUT',body:JSON.stringify({actor:app.getRole(),revision:state.revision,form})});state.form=form;state.revision=saved.revision;render();editor.close();$('#registerFormStatus').textContent=`เอกสารที่บันทึกไว้ ฉบับแก้ไข ${saved.revision}`;app.toast('บันทึกเอกสารทะเบียนคุมแล้ว');}catch(error){$('#registerEditorStatus').textContent=error.message;b.disabled=false;}};
+    $('#registerEditorForm').onsubmit=async event=>{event.preventDefault();const b=event.submitter;b.disabled=true;try{const raw=Object.fromEntries(new FormData(event.target));const form={fields:Object.fromEntries(fields.map(([key])=>[key,raw[key]])),rows,summary:Object.fromEntries(['annual','accumulated','net'].map(key=>[key,raw['sum_'+key]]))};const saved=await app.api(`/api/assets/${editingState.assetId}/register-form`,{method:'PUT',body:JSON.stringify({actor:app.getRole(),revision:editingState.revision,form})});if(state!==editingState)return;state.form=form;state.revision=saved.revision;render();editor.close();$('#registerFormStatus').textContent=`เอกสารที่บันทึกไว้ ฉบับแก้ไข ${saved.revision}`;app.toast('บันทึกเอกสารทะเบียนคุมแล้ว');}catch(error){if(state!==editingState)return;$('#registerEditorStatus').textContent=error.message;b.disabled=false;}};
     editor.showModal();
   };
   printButton.onclick=async()=>{

@@ -5,7 +5,7 @@
   const $ = (s, root = document) => root.querySelector(s);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const state = { assets: [], total: 0, offset: 0, limit: 50, selected: new Map(), templates: [], template: null, selectedElementId: null, settings: {} };
-  let searchTimer = null, registerItems = [];
+  let searchTimer = null, registerLoadEpoch = 0;
   const elementLabels = {text:'ข้อความ',qr:'QR Code',rect:'กรอบ/แถบสี',image:'ภาพ'};
   const variableMap = {
     AssetNo:'code', AssetName:'name', AssetSiteCode:'code', Serial:'serialNumber', Type:'assetType', Brand:'brand', Model:'model',
@@ -173,49 +173,35 @@
       setTimeout(()=>{try{iframe.contentWindow.focus();iframe.contentWindow.print();toast(`เตรียมพิมพ์ ${result.count} ฉลากแล้ว · บันทึกงานพิมพ์ #${result.jobId}`);setTimeout(()=>iframe.remove(),1200);}catch(e){iframe.remove();app.showError(e);}},500);
     } catch(error){app.showError(error);}
   }
-  async function loadRegisterOptions(q='',preferredId=null) {
+  async function loadRegister(id) {
+    const request=++registerLoadEpoch;
+    document.dispatchEvent(new CustomEvent('govasset:register-loading'));
+    $('#registerAssetContext').textContent='กำลังเปิดเอกสารครุภัณฑ์…';
+    $('#registerProvenanceSummary').replaceChildren();
     try {
-      const params=new URLSearchParams({q,limit:'50'});const data=await app.api(`/api/inventory?${params}`);registerItems=data.items||[];
-      const select=$('#registerAssetSelect');
-      select.innerHTML=registerItems.map(item=>`<option value="${item.id}">${esc(item.code||'ไม่มีรหัส')} · ${esc(item.name)}</option>`).join('');
-      if(preferredId&&registerItems.some(i=>String(i.id)===String(preferredId)))select.value=String(preferredId);
-      if(select.value)await loadRegister(Number(select.value));
-    } catch(error){app.showError(error);}
-  }
-  async function initRegister() {
-    try {
-      const [featured,list]=await Promise.all([app.api('/api/register/featured').catch(()=>null),app.api('/api/inventory?limit=50')]);
-      registerItems=list.items||[];
-      if(featured?.asset&&!registerItems.some(i=>String(i.id)===String(featured.asset.id)))registerItems.unshift(featured.asset);
-      const select=$('#registerAssetSelect');select.innerHTML=registerItems.map(item=>`<option value="${item.id}">${esc(item.code||'ไม่มีรหัส')} · ${esc(item.name)}</option>`).join('');
-      const preferred=featured?.asset?.id??registerItems[0]?.id;if(preferred){select.value=String(preferred);await loadRegister(Number(preferred),featured||null);}
-    } catch(error){app.showError(error);}
-  }
-  const findValue=(root,label)=>[...root.querySelectorAll('.register-org div,.register-meta-grid div')].find(node=>node.querySelector('span')?.textContent.trim()===label)?.querySelector('b');
-  function setLabel(label,value){const node=findValue($('.register-paper'),label);if(node)node.textContent=value??'';}
-  const fmtMoney=value=>value==null||value===''?'':Number(value).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
-  function formatRegisterDate(value,fiscalYear=''){
-    const text=String(value??'').trim();if(!text)return{label:'',year:String(fiscalYear||'')};
-    const match=text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/);
-    if(!match){const year=String(fiscalYear||'');return{label:year&&text.endsWith(year)?text.slice(0,-year.length).trim():text,year};}
-    const months=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    const rawYear=Number(match[1]);return{label:`${Number(match[3])} ${months[Number(match[2])-1]||''}`,year:String(fiscalYear||(rawYear>=2400?rawYear:rawYear+543))};
-  }
-  async function loadRegister(id,featured=null) {
-    try {
-      const data=featured||await app.api(`/api/assets/${id}/register`),a=data.asset||{},r=data.register||{},acq=(data.acquisitions||[]).at(-1)||{},dep=(data.depreciationSnapshots||[]).at(-1)||{};
-      const org=r.organization_name||a.organization||'หน่วยงานตัวอย่าง',dept=r.department_name||a.department||a.responsibleUnit||'',name=r.description||a.name||'',code=r.asset_code_printed||a.code||'';
-      setLabel('ส่วนราชการ',org);setLabel('หน่วยงาน',dept);setLabel('ประเภท',r.asset_type||a.assetType||a.group);setLabel('รหัส',code);setLabel('ลักษณะ/คุณสมบัติ',name);setLabel('รุ่น/แบบ',r.model||acq.model||a.model);setLabel('สถานที่ตั้ง/หน่วยงานรับผิดชอบ',r.location||a.location);setLabel('ชื่อผู้ขาย/ผู้รับจ้าง/ผู้บริจาค',r.vendor_name||acq.vendor_name||a.vendor);setLabel('ที่อยู่',r.vendor_address||acq.vendor_address);setLabel('โทร.',r.vendor_phone||acq.vendor_phone);setLabel('เลขที่ GFMIS',r.gfmis_no||acq.gfmis_no||a.gfmisNo);setLabel('เลขที่ PO',r.po_no||acq.po_no||a.poNo);setLabel('S/N',r.serial_number||acq.serial_number||a.serialNumber);setLabel('สิ้นสุดประกัน',r.warranty_end||acq.warranty_end||a.warrantyEnd);setLabel('ปีงบที่ได้มา',r.fiscal_year_th||acq.fiscal_year_th||a.fiscalYear);setLabel('ประเภทเงิน',r.fund_type||acq.fund_type||a.fundType);setLabel('วิธีการได้มา',r.acquisition_method||acq.acquisition_method||a.acquisitionMethod);
-      const acquired=acq.acquired_on||a.acquiredOn||'';const year=acq.fiscal_year_th||a.fiscalYear||'';const dateParts=formatRegisterDate(acquired,year);const documentNo=acq.document_no||r.po_no||r.gfmis_no||'';const qty=acq.quantity??'';const unit=acq.unit_price??acq.total_price??a.purchasePrice;const total=acq.total_price??unit;const usefulLife=dep.useful_life_years??a.usefulLifeYears;const note=r.notes||r.note||r.remarks||acq.notes||acq.note||acq.remarks||dep.notes||dep.note||'';const tbody=$('.register-table tbody');
-      tbody.innerHTML=`<tr><td>${esc(dateParts.label)}${dateParts.year?`<br><small>${esc(dateParts.year)}</small>`:''}</td><td>${esc(documentNo)}</td><td>${esc(name)}</td><td>${esc(qty)}</td><td>${esc(fmtMoney(unit))}</td><td>${esc(fmtMoney(total))}</td><td>${usefulLife?`${esc(usefulLife)} ปี`:''}</td><td>${esc(fmtMoney(dep.monthly_depreciation??a.monthlyDepreciation))}</td><td>${esc(fmtMoney(dep.annual_depreciation??a.annualDepreciation))}</td><td>${esc(fmtMoney(dep.accumulated_depreciation??a.accumulatedDepreciation))}</td><td>${esc(fmtMoney(dep.net_book_value??a.netBookValue))}</td><td>${esc(note)}</td></tr>`;
+      const data=await app.api(`/api/assets/${id}/register`);
+      if(request!==registerLoadEpoch)return;
+      const a=data.asset||{},r=data.register||{},acq=(data.acquisitions||[]).at(-1)||{},dep=(data.depreciationSnapshots||[]).at(-1)||{};
       const sourceNames=[...new Set([r.source_filename,acq.source_filename,dep.source_filename,...(data.sourceRows||[]).map(x=>x.source_filename)].filter(Boolean))];
-      $('#registerSourceInfo').textContent=sourceNames.length?`เชื่อมจาก ${sourceNames.join(' · ')} · ${data.sourceRows?.length||0} แถวต้นทาง`:(r.id?'เชื่อมข้อมูลทะเบียนแล้ว':'ไม่มีแถวทะเบียน PDF ที่จับคู่ได้; แสดงข้อมูลครุภัณฑ์เท่าที่มี');
-      const footnote=$('.register-footnote');if(footnote)footnote.textContent=sourceNames.length?`แหล่งข้อมูลที่เชื่อม: ${sourceNames.join(' · ')} · ค่าในช่องคำนวณ/อ่านจากเอกสารต้นทาง โปรดตรวจทานกับต้นฉบับก่อนใช้งานจริง`:'ข้อมูลสาธิตจากฐาน SQLite · ช่องที่ไม่มีข้อมูล acquisition/depreciation เว้นว่าง';
+      $('#registerAssetContext').textContent=`${a.code||'ยังไม่มีรหัส'} · ${a.name||'ครุภัณฑ์'}`;
+      $('#registerSourceInfo').textContent=sourceNames.length?`แหล่งหลักฐาน: ${sourceNames.join(' · ')}`:'ข้อมูลจากทะเบียนปัจจุบัน · ยังไม่มีเอกสารนำเข้าที่เชื่อมไว้';
       const provenance={asset:{id:a.id,code:a.code,name:a.name,sourceDocumentId:a.sourceDocumentId,sourceRowNo:a.sourceRowNo},sourceRows:data.sourceRows||[],acquisitions:data.acquisitions||[],depreciationSnapshots:data.depreciationSnapshots||[],fsnMatches:data.fsnMatches||[]};
       $('#registerSourceJson').textContent=JSON.stringify(provenance,null,2);
-      window.govAssetRegisterData=data;document.dispatchEvent(new CustomEvent('govasset:register-loaded',{detail:data}));
-    } catch(error){app.showError(error);}
+      window.govAssetRegisterData=data;
+      document.dispatchEvent(new CustomEvent('govasset:register-loaded',{detail:data}));
+    } catch(error){
+      if(request!==registerLoadEpoch)return;
+      $('#registerAssetContext').textContent='เปิดเอกสารไม่สำเร็จ';
+      $('#registerSourceInfo').textContent=error.message;
+      app.showError(error);
+    }
   }
+  app.openRegister=id=>{
+    const assetId=Number(id);
+    if(!Number.isSafeInteger(assetId)||assetId<1)return app.toast('รหัสครุภัณฑ์ไม่ถูกต้อง');
+    app.switchView('register');
+    return loadRegister(assetId);
+  };
   async function saveStickerSettings() {
     try {state.settings=await app.api('/api/sticker/settings',{method:'POST',body:JSON.stringify({orgName:$('#stickerOrgName').value,hotline:$('#stickerHotline').value})});renderPreview();toast('บันทึกข้อมูลที่แสดงบนฉลากแล้ว');}catch(error){app.showError(error);}
   }
@@ -234,9 +220,6 @@
   $('#stickerDeleteElement').addEventListener('click',()=>{if(!state.template||!state.selectedElementId)return;state.template.elements=state.template.elements.filter(e=>e.id!==state.selectedElementId);state.selectedElementId=state.template.elements[0]?.id||null;renderElementList();renderProperties();renderPreview();});
   $('#stickerVariableSelect').addEventListener('change',event=>{const value=event.target.value,el=state.template?.elements?.find(item=>item.id===state.selectedElementId);if(value&&el&&['text','qr'].includes(el.type)){el.content=(el.content||'')+value;renderProperties();renderElementList();renderPreview();}event.target.value='';});
   $('#printSelectedStickers').addEventListener('click',printSelected);
-  $('#registerSearchButton').addEventListener('click',()=>loadRegisterOptions($('#registerAssetSearch').value.trim()));
-  $('#registerAssetSearch').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();loadRegisterOptions(event.target.value.trim());}});
-  $('#registerAssetSelect').addEventListener('change',()=>loadRegister(Number($('#registerAssetSelect').value)));
   $('#saveStickerSettings').addEventListener('click',saveStickerSettings);
-  Promise.all([loadStickerTemplates(),loadStickerAssets(0),initRegister(),app.api('/api/sticker/settings').then(data=>{state.settings=data;$('#stickerOrgName').value=data.orgName||'';$('#stickerHotline').value=data.hotline||'';renderPreview();}).catch(app.showError)]).catch(app.showError);
+  Promise.all([loadStickerTemplates(),loadStickerAssets(0),app.api('/api/sticker/settings').then(data=>{state.settings=data;$('#stickerOrgName').value=data.orgName||'';$('#stickerHotline').value=data.hotline||'';renderPreview();}).catch(app.showError)]).catch(app.showError);
 })();
