@@ -537,3 +537,58 @@ CREATE INDEX IF NOT EXISTS idx_ticket_events_notification ON ticket_events(ticke
 CREATE INDEX IF NOT EXISTS idx_asset_events_notification ON asset_events(asset_id,id);
 CREATE INDEX IF NOT EXISTS idx_work_events_notification ON work_events(work_id,id);
 CREATE INDEX IF NOT EXISTS idx_assets_pending_notification ON assets(status,created_by);
+
+CREATE TABLE IF NOT EXISTS line_settings (
+  id INTEGER PRIMARY KEY CHECK(id=1),
+  enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
+  base_url TEXT NOT NULL DEFAULT '',
+  revision INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT OR IGNORE INTO line_settings(id) VALUES(1);
+CREATE TABLE IF NOT EXISTS line_recipients (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  recipient_role TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  UNIQUE(recipient_role,target_id)
+);
+CREATE TABLE IF NOT EXISTS line_candidates (
+  target_id TEXT PRIMARY KEY,
+  source_type TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS line_seen (
+  notification_key TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  PRIMARY KEY(notification_key,target_id)
+);
+CREATE TABLE IF NOT EXISTS line_outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  notification_key TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  recipient_role TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'notification',
+  payload_json TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  config_revision INTEGER NOT NULL,
+  retry_key TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  available_at TEXT NOT NULL,
+  lease_until TEXT NOT NULL DEFAULT '',
+  lease_token TEXT NOT NULL DEFAULT '',
+  first_attempt_at TEXT NOT NULL DEFAULT '',
+  last_error TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  accepted_at TEXT NOT NULL DEFAULT '',
+  UNIQUE(notification_key,target_id)
+);
+CREATE INDEX IF NOT EXISTS idx_line_outbox_due ON line_outbox(status,available_at);
+CREATE TABLE IF NOT EXISTS line_settings_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor TEXT NOT NULL,
+  before_json TEXT NOT NULL,
+  after_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);

@@ -24,6 +24,7 @@ from smart_assets import base_url, branding, public_asset, public_receipt, qr_ur
 from work_api import handle as handle_work_api, WorkError, generate_due
 from register_forms import handle as handle_register_form
 from notifications import handle as handle_notifications, NotificationError, approval_threshold
+from line_notifications import handle as handle_line, verify_webhook, dispatch as dispatch_line, WORKER as LINE_WORKER
 
 WORK_SCHEDULER = {"running": False, "lastRun": None, "lastError": None}
 
@@ -353,6 +354,9 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET" and path == "/api/work/status":
                 return {**WORK_SCHEDULER, "timezone": "Asia/Bangkok"}
             try:
+                line_result = handle_line(db, method, path, query, body)
+                if line_result is not None:
+                    return line_result
                 notification_result = handle_notifications(db, method, path, query, body)
                 if notification_result is not None:
                     return notification_result
@@ -777,7 +781,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}")
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -816,7 +820,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -838,13 +842,25 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_write(self, method: str):
         parsed = urlparse(self.path)
         try:
+            if method == "POST" and unquote(parsed.path) == "/api/line/webhook":
+                try:
+                    length=int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    raise ApiError("ขนาด webhook ไม่ถูกต้อง")
+                if not 0<length<=1_000_000:
+                    raise ApiError("ขนาด webhook ไม่ถูกต้อง",413)
+                raw=self.rfile.read(length)
+                with connect() as db:
+                    result=verify_webhook(db,raw,self.headers.get("X-Line-Signature", ""))
+                self.send_json(result)
+                return
             body = self.read_json()
             result = self.handle_api(method, unquote(parsed.path), parse_qs(parsed.query), body)
             status = 200
             if isinstance(result, tuple):
                 result, status = result
             self.send_json(result, status)
-        except ApiError as exc:
+        except (ApiError, NotificationError) as exc:
             self.send_json({"error": str(exc)}, exc.status)
         except sqlite3.IntegrityError as exc:
             self.send_json({"error": "ข้อมูลซ้ำหรือไม่ผ่านข้อกำหนด: " + str(exc)}, 409)
@@ -911,6 +927,18 @@ def main() -> None:
             stop_scheduler.wait(interval)
         WORK_SCHEDULER["running"] = False
     threading.Thread(target=run_scheduler, name="scheduled-work", daemon=True).start()
+    def run_line():
+        LINE_WORKER["running"] = True
+        while not stop_scheduler.is_set():
+            try:
+                dispatch_line(connect)
+                LINE_WORKER.update(lastRun=now_iso(),lastError=None)
+            except Exception as exc:
+                LINE_WORKER["lastError"] = type(exc).__name__
+                print("LINE worker error: "+type(exc).__name__)
+            stop_scheduler.wait(5)
+        LINE_WORKER["running"] = False
+    threading.Thread(target=run_line,name="line-notifications",daemon=True).start()
     print(f"SQLite prototype listening on http://{HOST}:{PORT}")
     print(f"SQLite database: {DB_PATH}")
     with connect() as db:
