@@ -15,6 +15,33 @@ import import_sources
 
 @unittest.skipUnless(importlib.util.find_spec('openpyxl') and importlib.util.find_spec('xlrd'),'optional source import dependencies not installed')
 class SourceImport(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec('pypdf'), 'optional Python PDF reader not installed')
+    def test_python_pdf_reader_retains_page_numbers_and_fsn_text(self):
+        from pypdf import PdfWriter
+        from pypdf.generic import NameObject, DictionaryObject, DecodedStreamObject
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'manual.pdf'
+            writer = PdfWriter()
+            writer.add_blank_page(width=595, height=842)
+            page = writer.add_blank_page(width=595, height=842)
+            font = DictionaryObject({NameObject('/Type'): NameObject('/Font'),
+                NameObject('/Subtype'): NameObject('/Type1'), NameObject('/BaseFont'): NameObject('/Helvetica')})
+            page[NameObject('/Resources')] = DictionaryObject({NameObject('/Font'): DictionaryObject({NameObject('/F1'): font})})
+            content = DecodedStreamObject()
+            content.set_data(b'BT /F1 12 Tf 50 700 Td (Drawer cabinet 7110-002-0001) Tj ET')
+            page[NameObject('/Contents')] = writer._add_object(content)
+            with path.open('wb') as output:
+                writer.write(output)
+            with patch.object(import_sources.shutil, 'which', return_value=None):
+                pages = import_sources.extract_pdf_pages(path)
+                self.assertEqual(import_sources.pdf_extraction_method(), 'pypdf layout')
+                self.assertEqual(len(pages), 2)
+                with sqlite3.connect(':memory:') as db:
+                    db.executescript(import_sources.SCHEMA.read_text())
+                    source = import_sources.add_source(db, path, title='test', kind='fsn_manual')
+                    self.assertEqual(import_sources.parse_fsn_pages(pages, source, db), 1)
+                    self.assertEqual(db.execute('SELECT source_page,canonical_fsn_code FROM fsn_catalog_items').fetchone(), (2, '7110-002-0001'))
+
     def test_actual_software_headers_override_legacy_positions(self):
         import openpyxl
         with tempfile.TemporaryDirectory() as folder:

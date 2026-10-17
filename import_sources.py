@@ -14,6 +14,7 @@ import hashlib
 import json
 import math
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -172,10 +173,23 @@ def add_source(db: sqlite3.Connection, path: Path, *, title: str, kind: str,
     return int(row[0])
 
 
+def pdf_extraction_method() -> str:
+    return "pdftotext -layout" if shutil.which("pdftotext") else "pypdf layout"
+
+
 def extract_pdf_pages(path: Path) -> list[str]:
-    proc = subprocess.run(["pdftotext", "-layout", str(path), "-"], check=True, capture_output=True)
-    text = proc.stdout.decode("utf-8", errors="replace")
-    return [page for page in text.split("\f") if page.strip()]
+    if shutil.which("pdftotext"):
+        proc = subprocess.run(["pdftotext", "-layout", str(path), "-"], check=True, capture_output=True)
+        text = proc.stdout.decode("utf-8", errors="replace")
+        pages = text.split("\f")
+        if pages and not pages[-1].strip():
+            pages.pop()  # Remove the final separator, not physical blank pages.
+        return pages
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise RuntimeError("กรุณาติดตั้งตัวนำเข้าด้วย python -m pip install -r requirements-import.txt") from exc
+    return [page.extract_text(extraction_mode="layout") or "" for page in PdfReader(path).pages]
 
 
 def parse_policy_rules(pages: list[str], source_id: int, db: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -231,8 +245,8 @@ def parse_fsn_pages(pages: list[str], source_id: int, db: sqlite3.Connection) ->
     two_code_rx = re.compile(r"(?<!\d)(\d{4})\s+([0-9]{4})(?!\d)")
     group_rx = re.compile(r"กลุ่ม\s*ที่\s*([0-9]{1,3})")
     for page_no, page in enumerate(pages, 1):
-        db.execute("INSERT OR IGNORE INTO source_document_pages(source_document_id,page_no,extracted_text,extraction_method) VALUES(?,?,?,?)", (source_id, page_no, page, "pdftotext -layout"))
-        db.execute("INSERT OR IGNORE INTO fsn_manual_pages(source_document_id,page_no,extracted_text,extraction_method) VALUES(?,?,?,?)", (source_id, page_no, page, "pdftotext -layout"))
+        db.execute("INSERT OR IGNORE INTO source_document_pages(source_document_id,page_no,extracted_text,extraction_method) VALUES(?,?,?,?)", (source_id, page_no, page, pdf_extraction_method()))
+        db.execute("INSERT OR IGNORE INTO fsn_manual_pages(source_document_id,page_no,extracted_text,extraction_method) VALUES(?,?,?,?)", (source_id, page_no, page, pdf_extraction_method()))
         lines = [re.sub(r"\s+", " ", line).strip() for line in page.splitlines()]
         group_no = ""
         group_title = ""
@@ -431,7 +445,7 @@ def main() -> int:
             workbook_sources[path.name] = add_source(db, path, title=path.stem, kind="workbook", container=ARCHIVE_NAME, method="xlrd/openpyxl; เก็บค่าใน raw_data_json")
         fsn_path = args.fsn_manual.expanduser().resolve()
         register_data = json.loads(args.register_json.read_text(encoding="utf-8")) if args.register_json else {}
-        fsn_source = add_source(db, fsn_path, title="คู่มือการออกเลขครุภัณฑ์", kind="fsn_manual", method="pdftotext -layout", notes="เก็บข้อความรายหน้าและรหัสตามต้นฉบับ ไม่สร้างเลขแทนช่องที่ไม่มี")
+        fsn_source = add_source(db, fsn_path, title="คู่มือการออกเลขครุภัณฑ์", kind="fsn_manual", method=pdf_extraction_method(), notes="เก็บข้อความรายหน้าและรหัสตามต้นฉบับ ไม่สร้างเลขแทนช่องที่ไม่มี")
         reg_source = None
         if args.register_json:
             register_path = args.register_pdf.expanduser().resolve() if args.register_pdf else Path(register_data.get("source_pdf", "")).expanduser().resolve()
@@ -444,10 +458,10 @@ def main() -> int:
         rules = []
         if args.depreciation_pdf:
             dep_path = args.depreciation_pdf.expanduser().resolve()
-            dep_source = add_source(db, dep_path, title="ตารางอายุและอัตราค่าเสื่อม", kind="depreciation_policy", method="pdftotext -layout", notes="ตรวจขอบเขตบังคับใช้จากเอกสารต้นฉบับ")
+            dep_source = add_source(db, dep_path, title="ตารางอายุและอัตราค่าเสื่อม", kind="depreciation_policy", method=pdf_extraction_method(), notes="ตรวจขอบเขตบังคับใช้จากเอกสารต้นฉบับ")
             dep_pages = extract_pdf_pages(dep_path)
             for page_no, page in enumerate(dep_pages, 1):
-                db.execute("INSERT OR IGNORE INTO source_document_pages(source_document_id,page_no,extracted_text,extraction_method) VALUES(?,?,?,?)", (dep_source, page_no, page, "pdftotext -layout"))
+                db.execute("INSERT OR IGNORE INTO source_document_pages(source_document_id,page_no,extracted_text,extraction_method) VALUES(?,?,?,?)", (dep_source, page_no, page, pdf_extraction_method()))
             rules = parse_policy_rules(dep_pages, dep_source, db)
         policy_ids = {r["rule_no"]: int(db.execute("SELECT id FROM depreciation_policies WHERE source_document_id=? AND rule_no=?", (dep_source, r["rule_no"])).fetchone()[0]) for r in rules}
 
