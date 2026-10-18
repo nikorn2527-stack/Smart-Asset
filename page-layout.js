@@ -95,7 +95,7 @@
     { name: 'ทั่วไป', entries: [
       { id: 'brandingForm', icon: '◈', name: 'หน่วยงาน ชื่อแอป และโลโก้', description: 'ชื่อที่แสดง โลโก้หน่วยงาน และที่อยู่ระบบสำหรับ Smart QR', keywords: 'องค์กร branding โดเมน URL' }
     ] },
-    { name: 'ทะเบียนและหลักเกณฑ์', views: ['administration', 'numbering', 'codes', 'depreciation'] },
+    { name: 'ทะเบียนและหลักเกณฑ์', views: ['operational-master', 'administration', 'numbering', 'codes', 'depreciation'] },
     { name: 'เอกสารและการพิมพ์', views: ['stickers'] },
     { name: 'การทำงานและการเชื่อมต่อ', views: ['supply-settings'], entries: [
       { id: 'workflowSettings', icon: '✓', name: 'แจ้งเตือนและเกณฑ์ส่งอนุมัติ', description: 'วงเงินส่งพิจารณางานซ่อม และจำนวนวันเตือนงานล่วงหน้า', keywords: 'PM ตรวจนับ ซ่อม reminder' },

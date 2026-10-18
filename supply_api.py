@@ -8,6 +8,8 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from governance import GovernanceError, OFFICER, ident, text, dump, check_account, create_asset, audit, today
 
+from operational_master import reference, check_references
+
 APPROVER = 'ผู้อนุมัติ'
 DEFAULTS = {'receiptPrefix':'RC','issuePrefix':'IS','issueApproval':True,
             'registrationApproval':True,'receiptAttachment':False,'issueAttachment':False,
@@ -117,6 +119,25 @@ def reserve(db,row,data):
         db.execute('INSERT INTO supply_reservations(asset_id,document_id) VALUES(?,?)',(aid,row['id']))
     data['items']=[dict(db.execute('SELECT id,code,name,location,serial_number FROM assets WHERE id=?',(i,)).fetchone()) for i in data['assetIds']]
 
+
+def build_data(db,body,aid,bid,kind):
+    fields=('supplier','location','receiver','fundType','acquisitionMethod') if kind=='receipt' else ('department','requester')
+    resolved={};canonical={**body}
+    for field in fields:reference(db,body,aid,bid,field,resolved,field not in ('fundType','acquisitionMethod'))
+    canonical.update(resolved)
+    line_links=[]
+    if kind=='receipt':
+        if not isinstance(body.get('lines'),list) or any(not isinstance(l,dict) for l in body['lines']):fail('รูปแบบรายการรับเข้าไม่ถูกต้อง')
+        canonical['lines']=[]
+        for line in body['lines']:
+            result={};reference(db,line,aid,bid,'unit',result,True)
+            canonical['lines'].append({**line,**result});line_links.append(result.get('masterLinks',{}))
+    data=receipt_data(db,canonical) if kind=='receipt' else issue_data(db,canonical)
+    data['masterLinks']=resolved.get('masterLinks',{})
+    if kind=='receipt':
+        for line,links in zip(data['lines'],line_links):line['masterLinks']=links
+    return data
+
 def handle(db,method,path,query,body):
     if not path.startswith('/api/supply/'):return None
     one=lambda k,default='':query.get(k,[default])[0]
@@ -160,8 +181,9 @@ def handle(db,method,path,query,body):
         role(body,OFFICER);aid=ident(body.get('accountId'));bid=ident(body.get('branchId'),True);check_account(db,aid,bid)
         kind=body.get('kind')
         if kind not in ('receipt','issue'):fail('ประเภทใบงานไม่ถูกต้อง')
-        data=receipt_data(db,body) if kind=='receipt' else issue_data(db,body)
-        db.execute('BEGIN IMMEDIATE');rules=settings(db,aid);now=stamp()
+        db.execute('BEGIN IMMEDIATE')
+        data=build_data(db,body,aid,bid,kind)
+        rules=settings(db,aid);now=stamp()
         did=db.execute("INSERT INTO supply_documents(kind,account_id,branch_id,number,status,rules_json,data_json,created_at,updated_at) VALUES(?,?,?,?,'draft',?,?,?,?)",(kind,aid,bid,'pending-'+now,dump(rules),dump(data),now,now)).lastrowid
         number=f"{rules['receiptPrefix' if kind=='receipt' else 'issuePrefix']}-{today().year+543}-{did:06d}"
         db.execute('UPDATE supply_documents SET number=? WHERE id=?',(number,did));add_files(db,did,body.get('files',[]))
@@ -182,12 +204,13 @@ def handle(db,method,path,query,body):
     if action=='save':
         role(body,OFFICER)
         if status!='draft':fail('แก้ข้อมูลได้เฉพาะร่าง')
-        data=receipt_data(db,body) if row['kind']=='receipt' else issue_data(db,body)
+        data=build_data(db,body,row['account_id'],row['branch_id'],row['kind'])
     elif action=='submit':
         role(body,OFFICER)
         if status!='draft':fail('ส่งใบงานนี้แล้ว',409)
         files=db.execute('SELECT COUNT(*) FROM supply_files WHERE document_id=?',(did,)).fetchone()[0]+len(body.get('files',[]))
         if rules['receiptAttachment' if row['kind']=='receipt' else 'issueAttachment'] and not files:fail('หน่วยงานกำหนดให้แนบเอกสารก่อนส่ง')
+        check_references(db,data,row['account_id'],row['branch_id'])
         if row['kind']=='receipt':status='received'
         else:
             if rules['issueReference'] and not data['reference']:fail('หน่วยงานกำหนดให้ระบุเลขเอกสารคำขอ')
@@ -209,8 +232,9 @@ def handle(db,method,path,query,body):
             accepted=integer(i.get('accepted'),'จำนวนผ่าน');rejected=integer(i.get('rejected'),'จำนวนไม่ผ่าน')
             if accepted+rejected!=l['quantity']:fail('จำนวนผ่านและไม่ผ่านต้องรวมเท่าจำนวนที่ส่ง')
             l.update(accepted=accepted,rejected=rejected,inspectionNote=string(i,'note','ผลตรวจ',bool(rejected),1000))
-        data['inspector']=string(body,'inspector','ชื่อผู้ตรวจรับ/คณะกรรมการ',True)
+        data['inspector']=string(body,'inspector','ชื่อผู้ตรวจรับ/คณะกรรมการ',not bool(body.get('inspectorId')))
         data['inspectionReference']=string(body,'inspectionReference','คำสั่งแต่งตั้ง/เลขเอกสารตรวจรับ',True)
+        reference(db,body,row['account_id'],row['branch_id'],'inspector',data,True)
         data['inspectionDate']=on_date(body.get('inspectionDate'))
         if data['inspectionDate']<data['date']:fail('วันตรวจรับต้องไม่ก่อนวันรับของ')
         status='inspected' if any(l['accepted'] for l in data['lines']) else 'rejected'
@@ -242,6 +266,8 @@ def handle(db,method,path,query,body):
                 db.execute("UPDATE assets SET status='ทะเบียนแล้ว' WHERE id=?",(a['id'],))
                 db.execute("INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,'ลงทะเบียนตามเงื่อนไขใบรับเข้า','รออนุมัติ','ทะเบียนแล้ว',?,?)",(a['id'],OFFICER,row['number'],stamp()))
             db.execute('INSERT INTO asset_acquisitions(asset_id,acquired_on,delivered_on,document_no,po_no,quantity,unit_price,total_price,vendor_name,model,serial_number) VALUES(?,?,?,?,?,1,?,?,?,?,?)',(a['id'],acquired,data['date'],data['deliveryNo'],data['poNo'],float(line['unitPrice']),float(line['unitPrice']),data['supplier'],line['model'],serial))
+            supplier=data.get('masterLinks',{}).get('supplier',{}).get('extra',{})
+            db.execute('UPDATE asset_acquisitions SET vendor_address=?,vendor_phone=? WHERE asset_id=?',(supplier.get('address',''),supplier.get('phone',''),a['id']))
             db.execute('UPDATE asset_acquisitions SET fiscal_year_th=?,fund_type=?,acquisition_method=?,gfmis_no=? WHERE asset_id=?',(data.get('fiscalYear',''),data.get('fundType',''),data.get('acquisitionMethod',''),data.get('gfmisNo',''),a['id']))
             db.execute('UPDATE assets SET fiscal_year_th=?,acquisition_method=?,po_no=?,gfmis_no=? WHERE id=?',(data.get('fiscalYear',''),data.get('acquisitionMethod',''),data['poNo'],data.get('gfmisNo',''),a['id']))
             db.execute('INSERT INTO supply_receipt_assets VALUES(?,?,?)',(did,lineid,a['id']))
@@ -251,13 +277,17 @@ def handle(db,method,path,query,body):
     elif action in ('approve','reject'):
         role(body,rules['approvalRole'])
         if row['kind']!='issue' or status!='pending':fail('ใบเบิกไม่ได้รออนุมัติ')
-        data['approvalNote']=string(body,'note','เหตุผล',action=='reject',1000);data['approver']=string(body,'operator','ชื่อผู้พิจารณา',True,160)
+        data['approvalNote']=string(body,'note','เหตุผล',action=='reject',1000);data['approver']='' if body.get('operatorId') else string(body,'operator','ชื่อผู้พิจารณา',True,160)
+        stage_master={};reference(db,body,row['account_id'],row['branch_id'],'operator',stage_master,True)
+        data['approver']=stage_master['operator'];data.setdefault('stageMasters',{})['approval']=stage_master.get('masterLinks',{})
         status='approved' if action=='approve' else 'rejected'
         if action=='reject':db.execute('DELETE FROM supply_reservations WHERE document_id=?',(did,))
     elif action=='issue':
         role(body,rules['issueRole'])
         if row['kind']!='issue' or status!='approved':fail('ต้องผ่านอนุมัติก่อนจ่าย')
-        data['issuer']=string(body,'operator','ชื่อผู้จ่าย',True,160);data['issuedOn']=on_date(body.get('date'));data['recipient']=string(body,'recipient','ชื่อผู้รับมอบ',True,160)
+        data['issuer']='' if body.get('operatorId') else string(body,'operator','ชื่อผู้จ่าย',True,160);data['issuedOn']=on_date(body.get('date'));data['recipient']='' if body.get('recipientId') else string(body,'recipient','ชื่อผู้รับมอบ',True,160)
+        stage_master={};reference(db,body,row['account_id'],row['branch_id'],'operator',stage_master,True);reference(db,body,row['account_id'],row['branch_id'],'recipient',stage_master,True)
+        data['issuer']=stage_master['operator'];data['recipient']=stage_master['recipient'];data.setdefault('stageMasters',{})['issue']=stage_master.get('masterLinks',{})
         if data['issuedOn']<data['date']:fail('วันจ่ายต้องไม่ก่อนวันคำขอ')
         for aid in data['assetIds']:
             if not db.execute("SELECT 1 FROM assets a JOIN supply_reservations r ON r.asset_id=a.id WHERE a.id=? AND a.numbering_account_id=? AND r.document_id=? AND a.status IN ('ทะเบียนแล้ว','พร้อมใช้','สำรวจแล้ว','รอตรวจสอบ')",(aid,row['account_id'],did)).fetchone():fail('ครุภัณฑ์เปลี่ยนสถานะ/บัญชีหลังอนุมัติ กรุณาตรวจสอบก่อนจ่าย',409)
@@ -266,7 +296,8 @@ def handle(db,method,path,query,body):
     elif action=='receive':
         if body.get('actor') not in ('ผู้แจ้ง',OFFICER):fail('ใช้บทบาทผู้แจ้งหรือเจ้าหน้าที่พัสดุเพื่อยืนยันรับมอบ',403)
         if row['kind']!='issue' or status!='issued':fail('ยังไม่ได้จ่ายครุภัณฑ์')
-        operator=string(body,'operator','ชื่อผู้ยืนยันรับมอบ',True,160);data['receivedBy']=operator;data['receivedOn']=on_date(body.get('date'))
+        stage_master={};reference(db,body,row['account_id'],row['branch_id'],'operator',stage_master,True)
+        operator=stage_master['operator'];data.setdefault('stageMasters',{})['receive']=stage_master.get('masterLinks',{});data['receivedBy']=operator;data['receivedOn']=on_date(body.get('date'))
         if data['receivedOn']<data['issuedOn']:fail('วันรับมอบต้องไม่ก่อนวันจ่าย')
         for aid in data['assetIds']:
             old=db.execute('SELECT location,status,numbering_account_id FROM assets WHERE id=?',(aid,)).fetchone()

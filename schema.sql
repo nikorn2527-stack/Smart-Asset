@@ -654,3 +654,22 @@ CREATE TABLE IF NOT EXISTS supply_files(id INTEGER PRIMARY KEY AUTOINCREMENT, do
 CREATE TABLE IF NOT EXISTS supply_receipt_assets(document_id INTEGER NOT NULL REFERENCES supply_documents(id), line_id INTEGER NOT NULL, asset_id INTEGER NOT NULL UNIQUE REFERENCES assets(id), PRIMARY KEY(document_id,asset_id));
 CREATE TABLE IF NOT EXISTS supply_reservations(asset_id INTEGER PRIMARY KEY REFERENCES assets(id), document_id INTEGER NOT NULL REFERENCES supply_documents(id));
 CREATE INDEX IF NOT EXISTS idx_supply_account ON supply_documents(account_id,kind,status,id);
+
+CREATE TABLE IF NOT EXISTS operational_master (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL REFERENCES asset_accounts(id),
+  branch_id INTEGER REFERENCES account_branches(id),
+  kind TEXT NOT NULL CHECK(kind IN ('supplier','department','location','person','unit','method','fund')),
+  code TEXT NOT NULL, code_key TEXT NOT NULL,
+  name TEXT NOT NULL, name_key TEXT NOT NULL,
+  parent_id INTEGER REFERENCES operational_master(id),
+  extra_json TEXT NOT NULL DEFAULT '{}', notes TEXT NOT NULL DEFAULT '',
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+  revision INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(account_id,kind,code_key)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_operational_master_name
+  ON operational_master(account_id,kind,COALESCE(branch_id,0),name_key);
+CREATE INDEX IF NOT EXISTS idx_operational_master_select
+  ON operational_master(account_id,kind,is_active,branch_id,name);
