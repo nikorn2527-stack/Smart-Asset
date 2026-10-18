@@ -9,6 +9,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import uuid
 import zipfile
 from pathlib import Path
@@ -205,12 +206,54 @@ class AccountGovernance(HTTPFixture):
         self.call('/api/backups/prepared/not-found.zip?'+urlencode({'actor':OFFICER}),expected=404)
 
 class ExistingDatabaseMigration(unittest.TestCase):
+    def test_thai_windows_default_cp874_does_not_affect_reference_loading(self):
+        original_read = Path.read_text
+        def windows_read(path, *args, **kwargs):
+            if not args and kwargs.get('encoding') is None:
+                kwargs['encoding'] = 'cp874'
+            return original_read(path, *args, **kwargs)
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'windows.sqlite3'
+            with sqlite3.connect(path) as db:
+                db.executescript((ROOT/'schema.sql').read_text(encoding='utf-8'))
+                db.execute("INSERT INTO assets(id,code,name) VALUES(1,'เดิม/001','ชื่อภาษาไทย')")
+            with patch.object(Path, 'read_text', windows_read):
+                initialize(path)
+                initialize(path)
+            with sqlite3.connect(path) as db:
+                self.assertEqual(db.execute('SELECT code,name FROM assets WHERE id=1').fetchone(),('เดิม/001','ชื่อภาษาไทย'))
+                self.assertEqual(db.execute("SELECT name FROM asset_accounts WHERE code='SURIN'").fetchone()[0],'โรงพยาบาลสุรินทร์')
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM account_manual_references').fetchone()[0],907)
+                self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
+
+    def test_failed_reference_decode_rolls_back_and_next_start_recovers(self):
+        original_read = Path.read_text
+        def fail_reference(path, *args, **kwargs):
+            if path.name == 'classification-v1.json':
+                raise UnicodeDecodeError('cp874', b'\x84', 0, 1, 'undefined character')
+            return original_read(path, *args, **kwargs)
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'retry.sqlite3'
+            with sqlite3.connect(path) as db:
+                db.executescript((ROOT/'schema.sql').read_text(encoding='utf-8'))
+                db.execute("INSERT INTO assets(id,code,name) VALUES(12,'OLD/001','ข้อมูลเดิม')")
+            with patch.object(Path, 'read_text', fail_reference):
+                with self.assertRaises(UnicodeDecodeError):initialize(path)
+            with sqlite3.connect(path) as db:
+                self.assertEqual(db.execute('SELECT id,code,name FROM assets').fetchall(),[(12,'OLD/001','ข้อมูลเดิม')])
+                self.assertIsNone(db.execute("SELECT 1 FROM schema_migrations WHERE name='account-numbering-v1'").fetchone())
+                self.assertIsNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='asset_accounts'").fetchone())
+            initialize(path)
+            with sqlite3.connect(path) as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM asset_accounts').fetchone()[0],2)
+                self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
+
     def test_imported_duplicate_numbers_are_retained_without_rewriting(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'imported.sqlite3'
-            source=json.loads((ROOT/'reference-data/classification-v1.json').read_text())['categories'][0]['source']
+            source=json.loads((ROOT/'reference-data/classification-v1.json').read_text(encoding='utf-8'))['categories'][0]['source']
             with sqlite3.connect(path) as db:
-                db.executescript((ROOT/'schema.sql').read_text())
+                db.executescript((ROOT/'schema.sql').read_text(encoding='utf-8'))
                 sid=db.execute("INSERT INTO source_documents(filename,source_kind) VALUES(?,'workbook')",(source,)).lastrowid
                 for aid in [1,2]:db.execute("INSERT INTO assets(id,code,name,source_document_id) VALUES(?,'DUPLICATE','ต้นฉบับ',?)",(aid,sid))
             initialize(path)
@@ -223,7 +266,7 @@ class ExistingDatabaseMigration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'old.sqlite3'
             with sqlite3.connect(path) as db:
-                db.executescript((ROOT/'schema.sql').read_text())
+                db.executescript((ROOT/'schema.sql').read_text(encoding='utf-8'))
                 # Match the original small prototype's global unique code constraint.
                 db.execute('DROP TABLE assets')
                 db.execute('CREATE TABLE assets(id INTEGER PRIMARY KEY AUTOINCREMENT,code TEXT NOT NULL UNIQUE,name TEXT NOT NULL,source_document_id INTEGER REFERENCES source_documents(id))')

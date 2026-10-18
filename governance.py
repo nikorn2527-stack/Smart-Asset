@@ -81,7 +81,7 @@ def _initialize_account_schema(db_path):
         cp=db.execute('INSERT INTO number_profiles(account_id,name,pattern,number_kind,source) VALUES(?,?,?,?,?)',(center,'เลขจำแนกตาม PDF 4–3–4','{group:4}-{type:3}-{detail:4}','classification','PDF หน้า 2; เป็นเลขจำแนกชนิด ใช้ซ้ำกับหลายชิ้นได้; ID/QR แยกรายชิ้น')).lastrowid
         for aid,pid in [(hospital,hp),(center,cp)]: db.execute('INSERT INTO account_bindings(account_id,profile_id) VALUES(?,?)',(aid,pid))
         # Only the user-confirmed archive reference pack belongs to this account.
-        pack=json.loads((Path(__file__).parent/'reference-data/classification-v1.json').read_text())
+        pack=json.loads((Path(__file__).parent/'reference-data/classification-v1.json').read_text(encoding='utf-8'))
         filenames=[entry['source'] for entry in pack['categories']]
         for row in db.execute('SELECT r.*,s.title FROM starter_catalog_rows r JOIN source_documents s ON s.id=r.source_document_id').fetchall():
             parts=row['fsn_code'].split('-')
@@ -360,7 +360,7 @@ def create_asset(db,body,stamp):
 def initialize_manual_references(db_path):
     with sqlite3.connect(db_path) as db:
         if db.execute("SELECT 1 FROM schema_migrations WHERE name='account-manual-reference-v1'").fetchone():return
-        pack=json.loads((Path(__file__).parent/'reference-data/manual-catalog-v1.json').read_text())
+        pack=json.loads((Path(__file__).parent/'reference-data/manual-catalog-v1.json').read_text(encoding='utf-8'))
         db.execute('''CREATE TABLE IF NOT EXISTS account_manual_references(id INTEGER PRIMARY KEY AUTOINCREMENT,account_id INTEGER NOT NULL REFERENCES asset_accounts(id),page INTEGER NOT NULL,name TEXT NOT NULL,group_code TEXT NOT NULL,type_code TEXT NOT NULL,raw_line TEXT NOT NULL,filename TEXT NOT NULL,sha256 TEXT NOT NULL)''')
         db.execute('CREATE INDEX IF NOT EXISTS idx_manual_ref_account ON account_manual_references(account_id,group_code,type_code)')
         account=db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER'").fetchone()
