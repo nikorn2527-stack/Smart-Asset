@@ -80,3 +80,18 @@ body{font-size:16px}.brand strong{font-size:16px}.brand span{font-size:12px}.wor
 .topbar{height:auto;min-height:60px;flex-wrap:wrap;gap:8px;padding-top:10px;padding-bottom:10px}
 .top-actions{min-width:0;max-width:100%;flex-wrap:wrap;justify-content:flex-end}
 .crumb{min-width:0;max-width:100%;flex-wrap:wrap}
+
+/* Keep each row's caption, control and help aligned without fixed label heights. */
+@supports(grid-template-rows:subgrid){
+  :is(.admin-grid,.supply-grid,.form-grid):has(>label,>div){row-gap:6px}
+  :is(.admin-grid,.supply-grid)>label:has(>input:not([type=checkbox]),>select,>textarea,>.om-picker),
+  .form-grid>div:has(>label+input,>label+select,>label+textarea){display:grid;grid-template-rows:subgrid;grid-row:span 3;align-self:stretch;min-width:0;margin:0}
+  .form-grid>div>label{margin:0}
+  :is(.admin-grid,.supply-grid)>label>:is(input,select,textarea,.om-picker),
+  .form-grid>div>:is(input,select,textarea){align-self:start;min-width:0;max-width:100%}
+}
+body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar){align-items:flex-end}
+body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>label,
+body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>.button{margin-top:0;margin-bottom:0}
+.line-recipient-row>button{margin-bottom:0}
+:is(.asset-dialog,.admin-form,.supply-toolbar,.supply-detail,.supply-settings,.inventory-row-form,.workspace-row-detail,.workspace-toolbar,.admin-account-bar,.equipment-dialog,.equipment-upload,.access-dialog,.om-dialog,.settings-panel,.line-settings) :is(select,input:not([type=checkbox],[type=radio],[type=file],[type=hidden],[type=range],[type=color])){height:42px;min-height:42px}

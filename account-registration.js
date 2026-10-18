@@ -8,7 +8,8 @@
   $('.dialog-head',form).after(root);
   $('h3',root).remove();
   const headerGrid=document.createElement('div');headerGrid.className='entry-header-grid';
-  const accountLabel=$('label[for=entryAccount]',root);root.insertBefore(headerGrid,accountLabel);headerGrid.append(accountLabel,$('#entryAccount'));
+  const accountLabel=$('label[for=entryAccount]',root);root.insertBefore(headerGrid,accountLabel);
+  const accountWrap=document.createElement('div');accountWrap.className='entry-account';accountWrap.append(accountLabel,$('#entryAccount'));headerGrid.append(accountWrap);
   const categoryWrap=document.createElement('div');categoryWrap.className='entry-category';
   categoryWrap.append($('label[for=assetCategoryId]'),$('#assetCategoryId'),$('#assetCategoryHelp'));headerGrid.append(categoryWrap);
   root.insertBefore($('label[for=assetNumberMode]'),$('#scopedEntry'));root.insertBefore($('#assetNumberMode'),$('#scopedEntry'));root.insertBefore($('#manualAssetCodeField'),$('#scopedEntry'));

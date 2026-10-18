@@ -2,3 +2,11 @@
 @media(max-width:720px){.workspace-toolbar{gap:8px}.workspace-toolbar label{flex-basis:100%;margin-bottom:4px}.workspace-row-detail,.inventory-row-form{padding:12px}.workspace-detail-heading{align-items:start}.entry-header-grid{grid-template-columns:minmax(0,1fr)}.entry-header-grid>.entry-category{grid-column:1;grid-row:3}.workspace-category-table>thead th{white-space:normal}.workspace-category-table{min-width:700px}.workspace-expansion .workspace-row-detail{max-width:calc(100vw - 120px)}.inventory-edit-row .inventory-row-form{max-width:calc(100vw - 120px)}}
 @media print{.workspace-overview,.workspace-expansion,.inventory-edit-row{display:none!important}}
 .settings-advanced{grid-column:1/-1;padding:10px 0}.settings-advanced>summary{cursor:pointer;color:#60798a;font-size:14px;padding:8px 0}.settings-advanced>.settings-card-grid{margin-top:10px}.settings-hub .settings-link[data-go-view=administration]{grid-column:1/-1;border-color:#9bcac6;background:#f0faf8}.workspace-category-table td strong{font-weight:600}
+
+/* Share caption/control/help rows so multiline captions do not shift the controls. */
+.entry-header-grid{gap:6px 14px;align-items:start}
+.entry-header-grid>.entry-account,.entry-header-grid>.entry-category{display:grid;grid-template-rows:subgrid;grid-row:span 3;grid-column:auto;align-self:stretch;min-width:0}
+.entry-header-grid label{margin:0}
+.entry-header-grid select{align-self:start}
+.entry-header-grid #assetCategoryHelp{margin:0}
+@media(max-width:720px){.entry-header-grid{grid-template-columns:minmax(0,1fr);row-gap:6px}.entry-header-grid>.entry-account,.entry-header-grid>.entry-category{grid-column:1;grid-row:span 3}}
