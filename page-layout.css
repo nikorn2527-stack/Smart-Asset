@@ -1,0 +1,65 @@
+/* Screen layout only: official paper forms retain their print geometry. */
+.page-help[hidden] { display: none !important; }
+@media screen {
+  :root { --page-topbar-height: 60px; --page-heading-height: 64px; }
+  html { scroll-padding-top: calc(var(--page-topbar-height) + var(--page-heading-height) + 12px); }
+  main { padding-top: 0; }
+  .view.active { animation: none; }
+  .view > .page-heading,
+  .view > .page-heading:has(.page-actions) {
+    position: sticky;
+    top: var(--page-topbar-height);
+    z-index: 3;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin: 0 0 12px;
+    padding: 12px 0;
+    background: #f3f6fa;
+    border-bottom: 1px solid #dce5ec;
+  }
+  .page-heading > div:first-child { min-width: 0; flex: 1 1 230px; }
+  .page-heading h1 { margin: 0; font-size: 23px; line-height: 1.4; }
+  .page-heading-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+  .page-heading-controls .page-actions,
+  .page-heading-controls .heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .page-heading-controls .button { min-height: 36px; padding: 7px 12px; font-size: 13px; }
+  .page-help { padding: 16px; margin: 0 0 14px; }
+  .page-help > .eyebrow { margin-bottom: 6px; }
+  .page-help > p { margin: 0 0 12px; color: var(--muted); }
+  .page-help > .notice { margin: 10px 0; }
+  .page-help .smart-hero { margin: 12px 0; padding: 20px; }
+  .page-help .workflow-panel, .page-help .guide-card { margin-top: 12px; }
+  #view-dashboard .content-grid { grid-template-columns: minmax(0, 1fr); }
+  #view-dashboard .bottom-grid { grid-template-columns: minmax(0, 1fr); }
+  .stats-grid, .repair-summary { margin-bottom: 12px; gap: 12px; }
+  .stats-grid .stat-card, .repair-summary .stat-card { padding: 10px 14px; min-height: 92px; }
+  .stat-number { font-size: 26px; margin: 2px 0; }
+  .panel-heading { padding-top: 13px; padding-bottom: 13px; }
+  .work-totals { gap: 12px; margin: 12px 0; }
+  .work-totals article { padding: 10px 14px; }
+  .work-totals strong { font-size: 26px; }
+  .work-section { padding-top: 14px; margin-bottom: 14px; }
+  .work-filters { gap: 10px; padding: 12px; }
+  .work-scheduler { margin: 0 0 10px; }
+  #view-survey .survey-layout { grid-template-columns: minmax(0, 1fr); }
+  .page-heading-controls .reference-tag { display: none; }
+  @media (max-width: 720px) {
+    .sidebar .workspace-label { display: none; }
+    .sidebar .nav-item, .sidebar .nav-item.active { font-size: 0; min-width: 0; gap: 0; overflow: hidden; }
+    .sidebar .nav-icon { font-size: 18px; flex: 0 0 24px; }
+    .view > .page-heading, .view > .page-heading:has(.page-actions) { padding: 10px 0; gap: 8px; }
+    .page-heading h1 { font-size: 20px; }
+    .page-heading > div:first-child { flex-basis: 100%; }
+    .page-heading-controls { width: 100%; justify-content: flex-start; }
+    .page-heading-controls .button.primary { width: auto; align-self: auto; }
+    .page-heading-controls .button { font-size: 12px; padding: 7px 9px; }
+    .page-help { padding: 12px; }
+    .stats-grid .stat-card, .repair-summary .stat-card { min-height: 88px; padding: 10px; }
+  }
+}
+@media print {
+  .page-help, .page-heading-controls { display: none !important; }
+}

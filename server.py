@@ -788,7 +788,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}")
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -827,7 +827,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
