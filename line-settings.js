@@ -51,9 +51,10 @@
   access();
 
   async function openTask(){
-    const match=/^#task=(ticket|asset|work):([1-9][0-9]{0,14})$/.exec(location.hash);if(!match)return;
+    const match=/^#task=(ticket|asset|work|supply):([1-9][0-9]{0,14})$/.exec(location.hash);if(!match)return;
     history.replaceState(null,'',location.pathname+location.search);const id=Number(match[2]);
     try{
+      if(match[1]==='supply'){await new Promise(resolve=>setTimeout(resolve,0));await window.govAssetSupply.open(id);}
       if(match[1]==='ticket'){app.switchView('repairs');await app.openTicket(id);}
       if(match[1]==='work')await app.openWork(id);
       if(match[1]==='asset'){

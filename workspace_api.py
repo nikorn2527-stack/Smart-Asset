@@ -95,6 +95,7 @@ def asset_state(db,asset_id):
     raw=dict(row);meta=dict(profile) if profile else {}
     fields={k:(meta.get(col) if k in ('custodian','warrantyEnd','serialNumber') and meta.get(col) is not None else raw.get(col,'')) for k,(col,_) in FIELDS.items()}
     fields.update(accountId=row['numbering_account_id'],branchId=row['branch_id'],categoryId=row['category_id'],purchasePrice=row['purchase_price'])
+    fields['depreciationStartDate']=json.loads(row['depreciation_rule_snapshot']).get('startDate',row['acquisition_date'])
     numbering=json.loads(row['numbering_snapshot'])
     copy_catalog=numbering.get('catalog',{}).get('id') if numbering.get('catalog') else None
     if not copy_catalog and row['numbering_account_id'] and row['fsn_code']:
@@ -105,18 +106,25 @@ def asset_state(db,asset_id):
 def save_asset(db,asset_id,body):
     if body.get('actor')!=OFFICER:raise GovernanceError('เลือกบทบาทเจ้าหน้าที่พัสดุเพื่อแก้ไข',403)
     changes=body.get('changes')
-    allowed=set(FIELDS)|{'accountId','branchId','categoryId','purchasePrice'}
+    allowed=set(FIELDS)|{'accountId','branchId','categoryId','purchasePrice','depreciationStartDate'}
     if not isinstance(changes,dict) or set(changes)-allowed:raise GovernanceError('ข้อมูลแก้ไขไม่ถูกต้อง')
     db.execute('BEGIN IMMEDIATE');before=asset_state(db,asset_id)
     if before['version']!=body.get('version'):raise GovernanceError('ทะเบียนถูกแก้ไขแล้ว เปิดแถวใหม่ก่อนบันทึก ร่างปัจจุบันยังไม่ถูกส่งทับ',409)
+    protected={'accountId','branchId','code','location','custodian','serialNumber'}
+    if protected.intersection(changes) and db.execute('SELECT 1 FROM supply_reservations WHERE asset_id=?',(asset_id,)).fetchone():
+        raise GovernanceError('รายการนี้อยู่ระหว่างเบิก/จัดสรร กรุณาดำเนินใบงานให้เสร็จหรือยกเลิกก่อนแก้บัญชี เลข ที่ตั้ง หรือผู้ดูแล',409)
     fields={**before['fields'],**changes}
+    if 'acquisitionDate' in changes and 'depreciationStartDate' not in changes and 'startDate' not in before['depreciation']:
+        fields['depreciationStartDate']=fields['acquisitionDate']
     for key,(col,limit) in FIELDS.items():
         if key not in changes:continue
         fields[key]=text(fields[key],key,limit,key in ('name','code'))
-    for key in ('acquisitionDate','warrantyEnd'):
+    for key in ('acquisitionDate','warrantyEnd','depreciationStartDate'):
         if key in changes and fields[key]:
             try:date.fromisoformat(fields[key])
             except (ValueError,TypeError):raise GovernanceError('รูปแบบวันที่ไม่ถูกต้อง')
+    if ('depreciationStartDate' in changes or 'acquisitionDate' in changes) and fields['depreciationStartDate'] and re.fullmatch(r'\d{4}-\d{2}-\d{2}',fields['acquisitionDate'] or '') and fields['depreciationStartDate']<fields['acquisitionDate']:
+        raise GovernanceError('วันเริ่มคิดค่าเสื่อมต้องไม่ก่อนวันที่ได้มา')
     for key in ('accountId','branchId'):fields[key]=ident(fields[key],True)
     fields['categoryId']=ident(fields['categoryId'])
     cat=db.execute('SELECT * FROM asset_categories WHERE id=? AND is_active=1',(fields['categoryId'],)).fetchone()
@@ -129,7 +137,7 @@ def save_asset(db,asset_id,body):
             try:fields['purchasePrice']=float(fields['purchasePrice'])
             except (ValueError,TypeError):raise GovernanceError('ราคาทุนต้องเป็นตัวเลข')
             if not math.isfinite(fields['purchasePrice']) or fields['purchasePrice']<0:raise GovernanceError('ราคาทุนไม่ถูกต้อง')
-    sensitive=any(fields[k]!=before['fields'][k] for k in ('accountId','branchId','categoryId','code','purchasePrice','acquisitionDate'))
+    sensitive=any(fields[k]!=before['fields'][k] for k in ('accountId','branchId','categoryId','code','purchasePrice','acquisitionDate','depreciationStartDate'))
     action=body.get('policyAction','keep')
     if action not in ('keep','inherit','override','unassigned'):raise GovernanceError('การเลือกหลักเกณฑ์ไม่ถูกต้อง')
     reason=text(body.get('reason',''),'เหตุผลการเปลี่ยนเลข หมวด หรือหลักเกณฑ์',1000,sensitive or action!='keep')
@@ -155,6 +163,8 @@ def save_asset(db,asset_id,body):
             _,pb=selected_binding(db,fields['accountId'],fields['branchId'],fields['categoryId'],policy_date)
             if pb:selected=policy_snapshot(db,pb['policy_id'])
         depreciation={'policy':selected or {},'overrideReason':reason,'recordedAt':datetime.now(timezone.utc).isoformat(),'previousPolicyId':before['depreciation'].get('policy',{}).get('id'),'calculationConvention':'actual_days_365_excluding_start'}
+    if 'startDate' in before['depreciation'] or 'depreciationStartDate' in changes:
+        depreciation={**depreciation,'startDate':fields['depreciationStartDate']}
     numbering={**numbering,'currentFields':{**before['numbering'].get('currentFields',{}),**{k:True for k in changes}}}
     policy=depreciation.get('policy') or {}
     alias=db.execute('SELECT name FROM account_category_labels WHERE account_id=? AND category_id=?',(fields['accountId'],fields['categoryId'])).fetchone()

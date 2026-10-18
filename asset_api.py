@@ -118,8 +118,9 @@ def _inventory_item(row: sqlite3.Row) -> dict[str, Any]:
     for key,(target,column) in overrides.items():
         if changed.get(key):item[target]=row[column]
     from governance import calculate
-    policy=json.loads(row['depreciation_rule_snapshot'] or '{}').get('policy')
-    estimate=calculate(policy,item['purchasePrice'],item['acquiredOn'])
+    depreciation=json.loads(row['depreciation_rule_snapshot'] or '{}');policy=depreciation.get('policy')
+    item['depreciationStartDate']=depreciation.get('startDate',item['acquiredOn'])
+    estimate=calculate(policy,item['purchasePrice'],item['depreciationStartDate'])
     item['depreciationEstimate']=estimate if estimate['status']=='calculated' else None
     item['depreciationPolicyName']=policy.get('category_name','') if policy else ''
     return item

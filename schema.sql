@@ -644,3 +644,13 @@ CREATE TABLE IF NOT EXISTS catalogue_wording_events (
   created_at TEXT NOT NULL,
   UNIQUE(scope,category_id,fsn_code,revision)
 );
+
+-- Receiving, inspection and allocation documents.
+
+CREATE TABLE IF NOT EXISTS supply_settings(account_id INTEGER PRIMARY KEY REFERENCES asset_accounts(id), revision INTEGER NOT NULL, data_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS supply_documents(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, account_id INTEGER NOT NULL REFERENCES asset_accounts(id), branch_id INTEGER REFERENCES account_branches(id), number TEXT NOT NULL UNIQUE, status TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, rules_json TEXT NOT NULL, data_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS supply_events(id INTEGER PRIMARY KEY AUTOINCREMENT, document_id INTEGER NOT NULL REFERENCES supply_documents(id), actor TEXT NOT NULL, action TEXT NOT NULL, data_json TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS supply_files(id INTEGER PRIMARY KEY AUTOINCREMENT, document_id INTEGER NOT NULL REFERENCES supply_documents(id), name TEXT NOT NULL, mime TEXT NOT NULL, content BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS supply_receipt_assets(document_id INTEGER NOT NULL REFERENCES supply_documents(id), line_id INTEGER NOT NULL, asset_id INTEGER NOT NULL UNIQUE REFERENCES assets(id), PRIMARY KEY(document_id,asset_id));
+CREATE TABLE IF NOT EXISTS supply_reservations(asset_id INTEGER PRIMARY KEY REFERENCES assets(id), document_id INTEGER NOT NULL REFERENCES supply_documents(id));
+CREATE INDEX IF NOT EXISTS idx_supply_account ON supply_documents(account_id,kind,status,id);

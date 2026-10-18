@@ -30,6 +30,7 @@ from starter_catalog import seed as seed_starter_catalog
 from governance import GovernanceError, handle as handle_governance, initialize as initialize_governance, create_asset as create_account_asset
 from backup_store import handle as handle_backups, create_bundle, prepared_file
 from workspace_api import handle as handle_workspace, initialize as initialize_workspace
+from supply_api import handle as handle_supply
 from catalog_guidance import GuidanceError
 from line_notifications import handle as handle_line, verify_webhook, dispatch as dispatch_line, WORKER as LINE_WORKER
 
@@ -349,7 +350,7 @@ class Handler(BaseHTTPRequestHandler):
     def read_json(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length < 0 or length > (35_000_000 if self.path == "/api/backups/sources" else 750_000 if self.path == "/api/branding" else 100_000):
+            if length < 0 or length > (9_000_000 if self.path.startswith("/api/supply/") else 35_000_000 if self.path == "/api/backups/sources" else 750_000 if self.path == "/api/branding" else 100_000):
                 raise ApiError("ข้อมูลที่ส่งมายาวเกินกำหนด", 413)
             data = json.loads(self.rfile.read(length) or b"{}")
             if not isinstance(data, dict):
@@ -360,6 +361,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_api(self, method: str, path: str, query: dict, body: dict):
         with connect() as db:
+            supply = handle_supply(db, method, path, query, body)
+            if supply is not None: return supply
             workspace = handle_workspace(db, method, path, query, body)
             if workspace is not None: return workspace
             governed = handle_governance(db, method, path, query, body)
@@ -822,7 +825,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}")
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -881,7 +884,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return

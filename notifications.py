@@ -97,6 +97,21 @@ FEED = """WITH feed AS (
  WHERE (:role IN ('เจ้าหน้าที่พัสดุ','ช่าง') AND w.status!='completed')
     OR (:role='เจ้าหน้าที่พัสดุ' AND w.status='completed' AND
        ((w.result IN ('needs_repair','damaged') AND w.repair_ticket_id IS NULL) OR (w.result='not_found' AND datetime(w.completed_at)>=datetime(:cutoff))))
+ UNION ALL
+ SELECT 'supply:'||s.id||':'||s.revision,'supply',s.id,s.number,
+ COALESCE(json_extract(s.data_json,'$.supplier'),json_extract(s.data_json,'$.department')),
+ s.status,s.updated_at,CASE WHEN s.status='pending' THEN 'approval' ELSE 'supply' END,
+ CASE WHEN s.status='pending' THEN 90 ELSE 60 END,
+ CASE s.status WHEN 'received' THEN 'ตรวจรับพัสดุที่รับเข้า' WHEN 'inspected' THEN 'ขึ้นทะเบียนรายการผ่านตรวจรับ'
+ WHEN 'pending' THEN 'พิจารณาอนุมัติเบิก / จัดสรร' WHEN 'approved' THEN 'จ่ายครุภัณฑ์ตามใบเบิก'
+ ELSE 'ยืนยันรับมอบครุภัณฑ์' END,
+ CASE s.kind WHEN 'receipt' THEN 'รับเข้า' ELSE 'เบิก / จัดสรร' END,'',''
+ FROM supply_documents s
+ WHERE (s.status='received' AND :role=json_extract(s.rules_json,'$.inspectionRole'))
+ OR (s.status='inspected' AND :role='เจ้าหน้าที่พัสดุ')
+ OR (s.status='pending' AND :role=json_extract(s.rules_json,'$.approvalRole'))
+ OR (s.status='approved' AND :role=json_extract(s.rules_json,'$.issueRole'))
+ OR (s.status='issued' AND :role IN ('ผู้แจ้ง','เจ้าหน้าที่พัสดุ'))
 ), inbox AS (
  SELECT feed.*,r.read_at AS readAt FROM feed LEFT JOIN notification_reads r
  ON r.recipient_role=:role AND r.notification_key=feed.key
@@ -119,7 +134,7 @@ def inbox(db, query):
     except (TypeError, ValueError):
         raise NotificationError('จำนวนรายการหรือหน้าไม่ถูกต้อง')
     category = one(query, 'category')
-    if category not in ('', 'approval', 'repair', 'work', 'asset'):
+    if category not in ('', 'approval', 'repair', 'work', 'asset', 'supply'):
         raise NotificationError('ประเภทแจ้งเตือนไม่ถูกต้อง')
     params = parameters(db, recipient)
     params.update(limit=limit, offset=offset, category=category)

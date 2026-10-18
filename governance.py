@@ -257,7 +257,7 @@ def handle(db, method, path, query, body):
         r=db.execute('SELECT a.*,n.name AS account_name,b.name AS branch_name FROM assets a LEFT JOIN asset_accounts n ON n.id=a.numbering_account_id LEFT JOIN account_branches b ON b.id=a.branch_id WHERE a.id=?',(int(match[1]),)).fetchone()
         if not r:raise GovernanceError('ไม่พบครุภัณฑ์',404)
         dep=json.loads(r['depreciation_rule_snapshot'])
-        return {'account':r['account_name'],'branch':r['branch_name'],'numbering':json.loads(r['numbering_snapshot']),'depreciation':dep,'calculation':calculate(dep.get('policy'),r['purchase_price'],r['acquisition_date'],query.get('asOf',[None])[0]),'legacyPolicyId':r['depreciation_policy_id']}
+        return {'account':r['account_name'],'branch':r['branch_name'],'numbering':json.loads(r['numbering_snapshot']),'depreciation':dep,'calculation':calculate(dep.get('policy'),r['purchase_price'],dep.get('startDate',r['acquisition_date']),query.get('asOf',[None])[0]),'legacyPolicyId':r['depreciation_policy_id']}
     if method=='POST' and path=='/api/governance/preview':return resolve(db,body)
     if method not in ('POST','PUT'):raise GovernanceError('ไม่พบคำสั่ง',404)
     if body.get('actor')!=OFFICER:raise GovernanceError('การตั้งค่าต้องใช้บทบาทเจ้าหน้าที่พัสดุ',403)
@@ -339,7 +339,7 @@ def create_asset(db,body,stamp):
     code=text(body.get('code',''),'เลขเดิม',80,False)
     actor=text(body.get('actor','ผู้แจ้ง'),'ผู้บันทึก',80)
     context={**body,'manualCode':code}
-    db.execute('BEGIN IMMEDIATE')
+    if not db.in_transaction: db.execute('BEGIN IMMEDIATE')
     result=resolve(db,context,allocate=not bool(code))
     if body.get('expectedSelection') and body['expectedSelection']!=result['selectionVersion']:raise GovernanceError('แบบเลข บัญชีชนิด หรือหลักเกณฑ์เปลี่ยนหลังดูตัวอย่าง กรุณาตรวจเลขและหลักเกณฑ์อีกครั้ง',409)
     code=code or result['code']
