@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import hashlib
 import secrets
+import shutil
 import base64
 import math
 import threading
@@ -26,6 +27,8 @@ from register_forms import handle as handle_register_form
 from notifications import handle as handle_notifications, NotificationError, approval_threshold
 from numbering import valid_for_category, next_code, classification_type_exists
 from starter_catalog import seed as seed_starter_catalog
+from governance import GovernanceError, handle as handle_governance, initialize as initialize_governance, create_asset as create_account_asset
+from backup_store import handle as handle_backups, create_bundle, prepared_file
 from catalog_guidance import GuidanceError
 from line_notifications import handle as handle_line, verify_webhook, dispatch as dispatch_line, WORKER as LINE_WORKER
 
@@ -299,7 +302,7 @@ def initialize() -> None:
 
 
 def asset_dict(row: sqlite3.Row) -> dict:
-    return {"id": row["id"], "name": row["name"], "detail": row["detail"], "code": row["code"], "group": row["group_name"], "categoryId": row["category_id"], "fsnCode": row["fsn_code"], "assetType": row["asset_type"], "location": row["location"], "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"]}
+    return {"id": row["id"], "name": row["name"], "detail": row["detail"], "code": row["code"], "group": row["group_name"], "accountId": row["numbering_account_id"], "branchId": row["branch_id"], "categoryId": row["category_id"], "fsnCode": row["fsn_code"], "assetType": row["asset_type"], "location": row["location"], "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"]}
 
 
 def survey_dict(row: sqlite3.Row) -> dict:
@@ -345,7 +348,7 @@ class Handler(BaseHTTPRequestHandler):
     def read_json(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length < 0 or length > (750_000 if self.path == "/api/branding" else 100_000):
+            if length < 0 or length > (35_000_000 if self.path == "/api/backups/sources" else 750_000 if self.path == "/api/branding" else 100_000):
                 raise ApiError("ข้อมูลที่ส่งมายาวเกินกำหนด", 413)
             data = json.loads(self.rfile.read(length) or b"{}")
             if not isinstance(data, dict):
@@ -356,6 +359,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_api(self, method: str, path: str, query: dict, body: dict):
         with connect() as db:
+            governed = handle_governance(db, method, path, query, body)
+            if governed is not None: return governed
+            backups = handle_backups(db, DB_PATH, method, path, query, body)
+            if backups is not None: return backups
             if method == "GET" and path == "/api/work/status":
                 return {**WORK_SCHEDULER, "timezone": "Asia/Bangkok"}
             try:
@@ -526,7 +533,9 @@ class Handler(BaseHTTPRequestHandler):
             category = db.execute("SELECT category_name FROM asset_categories WHERE id=? AND is_active=1", (category_id,)).fetchone()
             if category is None:
                 raise ApiError("ไม่พบหมวดที่ใช้งาน")
-            if db.execute("SELECT 1 FROM assets WHERE code=? AND id<>?", (code, asset_id)).fetchone():
+            if row["numbering_account_id"] and (code != row["code"] or category_id != row["category_id"]):
+                raise ApiError("รายการที่ผูกบัญชีเลขแล้วต้องคงเลขและหมวดเดิม เพื่อรักษาหลักเกณฑ์ที่บันทึกไว้ แก้ข้อมูลทั่วไปได้")
+            if row["code_unique"] and db.execute("SELECT 1 FROM assets WHERE COALESCE(numbering_account_id,0)=? AND code=? AND id<>?", (row["numbering_account_id"] or 0, code, asset_id)).fetchone():
                 raise ApiError("รหัสครุภัณฑ์ซ้ำกับรายการอื่น", 409)
             db.execute("UPDATE assets SET name=?,code=?,location=?,detail=?,category_id=?,group_name=?,updated_at=? WHERE id=?", (name, code, location, detail, category_id, category[0], now_iso(), asset_id))
             db.execute("INSERT INTO asset_profiles(asset_id,serial_number,custodian,warranty_end) VALUES(?,?,?,?) ON CONFLICT(asset_id) DO UPDATE SET serial_number=excluded.serial_number,custodian=excluded.custodian,warranty_end=excluded.warranty_end", (asset_id, serial, custodian, warranty))
@@ -598,6 +607,8 @@ class Handler(BaseHTTPRequestHandler):
         return ticket_dict(row), 201
 
     def create_asset(self, db: sqlite3.Connection, body: dict):
+        if body.get("accountId"):
+            return asset_dict(create_account_asset(db, body, now_iso())), 201
         name = clean_text(body.get("name"), 300, "ชื่อครุภัณฑ์")
         detail = clean_text(body.get("detail", ""), 1000, "รายละเอียด", required=False)
         code = clean_text(body.get("code", ""), 80, "เลขประจำครุภัณฑ์", required=False)
@@ -627,7 +638,7 @@ class Handler(BaseHTTPRequestHandler):
             code = next_code(db, fsn_code)
             if len(code) > 80:
                 raise ApiError("เลขลำดับครุภัณฑ์เกินช่วงที่รองรับ")
-        if db.execute("SELECT 1 FROM assets WHERE code=?", (code,)).fetchone():
+        if db.execute("SELECT 1 FROM assets WHERE numbering_account_id IS NULL AND code=?", (code,)).fetchone():
             raise ApiError("รหัสนี้มีในทะเบียนแล้ว กรุณาตรวจสอบรายการซ้ำ", 409)
         category = db.execute("SELECT category_name FROM asset_categories WHERE id=? AND is_active=1", (category_id,)).fetchone()
         if not category:
@@ -775,6 +786,26 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(parsed.path)
         if re.fullmatch(r"/(q|t)/[A-Za-z0-9_-]{32}", path):
             path = "/scan.html"
+        if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
+            folder = None
+            try:
+                actor = parse_qs(parsed.query).get("actor", [""])[0]
+                if path == "/api/backups/download":
+                    folder, output = create_bundle(DB_PATH, actor)
+                else:
+                    output = prepared_file(DB_PATH, path.removeprefix("/api/backups/prepared/"), actor)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(output.stat().st_size))
+                self.send_header("Content-Disposition", 'attachment; filename="' + output.name + '"')
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                with output.open("rb") as stream: shutil.copyfileobj(stream, self.wfile)
+            except GovernanceError as exc:
+                self.send_json({"error": str(exc)}, exc.status)
+            finally:
+                if folder: shutil.rmtree(folder)
+            return
         if path.startswith("/api/"):
             try:
                 result = self.handle_api("GET", path, parse_qs(parsed.query), {})
@@ -782,13 +813,13 @@ class Handler(BaseHTTPRequestHandler):
                 if isinstance(result, tuple):
                     result, status = result
                 self.send_json(result, status)
-            except (ApiError, GuidanceError) as exc:
+            except (ApiError, GuidanceError, GovernanceError) as exc:
                 self.send_json({"error": str(exc)}, exc.status)
             except Exception as exc:
                 print(f"API error: {exc!r}")
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -815,6 +846,26 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(parsed.path)
         if re.fullmatch(r"/(q|t)/[A-Za-z0-9_-]{32}", path):
             path = "/scan.html"
+        if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
+            folder = None
+            try:
+                actor = parse_qs(parsed.query).get("actor", [""])[0]
+                if path == "/api/backups/download":
+                    folder, output = create_bundle(DB_PATH, actor)
+                else:
+                    output = prepared_file(DB_PATH, path.removeprefix("/api/backups/prepared/"), actor)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(output.stat().st_size))
+                self.send_header("Content-Disposition", 'attachment; filename="' + output.name + '"')
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                with output.open("rb") as stream: shutil.copyfileobj(stream, self.wfile)
+            except GovernanceError as exc:
+                self.send_json({"error": str(exc)}, exc.status)
+            finally:
+                if folder: shutil.rmtree(folder)
+            return
         if path.startswith("/api/"):
             try:
                 result = self.handle_api("GET", path, parse_qs(parsed.query), {})
@@ -827,7 +878,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -867,7 +918,7 @@ class Handler(BaseHTTPRequestHandler):
             if isinstance(result, tuple):
                 result, status = result
             self.send_json(result, status)
-        except (ApiError, NotificationError, GuidanceError) as exc:
+        except (ApiError, NotificationError, GuidanceError, GovernanceError) as exc:
             self.send_json({"error": str(exc)}, exc.status)
         except sqlite3.IntegrityError as exc:
             self.send_json({"error": "ข้อมูลซ้ำหรือไม่ผ่านข้อกำหนด: " + str(exc)}, 409)
@@ -918,6 +969,7 @@ def require_status(actual: str, expected: str) -> None:
 
 def main() -> None:
     initialize()
+    initialize_governance(DB_PATH)
     stop_scheduler = threading.Event()
     def run_scheduler():
         WORK_SCHEDULER["running"] = True

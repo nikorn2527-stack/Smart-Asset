@@ -7,6 +7,7 @@
   const parts=()=>ids.map(id=>$('#'+id).value);
   const manual=()=>$('#assetNumberMode').value==='manual';
   function renderPreview(){
+    if(window.govAssetAccountRegistration?.scoped()){window.govAssetAccountRegistration.render();return;}
     const isManual=manual(),complete=parts().every(Boolean);
     $('#assetClassificationFields').hidden=isManual;
     $('#assetClassification').required=!isManual;

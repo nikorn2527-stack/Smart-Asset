@@ -58,8 +58,8 @@ def _inventory_select() -> str:
         a.fsn_code,a.old_asset_code,a.maintenance_status,a.asset_status_source,a.asset_type,a.fiscal_year_th,a.acquisition_date,a.delivery_date,
         a.acquisition_method,a.purchase_price,a.gfmis_no,a.po_no,a.model,a.serial_number,a.useful_life_years,a.depreciation_policy_id,
         a.depreciation_value,a.accumulated_depreciation,a.net_book_value,a.valuation_date,a.remaining_days,a.is_loaned,a.loan_price,
-        a.latest_update,a.delivery_note_no,a.source_document_id,a.source_row_no,
-        c.category_name,org.name AS organization_name,dept.name AS department_name,responsible.name AS responsible_unit,
+        a.latest_update,a.delivery_note_no,a.source_document_id,a.source_row_no,a.numbering_account_id,a.branch_id,a.numbering_profile_id,
+        c.category_name,account.name AS account_name,branch.name AS branch_name,org.name AS organization_name,dept.name AS department_name,responsible.name AS responsible_unit,
         reg.description AS register_description,reg.asset_type AS register_asset_type,reg.model AS register_model,
         reg.location AS register_location,reg.vendor_name,reg.vendor_address,reg.vendor_phone,
         COALESCE(profile.warranty_end,reg.warranty_end) AS warranty_end,
@@ -82,6 +82,8 @@ def _inventory_select() -> str:
       LEFT JOIN asset_profiles profile ON profile.asset_id=a.id
       LEFT JOIN asset_categories c ON c.id=a.category_id
       LEFT JOIN organizations org ON org.id=a.organization_id
+      LEFT JOIN asset_accounts account ON account.id=a.numbering_account_id
+      LEFT JOIN account_branches branch ON branch.id=a.branch_id
       LEFT JOIN org_units dept ON dept.id=a.department_unit_id
       LEFT JOIN org_units responsible ON responsible.id=a.responsible_unit_id
       LEFT JOIN asset_register_details reg ON reg.id=(SELECT id FROM asset_register_details r WHERE r.asset_id=a.id ORDER BY r.id DESC LIMIT 1)
@@ -96,7 +98,7 @@ def _inventory_item(row: sqlite3.Row) -> dict[str, Any]:
         "id": row["id"], "name": name, "detail": row["detail"] or row["register_description"] or "",
         "code": row["code"], "group": row["category_name"] or row["group_name"], "location": location,
         "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"],
-        "categoryId": row["category_id"], "fsnCode": row["fsn_code"], "assetType": row["register_asset_type"] or row["asset_type"],
+        "accountName": row["account_name"], "branchName": row["branch_name"], "accountId": row["numbering_account_id"], "branchId": row["branch_id"], "profileId": row["numbering_profile_id"], "categoryId": row["category_id"], "fsnCode": row["fsn_code"], "assetType": row["register_asset_type"] or row["asset_type"],
         "organization": row["organization_name"] or "", "department": row["department_name"] or "",
         "responsibleUnit": row["responsible_unit"] or "", "gfmisNo": row["linked_gfmis_no"] or "",
         "poNo": row["linked_po_no"] or "", "serialNumber": row["linked_serial_number"] or "",
@@ -114,10 +116,19 @@ def _inventory_item(row: sqlite3.Row) -> dict[str, Any]:
 def _where(query: dict) -> tuple[str, list[Any]]:
     terms: list[str] = []
     values: list[Any] = []
+    account = _one(query, "accountId")
+    if account == "legacy": terms.append("a.numbering_account_id IS NULL")
+    elif account:
+        try: values.append(int(account)); terms.append("a.numbering_account_id=?")
+        except ValueError: terms.append("0")
+    branch = _one(query, "branchId")
+    if branch:
+        try: values.append(int(branch)); terms.append("a.branch_id=?")
+        except ValueError: terms.append("0")
     text = _one(query, "q").strip()
     if text:
         like = f"%{text}%"
-        searchable = ["a.fsn_code", "a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name"]
+        searchable = ["a.fsn_code", "a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name", "account.name", "branch.name"]
         searchable_terms = [f"COALESCE({column},'') LIKE ?" for column in searchable]
         searchable_terms.append("EXISTS(SELECT 1 FROM asset_register_details rr WHERE rr.asset_id=a.id AND (rr.vendor_name LIKE ? OR rr.description LIKE ?))")
         values.extend([like] * len(searchable))
@@ -332,8 +343,9 @@ def _make_print_job(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tupl
     if not ids and body.get("assetId") is not None:
         ids=[body.get("assetId")]
     if not ids and body.get("assetNo"):
-        row=db.execute("SELECT id FROM assets WHERE code=? ORDER BY id LIMIT 1",(str(body["assetNo"]),)).fetchone()
-        ids=[row["id"]] if row else []
+        matches=db.execute("SELECT id FROM assets WHERE code=? ORDER BY id LIMIT 2",(str(body["assetNo"]),)).fetchall()
+        if len(matches)>1: raise ValueError("เลขตรงหลายบัญชีหรือหลายชิ้น กรุณาเลือกด้วยรายการครุภัณฑ์")
+        ids=[matches[0]["id"]] if matches else []
     if not isinstance(ids,list) or not ids:
         return {"error":"กรุณาเลือกครุภัณฑ์อย่างน้อย 1 รายการ"},400
     if len(ids)>MAX_PRINT_BATCH:
