@@ -26,6 +26,7 @@ from register_forms import handle as handle_register_form
 from notifications import handle as handle_notifications, NotificationError, approval_threshold
 from numbering import valid_for_category, next_code, classification_type_exists
 from starter_catalog import seed as seed_starter_catalog
+from catalog_guidance import GuidanceError
 from line_notifications import handle as handle_line, verify_webhook, dispatch as dispatch_line, WORKER as LINE_WORKER
 
 WORK_SCHEDULER = {"running": False, "lastRun": None, "lastError": None}
@@ -781,13 +782,13 @@ class Handler(BaseHTTPRequestHandler):
                 if isinstance(result, tuple):
                     result, status = result
                 self.send_json(result, status)
-            except ApiError as exc:
+            except (ApiError, GuidanceError) as exc:
                 self.send_json({"error": str(exc)}, exc.status)
             except Exception as exc:
                 print(f"API error: {exc!r}")
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -826,7 +827,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -866,7 +867,7 @@ class Handler(BaseHTTPRequestHandler):
             if isinstance(result, tuple):
                 result, status = result
             self.send_json(result, status)
-        except (ApiError, NotificationError) as exc:
+        except (ApiError, NotificationError, GuidanceError) as exc:
             self.send_json({"error": str(exc)}, exc.status)
         except sqlite3.IntegrityError as exc:
             self.send_json({"error": "ข้อมูลซ้ำหรือไม่ผ่านข้อกำหนด: " + str(exc)}, 409)

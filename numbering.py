@@ -57,8 +57,12 @@ def category_codes(db, category_id):
             item['typeNames'].insert(0,row['item_name'])
         item['sources'].append('บัญชีหน่วยงานที่ผูกหมวดแล้ว')
         item['reference'] = row['reference']
+    wording={row['fsn_code']:row for row in db.execute("SELECT fsn_code,content_text,conditions FROM catalogue_wording WHERE scope='code' AND category_id=?",(category_id,))}
     for item in codes.values():
         item.setdefault('typeNames',item['names'][:])
+        saved=wording.get(item['code'])
+        item['description']=saved['content_text'] if saved else ''
+        item['conditions']=saved['conditions'] if saved else ''
     return sorted(codes.values(), key=lambda item: item['code']), {'registerRows': total, 'recognizedRows': recognized, 'otherFormatRows': total-recognized}
 
 
@@ -134,7 +138,8 @@ def get_catalog(db, query):
         source_types=[dict(row) for row in db.execute('''SELECT r.type_name AS name,s.title AS source FROM starter_catalog_rows r
             JOIN source_documents s ON s.id=r.source_document_id WHERE r.category_id=? AND r.fsn_code=? ORDER BY r.type_name''',(category_id,code))]
         floor=db.execute('SELECT sequence_floor FROM starter_number_floors WHERE fsn_code=?',(code,)).fetchone()
-        result.update(sequenceFloor=floor[0] if floor else 0,sourceTypes=source_types,selected=selected, examples=examples, references=references, nextCode=next_code(db, code))
+        from catalog_guidance import read as read_guidance
+        result.update(guidance=read_guidance(db,'code',category_id,code),sequenceFloor=floor[0] if floor else 0,sourceTypes=source_types,selected=selected, examples=examples, references=references, nextCode=next_code(db, code))
     return result
 
 

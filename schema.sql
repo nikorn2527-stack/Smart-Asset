@@ -616,3 +616,31 @@ CREATE TABLE IF NOT EXISTS starter_number_floors (
   fsn_code TEXT PRIMARY KEY,
   sequence_floor INTEGER NOT NULL CHECK(sequence_floor>=0)
 );
+
+CREATE TABLE IF NOT EXISTS catalogue_wording (
+  scope TEXT NOT NULL CHECK(scope IN ('numbering','category','code')),
+  category_id INTEGER NOT NULL DEFAULT 0,
+  fsn_code TEXT NOT NULL DEFAULT '',
+  content_text TEXT NOT NULL,
+  conditions TEXT NOT NULL DEFAULT '',
+  citation TEXT NOT NULL DEFAULT '',
+  source_text TEXT NOT NULL,
+  source_citation TEXT NOT NULL DEFAULT '',
+  revision INTEGER NOT NULL,
+  updated_by TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(scope,category_id,fsn_code)
+);
+CREATE TABLE IF NOT EXISTS catalogue_wording_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  scope TEXT NOT NULL,
+  category_id INTEGER NOT NULL DEFAULT 0,
+  fsn_code TEXT NOT NULL DEFAULT '',
+  revision INTEGER NOT NULL,
+  actor TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  before_json TEXT NOT NULL,
+  after_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(scope,category_id,fsn_code,revision)
+);

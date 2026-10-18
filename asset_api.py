@@ -10,6 +10,7 @@ import time
 from typing import Any
 from master_data_api import handle as handle_master_data
 from numbering import get_catalog, link_code
+from catalog_guidance import handle as handle_guidance
 from smart_assets import qr_url, branding
 
 try:
@@ -373,6 +374,9 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
         return {"error": str(exc)}, 400
     if master_data is not None:
         return master_data
+    wording=handle_guidance(db,method,path,query,body)
+    if wording is not None:
+        return wording
     if method=="GET" and path=="/api/inventory":
         return inventory(db,query)
     if method=="GET" and path=="/api/register/featured":
