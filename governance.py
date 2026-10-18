@@ -156,6 +156,7 @@ def resolve(db, body, allocate=False):
     if body.get('catalogId'):
         entry=db.execute('SELECT * FROM account_catalog WHERE id=? AND account_id=? AND category_id=?',(ident(body['catalogId']),aid,cid)).fetchone()
         if not entry: raise GovernanceError('รายการบัญชีไม่ตรงหน่วยงานหรือหมวด')
+        if not entry['code'] and not body.get('manualCode'):raise GovernanceError('ชนิดนี้ยังไม่มีรหัสครบ เติมเลขในตารางหมวดก่อนออกเลขใหม่')
         values={**values,**json.loads(entry['values_json'])}
     branch=db.execute('SELECT code FROM account_branches WHERE id=?',(bid,)).fetchone() if bid else None
     values={**values,'year':str(day.year),'yearBE':str(day.year+543),'month':str(day.month)}
@@ -238,7 +239,7 @@ def apply_asset(db, asset_id, body, result):
 def handle(db, method, path, query, body):
     if not path.startswith('/api/governance'):return None
     if method=='GET' and path=='/api/governance':
-        return {'accounts':[dict(r) for r in db.execute('SELECT * FROM asset_accounts ORDER BY id')],'branches':[dict(r) for r in db.execute('SELECT * FROM account_branches ORDER BY id')],'profiles':[dict(r) for r in db.execute('SELECT * FROM number_profiles ORDER BY id DESC')],'bindings':[dict(r) for r in db.execute('SELECT * FROM account_bindings ORDER BY account_id,id')],'variables':sorted(VARIABLES)}
+        return {'categoryLabels':[dict(r) for r in db.execute('SELECT * FROM account_category_labels')],'accounts':[dict(r) for r in db.execute('SELECT * FROM asset_accounts ORDER BY id')],'branches':[dict(r) for r in db.execute('SELECT * FROM account_branches ORDER BY id')],'profiles':[dict(r) for r in db.execute('SELECT * FROM number_profiles ORDER BY id DESC')],'bindings':[dict(r) for r in db.execute('SELECT * FROM account_bindings ORDER BY account_id,id')],'variables':sorted(VARIABLES)}
     if method=='GET' and path=='/api/governance/references':
         try:aid=int(query.get('accountId',[''])[0]);offset=max(0,int(query.get('offset',['0'])[0]))
         except (ValueError,TypeError):raise GovernanceError('เลือกหน่วยงานหรือหน้ารายการให้ถูกต้อง')
@@ -344,7 +345,7 @@ def create_asset(db,body,stamp):
     code=code or result['code']
     unique=int(result['profile']['number_kind']=='inventory')
     if db.execute('SELECT 1 FROM assets WHERE numbering_account_id=? AND code=? AND (?=1 OR code_unique=1)',(result['accountId'],code,unique)).fetchone():raise GovernanceError('เลขนี้มีในบัญชีหน่วยงานแล้ว',409)
-    category=db.execute('SELECT category_name FROM asset_categories WHERE id=?',(result['categoryId'],)).fetchone()[0]
+    category=db.execute('SELECT COALESCE(l.name,c.category_name) FROM asset_categories c LEFT JOIN account_category_labels l ON l.category_id=c.id AND l.account_id=? WHERE c.id=?',(result['accountId'],result['categoryId'])).fetchone()[0]
     values=result['values'];fsn='-'.join(values.get(k,'') for k in ['group','type','detail'])
     if not re.fullmatch(r'[0-9]{4}-[0-9]{3}-[0-9]{4}',fsn):fsn=''
     asset_type=text(body.get('assetType',''),'ชนิดครุภัณฑ์',300,False)
@@ -353,6 +354,12 @@ def create_asset(db,body,stamp):
     cur=db.execute('''INSERT INTO assets(name,detail,code,group_name,location,category_id,status,created_at,created_by,updated_at,fsn_code,asset_type,numbering_account_id,code_unique) VALUES(?,?,?,?,?,?,'รออนุมัติ',?,?,?,?,?,?,?)''',(name,detail,code,category,location,result['categoryId'],stamp,actor,stamp,fsn,asset_type,result['accountId'],unique))
     result['manualOriginal']=bool(body.get('code'));result['codeUnique']=unique
     apply_asset(db,cur.lastrowid,body,result)
+    model=text(body.get('model',''),'รุ่น',160,False);serial=text(body.get('serialNumber',''),'หมายเลขเครื่อง',160,False);custodian=text(body.get('custodian',''),'ผู้ดูแล',160,False);warranty=text(body.get('warrantyEnd',''),'วันสิ้นสุดประกัน',10,False)
+    if warranty:
+        try:date.fromisoformat(warranty)
+        except ValueError:raise GovernanceError('วันสิ้นสุดประกันไม่ถูกต้อง')
+    db.execute('UPDATE assets SET model=?,serial_number=? WHERE id=?',(model,serial,cur.lastrowid))
+    if serial or custodian or warranty:db.execute('INSERT INTO asset_profiles(asset_id,serial_number,custodian,warranty_end) VALUES(?,?,?,?)',(cur.lastrowid,serial,custodian,warranty))
     db.execute('INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)',(cur.lastrowid,actor,'ส่งขออนุมัติลงทะเบียน','','รออนุมัติ',dump({'accountId':result['accountId'],'profileId':result['profile']['id'],'policyId':(result['policy'] or {}).get('id'),'manualOriginal':result['manualOriginal']}),stamp))
     return dict(db.execute('SELECT * FROM assets WHERE id=?',(cur.lastrowid,)).fetchone())
 

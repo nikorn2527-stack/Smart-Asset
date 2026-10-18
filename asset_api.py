@@ -58,8 +58,8 @@ def _inventory_select() -> str:
         a.fsn_code,a.old_asset_code,a.maintenance_status,a.asset_status_source,a.asset_type,a.fiscal_year_th,a.acquisition_date,a.delivery_date,
         a.acquisition_method,a.purchase_price,a.gfmis_no,a.po_no,a.model,a.serial_number,a.useful_life_years,a.depreciation_policy_id,
         a.depreciation_value,a.accumulated_depreciation,a.net_book_value,a.valuation_date,a.remaining_days,a.is_loaned,a.loan_price,
-        a.latest_update,a.delivery_note_no,a.source_document_id,a.source_row_no,a.numbering_account_id,a.branch_id,a.numbering_profile_id,
-        c.category_name,account.name AS account_name,branch.name AS branch_name,org.name AS organization_name,dept.name AS department_name,responsible.name AS responsible_unit,
+        a.latest_update,a.delivery_note_no,a.source_document_id,a.source_row_no,a.numbering_account_id,a.branch_id,a.numbering_profile_id,a.numbering_snapshot,a.depreciation_rule_snapshot,
+        COALESCE(category_label.name,c.category_name) AS category_name,account.name AS account_name,branch.name AS branch_name,org.name AS organization_name,dept.name AS department_name,responsible.name AS responsible_unit,
         reg.description AS register_description,reg.asset_type AS register_asset_type,reg.model AS register_model,
         reg.location AS register_location,reg.vendor_name,reg.vendor_address,reg.vendor_phone,
         COALESCE(profile.warranty_end,reg.warranty_end) AS warranty_end,
@@ -82,6 +82,7 @@ def _inventory_select() -> str:
       LEFT JOIN asset_profiles profile ON profile.asset_id=a.id
       LEFT JOIN asset_categories c ON c.id=a.category_id
       LEFT JOIN organizations org ON org.id=a.organization_id
+      LEFT JOIN account_category_labels category_label ON category_label.category_id=a.category_id AND category_label.account_id=a.numbering_account_id
       LEFT JOIN asset_accounts account ON account.id=a.numbering_account_id
       LEFT JOIN account_branches branch ON branch.id=a.branch_id
       LEFT JOIN org_units dept ON dept.id=a.department_unit_id
@@ -94,7 +95,7 @@ def _inventory_select() -> str:
 def _inventory_item(row: sqlite3.Row) -> dict[str, Any]:
     location = row["location"] or row["register_location"] or row["responsible_unit"] or row["department_name"] or ""
     name = row["name"] or row["register_description"] or row["detail"] or ""
-    return {
+    item = {
         "id": row["id"], "name": name, "detail": row["detail"] or row["register_description"] or "",
         "code": row["code"], "group": row["category_name"] or row["group_name"], "location": location,
         "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"],
@@ -112,6 +113,17 @@ def _inventory_item(row: sqlite3.Row) -> dict[str, Any]:
         "sourceDocumentId": row["source_document_id"], "sourceRowNo": row["source_row_no"],
     }
 
+    numbering=json.loads(row["numbering_snapshot"] or '{}');changed=numbering.get('currentFields',{})
+    overrides={'purchasePrice':('purchasePrice','purchase_price'),'acquisitionDate':('acquiredOn','acquisition_date'),'model':('model','model'),'gfmisNo':('gfmisNo','gfmis_no'),'poNo':('poNo','po_no'),'fiscalYear':('fiscalYear','fiscal_year_th'),'acquisitionMethod':('acquisitionMethod','acquisition_method'),'assetType':('assetType','asset_type')}
+    for key,(target,column) in overrides.items():
+        if changed.get(key):item[target]=row[column]
+    from governance import calculate
+    policy=json.loads(row['depreciation_rule_snapshot'] or '{}').get('policy')
+    estimate=calculate(policy,item['purchasePrice'],item['acquiredOn'])
+    item['depreciationEstimate']=estimate if estimate['status']=='calculated' else None
+    item['depreciationPolicyName']=policy.get('category_name','') if policy else ''
+    return item
+
 
 def _where(query: dict) -> tuple[str, list[Any]]:
     terms: list[str] = []
@@ -128,7 +140,7 @@ def _where(query: dict) -> tuple[str, list[Any]]:
     text = _one(query, "q").strip()
     if text:
         like = f"%{text}%"
-        searchable = ["a.fsn_code", "a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name", "account.name", "branch.name"]
+        searchable = ["a.fsn_code", "a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name", "account.name", "branch.name", "category_label.name"]
         searchable_terms = [f"COALESCE({column},'') LIKE ?" for column in searchable]
         searchable_terms.append("EXISTS(SELECT 1 FROM asset_register_details rr WHERE rr.asset_id=a.id AND (rr.vendor_name LIKE ? OR rr.description LIKE ?))")
         values.extend([like] * len(searchable))
@@ -156,7 +168,7 @@ def _where(query: dict) -> tuple[str, list[Any]]:
 
 def inventory(db: sqlite3.Connection, query: dict) -> dict[str, Any]:
     where, values = _where(query)
-    total = int(db.execute("SELECT COUNT(*) FROM assets a LEFT JOIN asset_categories c ON c.id=a.category_id LEFT JOIN organizations org ON org.id=a.organization_id LEFT JOIN org_units dept ON dept.id=a.department_unit_id LEFT JOIN org_units responsible ON responsible.id=a.responsible_unit_id" + where, values).fetchone()[0])
+    total = int(db.execute("SELECT COUNT(*) FROM assets a LEFT JOIN asset_categories c ON c.id=a.category_id LEFT JOIN asset_accounts account ON account.id=a.numbering_account_id LEFT JOIN account_branches branch ON branch.id=a.branch_id LEFT JOIN account_category_labels category_label ON category_label.account_id=a.numbering_account_id AND category_label.category_id=a.category_id LEFT JOIN organizations org ON org.id=a.organization_id LEFT JOIN org_units dept ON dept.id=a.department_unit_id LEFT JOIN org_units responsible ON responsible.id=a.responsible_unit_id" + where, values).fetchone()[0])
     limit, offset = _safe_limit(query), _safe_offset(query)
     rows = db.execute(_inventory_select() + where + " ORDER BY CASE WHEN a.code='' THEN 1 ELSE 0 END,a.code,a.id LIMIT ? OFFSET ?", (*values, limit, offset)).fetchall()
     return {"items": [_inventory_item(row) for row in rows], "total": total, "limit": limit, "offset": offset}

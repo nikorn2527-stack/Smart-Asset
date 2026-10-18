@@ -1,7 +1,7 @@
 /* Unit-scoped master data. Forms retain original IDs and use the same server resolver as registration. */
 (() => {
   const app=window.govAssetApp,$=(s,r=document)=>r.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  let state=null,categories=[],policies=[],activeTab='units',catalog=[],selectedBinding=null,editingAccount=null,editingBranch=null,editingCatalog=null,referenceOffset=0;
+  let state=null,categories=[],policies=[],activeTab='overview',catalog=[],selectedBinding=null,editingAccount=null,editingBranch=null,editingCatalog=null,referenceOffset=0;
   const variableNames={group:'กลุ่ม/ประเภท',type:'ชนิด',detail:'รายละเอียด/คุณลักษณะ',category:'รหัสหมวด',branch:'รหัสสาขา',department:'รหัสแผนก',prefix:'รหัสนำหน้า',year:'ปี ค.ศ.',yearBE:'ปี พ.ศ.',month:'เดือน',seq:'ลำดับรายชิ้น'};
   const view=document.createElement('section');view.id='view-administration';view.className='view';
   view.innerHTML=`<div class="subpage-nav"><button class="button outline" data-go-view="settings">← กลับตั้งค่า</button></div><div class="page-heading"><div><h1>หน่วยงาน บัญชีเลข และค่าเสื่อม</h1><p>แยกแบบเลขและหลักเกณฑ์ตามหน่วยงาน สาขา และหมวด โดยรักษาทะเบียนเดิม</p></div></div>
@@ -19,7 +19,7 @@
   const options=(rows,label,blank='')=>`<option value="">${esc(blank)}</option>`+rows.map(r=>`<option value="${r.id}">${esc(label(r))}</option>`).join('');
   const labelOf=(rows,id,key='name')=>rows.find(r=>r.id===id)?.[key]||'—';
   function permission(){const allowed=app.getRole()==='เจ้าหน้าที่พัสดุ';view.querySelectorAll('form button[type=submit],form button:not([type]),#downloadAccountBackup').forEach(b=>b.disabled=!allowed);}
-  function tab(name){activeTab=name;view.querySelectorAll('[data-admin-section]').forEach(s=>s.hidden=s.dataset.adminSection!==name);view.querySelectorAll('[data-admin-tab]').forEach(b=>b.setAttribute('aria-current',String(b.dataset.adminTab===name)));if(name==='catalog'){loadCatalog();loadReferences();}if(name==='backup')loadBackup();}
+  function tab(name){if(['profiles','bindings','catalog'].includes(name))document.querySelector('#administrationAdvanced')?.setAttribute('aria-expanded','true');activeTab=name;view.querySelectorAll('[data-admin-section]').forEach(s=>s.hidden=s.dataset.adminSection!==name);view.querySelectorAll('[data-admin-tab]').forEach(b=>b.setAttribute('aria-current',String(b.dataset.adminTab===name)));if(name==='catalog'){loadCatalog();loadReferences();}if(name==='backup')loadBackup();document.dispatchEvent(new CustomEvent('govasset:administration-tab',{detail:{name}}));}
   view.querySelectorAll('[data-admin-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.adminTab));
   async function load(){
     try{const [data,c,p]=await Promise.all([app.api('/api/governance'),app.api('/api/catalog/categories'),app.api('/api/catalog/depreciation')]);state=data;categories=c;policies=p.items;const prev=aid();$('#adminAccount').innerHTML=options(data.accounts,r=>r.name,'เลือกหน่วยงาน');$('#adminAccount').value=String(prev||data.accounts[0]?.id||'');render();$('#administrationStatus').textContent='';}
@@ -34,7 +34,7 @@
     $('#profileList').innerHTML=profiles.map(p=>`<article class="panel admin-form"><b>${esc(p.name)} · รุ่น ${p.version}</b><p><code>${esc(p.pattern)}</code> · ${p.number_kind==='classification'?'เลขจำแนก ใช้กับหลายชิ้นได้':'เลขประจำชิ้น ห้ามซ้ำในบัญชี'}</p><p class="field-hint">${esc(p.source)}</p><button class="button outline" type="button" data-new-profile-version="${p.id}">สร้างรุ่นใหม่จากแบบนี้</button></article>`).join('');
     $('#bindingList').innerHTML=state.bindings.filter(b=>b.account_id===account).map(b=>`<article class="panel admin-form"><b>${esc(b.branch_id?labelOf(state.branches,b.branch_id):'ทุกสาขา')} · ${esc(b.category_id?labelOf(categories,b.category_id):'ทุกหมวด')}</b><p>แบบเลข: ${esc(labelOf(state.profiles,b.profile_id))}<br>ค่าเสื่อม: ${esc(labelOf(policies,b.policy_id,'category'))}</p><p class="field-hint">เริ่ม ${esc(b.effective_from)} · ฉบับ ${b.revision} · ${b.is_active?'เปิดใช้':'พักใช้'} ${esc(b.notes)}</p><button class="button outline" type="button" data-edit-binding="${b.id}">แก้เงื่อนไข</button></article>`).join('');
     $('#catalogVariables').innerHTML=Object.entries(variableNames).filter(([key])=>!['seq','year','yearBE','month'].includes(key)).map(([key,name])=>`<label>${name}<input data-catalog-variable="${key}" maxlength="30"></label>`).join('');
-    selectedBinding=null;permission();if(activeTab==='backup')loadBackup();
+    selectedBinding=null;permission();if(activeTab==='backup')loadBackup();document.dispatchEvent(new CustomEvent('govasset:administration-ready',{detail:{accountId:aid()}}));
   }
   $('#adminAccount').onchange=()=>{editingAccount=null;editingBranch=null;editingCatalog=null;referenceOffset=0;$('#manualReferenceSearch').value='';$('#accountForm').reset();$('#branchForm').reset();$('#accountCatalogCategory').value='';render();tab(activeTab);};$('#reloadAdministration').onclick=load;
   function row(variable='group',width=4){const div=document.createElement('div');div.className='profile-segment';div.innerHTML=`<label>ตัวแปร<select data-segment-key>${Object.entries(variableNames).map(([k,n])=>`<option value="${k}">${n}</option>`).join('')}</select></label><label>จำนวนหลัก<input data-segment-width type="number" min="1" max="30" required value="${width}"></label><button type="button" class="button outline" aria-label="ลบชุดตัวเลข">ลบ</button>`;$('[data-segment-key]',div).value=variable;$('button',div).onclick=()=>{div.remove();profilePreview();};div.addEventListener('input',profilePreview);$('#profileSegments').append(div);profilePreview();}
@@ -70,6 +70,6 @@
   $('#downloadAccountBackup').onclick=downloadBackup;
   $('#preparedBackupList').addEventListener('click',e=>{const b=e.target.closest('[data-download-prepared]');if(b)downloadBackup({currentTarget:b},b.dataset.downloadPrepared);});
   document.addEventListener('govasset:view-changed',e=>{if(e.detail.name==='administration'){load();tab(activeTab);}});
-  $('#actorRole').addEventListener('change',permission);tab('units');load();
-  window.govAssetGovernance={reload:load,variables:variableNames};
+  $('#actorRole').addEventListener('change',permission);tab('overview');load();
+  window.govAssetGovernance={reload:load,variables:variableNames,openTab:tab,openCatalog:async categoryId=>{await load();tab('catalog');$('#accountCatalogCategory').value=String(categoryId);loadCatalog();}};
 })();

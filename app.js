@@ -103,7 +103,7 @@ async function refreshData() {
   const inventoryParams=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),status:$('#statusFilter')?.value||'all',limit:String(inventoryLimit),offset:'0'});
   try {
     const [assetData,surveyData,ticketData,config,inventoryData,fsnData,categoryData,depreciationData,pendingData]=await Promise.all([api('/api/assets'),api('/api/survey'),api('/api/tickets'),api('/api/config'),api(`/api/inventory?${inventoryParams}`),api(`/api/catalog/fsn?limit=${fsnLimit}`),api('/api/catalog/categories'),api('/api/catalog/depreciation'),api('/api/assets/pending')]);
-    assets=assetData; approvalAssets=pendingData; sheet=surveyData; repairs=ticketData; appConfig=config;
+    document.dispatchEvent(new CustomEvent('govasset:inventory-rendering'));assets=assetData; approvalAssets=pendingData; sheet=surveyData; repairs=ticketData; appConfig=config;
     if(request===inventoryRequest){inventoryRows=inventoryData.items; inventoryTotal=inventoryData.total; inventoryOffset=inventoryData.offset;}
     fsnRows=fsnData.items; fsnTotal=fsnData.total; fsnOffset=fsnData.offset;
     liveCategories=categoryData.length?categoryData:null;populateAssetCategoryOptions(categoryData);
@@ -121,10 +121,13 @@ const statusClass = status => ['พร้อมใช้','ทะเบียน
 function badge(status) { return `<span class="badge ${statusClass(status)}">${esc(status)}</span>`; }
 function assetNameCell(item) { return `<div class="item-cell"><span class="item-thumb" aria-hidden="true">${esc(item.icon||'▤')}</span><div><div class="item-name">${esc(item.name)}</div><div class="item-meta">${esc(item.detail||'รายการตัวอย่าง')}</div></div></div>`; }
 function renderAssets() {
+  queueMicrotask(()=>document.dispatchEvent(new CustomEvent('govasset:inventory-rendered')));
+  document.dispatchEvent(new CustomEvent('govasset:inventory-rendering'));
+
   const recent=$('#recentRows'); if(recent) recent.innerHTML=assets.slice(0,4).map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.group)}</td><td>${badge(item.status)}</td></tr>`).join('');
   const search=($('#assetSearch')?.value||'').trim().toLowerCase(), status=$('#statusFilter')?.value||'all';
   const filtered=inventoryRows!==null?inventoryRows:assets.filter(item=>`${item.name} ${item.code} ${item.group} ${item.location} ${item.status}`.toLowerCase().includes(search)&&(status==='all'||item.status===status));
-  const rows=$('#assetRows'); if(rows) rows.innerHTML=filtered.length?filtered.map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.group)}</td><td>${esc(item.location)}${item.accountName?`<small class="item-meta">บัญชี: ${esc(item.accountName)}${item.branchName?' · '+esc(item.branchName):''}</small>`:''}</td><td>${esc(fmtDate(item.date))}</td><td>${badge(item.status)}</td><td><button class="button outline mini-action" data-smart-id="${item.id}">รายละเอียด / QR</button> <button class="button outline mini-action" type="button" data-register-id="${item.id}">ใบทะเบียนคุม</button> ${item.status==='รออนุมัติ'?(currentRole===ROLE_APPROVER?`<button class="button outline mini-action" data-asset-action="approve" data-asset-id="${item.id}">อนุมัติ</button> <button class="button outline mini-action reject" data-asset-action="reject" data-asset-id="${item.id}">ไม่อนุมัติ</button>`:'<span class="item-meta">รอผู้อนุมัติ</span>'):'—'}</td></tr>`).join(''):'<tr><td colspan="7" class="empty-cell">ไม่พบรายการที่ตรงกับคำค้น</td></tr>';
+  const rows=$('#assetRows'); if(rows) rows.innerHTML=filtered.length?filtered.map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.group)}</td><td>${esc(item.location)}${item.accountName?`<small class="item-meta">บัญชี: ${esc(item.accountName)}${item.branchName?' · '+esc(item.branchName):''}</small>`:''}</td><td>${esc(fmtDate(item.date))}</td><td><span class="item-meta">ทุน ${item.purchasePrice==null?'—':Number(item.purchasePrice).toLocaleString('th-TH')} บาท</span><span class="item-meta">${item.depreciationEstimate?'คงเหลือประมาณ':'คงเหลือต้นทาง'} ${(item.depreciationEstimate?.netBookValue??item.netBookValue)==null?'—':Number(item.depreciationEstimate?.netBookValue??item.netBookValue).toLocaleString('th-TH')} บาท</span>${badge(item.status)}</td><td><button class="button outline mini-action" type="button" data-workspace-edit="${item.id}">แก้ไขแถว</button> <button class="button outline mini-action" type="button" data-workspace-copy="${item.id}">＋ อีกชิ้นแบบนี้</button> <button class="button outline mini-action" data-smart-id="${item.id}">รายละเอียด / QR</button> <button class="button outline mini-action" type="button" data-register-id="${item.id}">ใบทะเบียนคุม</button> ${item.status==='รออนุมัติ'?(currentRole===ROLE_APPROVER?`<button class="button outline mini-action" data-asset-action="approve" data-asset-id="${item.id}">อนุมัติ</button> <button class="button outline mini-action reject" data-asset-action="reject" data-asset-id="${item.id}">ไม่อนุมัติ</button>`:'<span class="item-meta">รอผู้อนุมัติ</span>'):'—'}</td></tr>`).join(''):'<tr><td colspan="7" class="empty-cell">ไม่พบรายการที่ตรงกับคำค้น</td></tr>';
   const shownStart=inventoryTotal?inventoryOffset+1:1, shownEnd=Math.min(inventoryOffset+filtered.length,inventoryTotal||filtered.length);
   const result=$('#resultCount'); if(result) result.textContent=`แสดง ${filtered.length?shownStart:0}–${shownEnd} จาก ${inventoryRows!==null?inventoryTotal:assets.length} รายการ`;
   const total=$('#totalCount'); if(total) total.textContent=String(appConfig.overview?.assets ?? inventoryTotal ?? assets.length);
@@ -135,7 +138,7 @@ function renderAssets() {
 async function loadInventory(offset=0){
   const request=++inventoryRequest;
   const params=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),status:$('#statusFilter')?.value||'all',limit:String(inventoryLimit),offset:String(Math.max(0,offset))});
-  try{const result=await api(`/api/inventory?${params}`);if(request!==inventoryRequest)return;inventoryRows=result.items;inventoryTotal=result.total;inventoryOffset=result.offset;renderAssets();}catch(error){if(request===inventoryRequest)showError(error);}
+  try{const result=await api(`/api/inventory?${params}`);if(request!==inventoryRequest)return;inventoryRows=result.items;inventoryTotal=result.total;inventoryOffset=result.offset;renderAssets();document.dispatchEvent(new CustomEvent('govasset:inventory-rendered'));}catch(error){if(request===inventoryRequest)showError(error);}
 }
 function fmtDate(value) { if(!value) return '—'; const date=new Date(value); return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}); }
 function repairStatusClass(status) { return ['ปิดงาน','ซ่อมเสร็จ'].includes(status)?'green':['รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง','รับแจ้งใหม่','รอผู้แจ้งยืนยัน','รอมอบหมาย','รอแก้ไขค่าใช้จ่าย'].includes(status)?'amber':status==='ไม่อนุมัติ'?'red':status==='รออะไหล่'?'violet':'blue'; }
@@ -180,7 +183,7 @@ function switchView(name) {
     button.classList.toggle('active',active);
     if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
   });
-  const titles={administration:'หน่วยงาน บัญชีเลข และค่าเสื่อม',work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่า',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตามงาน',approvals:'คิวรออนุมัติ',register:'เอกสารทะเบียนคุมทรัพย์สิน',stickers:'แบบสติกเกอร์และการพิมพ์',depreciation:'อายุใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'หมวดและเอกสารอ้างอิง',numbering:'จัดการเลขครุภัณฑ์'};
+  const titles={administration:'ตั้งหมวดและค่าเสื่อม',work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่า',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตามงาน',approvals:'คิวรออนุมัติ',register:'เอกสารทะเบียนคุมทรัพย์สิน',stickers:'แบบสติกเกอร์และการพิมพ์',depreciation:'อายุใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'หมวดและเอกสารอ้างอิง',numbering:'จัดการเลขครุภัณฑ์'};
   const title=titles[name]||'ภาพรวม';
   $('#crumbCurrent').textContent=parents[name]?`${titles[activeMenu]} / ${title}`:title;
   document.title=`${title} — ${window.govAssetBranding?.appName || 'GovAsset'}`;
@@ -254,7 +257,7 @@ function updateCode() {
   $('#generatedCode').textContent=manual?($('#manualAssetCode').value||'ระบุเลขประจำครุภัณฑ์เดิม'):parts.every((v,i)=>new RegExp(`^[0-9]{${[4,3,4][i]}}$`).test(v))?`${parts.join('-')}-[ลำดับประจำชิ้น]`:'เลือกรหัส FSN ให้ครบ 4-3-4 ก่อน';
   window.govAssetNumbering?.renderPreview();
 }
-function openAssetDialog() { populateAssetCategoryOptions(liveCategories||[]); $('#assetFormError').textContent='';updateCode(); $('#assetDialog').showModal(); document.dispatchEvent(new CustomEvent('govasset:asset-entry-open')); $('#assetCategoryId').focus(); }
+function openAssetDialog(options={}) { populateAssetCategoryOptions(liveCategories||[]); $('#assetFormError').textContent='';updateCode(); $('#assetDialog').showModal(); document.dispatchEvent(new CustomEvent('govasset:asset-entry-open',{detail:{preset:options?.preset||null}})); $('#assetCategoryId').focus(); }
 function openRepairDialog() { $('#assetSuggestions').innerHTML=assets.map(item=>`<option value="${esc(item.name)}">`).join(''); $('#assetCodes').innerHTML=assets.map(item=>`<option value="${esc(item.code)}">`).join(''); $('#repairForm').reset(); $('#repairForm input[name="assetId"]')?.remove(); $('#repairFormError').textContent=''; $('#repairDialog').showModal(); $('#repairAsset').focus(); }
 
 $$('.nav-item[data-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.view)));
