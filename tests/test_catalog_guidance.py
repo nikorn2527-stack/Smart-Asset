@@ -96,7 +96,7 @@ class CatalogGuidance(HTTPFixture):
     def test_z_wording_and_history_survive_server_restart(self):
         context={'scope':'numbering'};current=self.wording(context);saved=self.save(current,text='ข้อความสำหรับตรวจหลังเริ่มเซิร์ฟเวอร์ใหม่')
         self.proc.terminate();self.proc.wait(timeout=10)
-        self.__class__.proc=subprocess.Popen(self.proc.args,cwd=ROOT,env={**os.environ,'ASSET_DB_PATH':str(self.db),'PORT':str(self.port),'HOST':'127.0.0.1'},stdout=self.log,stderr=self.log)
+        self.__class__.proc=subprocess.Popen(self.proc.args,cwd=ROOT,env={**os.environ,'ASSET_DB_PATH':str(self.db),'PORT':str(self.port),'HOST':'127.0.0.1','ASSET_AUTH_REQUIRED':'0'},stdout=self.log,stderr=self.log)
         for _ in range(100):
             try:self.call('/api/health');break
             except OSError:time.sleep(.05)

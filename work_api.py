@@ -1,3 +1,4 @@
+from access_control import scope_sql,visible_plan
 """Persistent PM / inventory planning, assignment, and restart-safe due generation."""
 from datetime import date, datetime, timedelta, timezone
 import json
@@ -97,7 +98,7 @@ def handle(db, method, path, query, body):
     if not path.startswith('/api/work/'):
         return None
     if path == '/api/work/plans' and method == 'GET':
-        return [plan_dict(db,p) for p in db.execute('SELECT * FROM work_plans ORDER BY id DESC')]
+        return [plan_dict(db,p) for p in db.execute('SELECT * FROM work_plans ORDER BY id DESC') if visible_plan(db,p['id'])]
     if path == '/api/work/plans' and method == 'POST':
         actor = role(body)
         name = text(body.get('name'), 'ชื่อแผน')
@@ -171,7 +172,7 @@ def handle(db, method, path, query, body):
             raise WorkError('ไม่พบงาน',404)
         return work_dict(row)
     if path == '/api/work/items' and method == 'GET':
-        where, args = [], []
+        where, args = [scope_sql(db)], []
         for key,column in [('kind','p.kind'),('assignee','w.assignee'),('status','w.status'),('planId','p.id'),('dueOn','w.due_on')]:
             value = query.get(key,[''])[0]
             if value:

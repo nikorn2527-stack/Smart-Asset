@@ -127,7 +127,8 @@ class AccountGovernance(HTTPFixture):
         original=self.register(code='เลขเดิม/8-พิเศษ',values={})
         self.assertEqual(original['code'],'เลขเดิม/8-พิเศษ')
         other=self.post('accounts',name='อีกบัญชี',code=uuid.uuid4().hex)['id']
-        self.assertEqual(self.call('/api/governance/catalog?'+urlencode({'accountId':other,'categoryId':self.cid}))['items'],[])
+        shared=self.call('/api/governance/catalog?'+urlencode({'accountId':other,'categoryId':self.cid}))['items']
+        self.assertTrue(shared);self.assertTrue(all(r['shared_catalog_id'] for r in shared));self.assertNotIn('ตู้เฉพาะบัญชี',[r['name'] for r in shared])
         self.call('/api/governance/preview',self.context(accountId=other,catalogId=row['id']),method='POST',expected=400)
 
     def test_latest_scope_version_masks_old_values_and_policy_uses_acquisition_date(self):
@@ -160,8 +161,8 @@ class AccountGovernance(HTTPFixture):
         source=self.call('/api/governance/references?'+urlencode({'accountId':center,'q':'0204'}))
         cabinet=next(r for r in source['items'] if '4 ลิ้นชัก' in r['name'])
         self.assertEqual(cabinet['group_code'],'7110');self.assertEqual(cabinet['type_code'],'0204');self.assertEqual(cabinet['page'],53)
-        self.assertEqual(self.call('/api/governance/references?'+urlencode({'accountId':self.aid}))['total'],0)
-        self.assertEqual(self.call('/api/governance/catalog?'+urlencode({'accountId':center,'categoryId':self.cid}))['items'],[])
+        self.assertEqual(self.call('/api/governance/references?'+urlencode({'accountId':self.aid}))['total'],907)
+        self.assertTrue(all(r['shared_catalog_id'] for r in self.call('/api/governance/catalog?'+urlencode({'accountId':center,'categoryId':self.cid}))['items']))
 
     def test_edits_keep_account_and_catalog_history_and_detect_stale_revision(self):
         original=self.call('/api/governance')['accounts']

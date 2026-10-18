@@ -32,6 +32,9 @@ from backup_store import handle as handle_backups, create_bundle, prepared_file
 from workspace_api import handle as handle_workspace, initialize as initialize_workspace
 from supply_api import handle as handle_supply
 from operational_master import handle as handle_operational_master
+from shared_catalog import initialize as initialize_shared_catalog, handle as handle_shared_catalog
+from asset_import import initialize as initialize_asset_import, handle as handle_asset_import
+import access_control as access
 from catalog_guidance import GuidanceError
 from line_notifications import handle as handle_line, verify_webhook, dispatch as dispatch_line, WORKER as LINE_WORKER
 
@@ -105,7 +108,7 @@ def seed_master_data(db: sqlite3.Connection) -> None:
 
 def connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=15, isolation_level=None)
+    conn = sqlite3.connect(DB_PATH, timeout=15, isolation_level=None, factory=access.Connection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA busy_timeout = 15000")
@@ -345,13 +348,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if getattr(self,"session_cookie",None):
+            self.send_header("Set-Cookie",self.session_cookie);self.session_cookie=None
         self.end_headers()
         self.wfile.write(body)
 
     def read_json(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length < 0 or length > (9_000_000 if self.path.startswith("/api/supply/") else 35_000_000 if self.path == "/api/backups/sources" else 750_000 if self.path == "/api/branding" else 100_000):
+            if length < 0 or length > (35_000_000 if self.path.startswith("/api/imports/") else 9_000_000 if self.path.startswith("/api/supply/") else 35_000_000 if self.path == "/api/backups/sources" else 750_000 if self.path == "/api/branding" else 100_000):
                 raise ApiError("ข้อมูลที่ส่งมายาวเกินกำหนด", 413)
             data = json.loads(self.rfile.read(length) or b"{}")
             if not isinstance(data, dict):
@@ -362,6 +367,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_api(self, method: str, path: str, query: dict, body: dict):
         with connect() as db:
+            authenticated = access.auth_api(db,self,method,path,body)
+            if authenticated is not None: return authenticated
+            ctx = access.authenticate(db,self,method,path,body)
+            if path == '/api/health' and access.required(): return {'ok':True,'database':'sqlite'}
+            access.authorize(db,ctx,method,path,query,body)
+            result = self.route_api(db,method,path,query,body)
+            if ctx and method not in ('GET','HEAD'):
+                db.execute('INSERT INTO account_events(actor,kind,before_json,after_json) VALUES(?,?,?,?)',(ctx['user']['username'],'request','{}',json.dumps({'method':method,'path':path,'accountId':ctx['accountId'],'branchId':ctx['branchId'],'action':body.get('action')},ensure_ascii=False)))
+            return access.filter_result(db,path,result)
+
+    def route_api(self, db, method, path, query, body):
+        if True:
+            imported = handle_asset_import(db, DB_PATH, method, path, query, body)
+            if imported is not None: return imported
+            shared = handle_shared_catalog(db, method, path, query, body)
+            if shared is not None: return shared
             master = handle_operational_master(db, method, path, query, body)
             if master is not None: return master
             supply = handle_supply(db, method, path, query, body)
@@ -403,14 +424,14 @@ class Handler(BaseHTTPRequestHandler):
             if extended is not None:
                 return extended
             if method == "GET" and path == "/api/assets/pending":
-                return [asset_dict(row) for row in db.execute("SELECT * FROM assets WHERE status='รออนุมัติ' ORDER BY id DESC")]
+                return [asset_dict(row) for row in db.execute("SELECT * FROM assets a WHERE status='รออนุมัติ' AND "+access.scope_sql(db)+" ORDER BY id DESC")]
             if method == "GET" and path == "/api/assets":
-                return [asset_dict(row) for row in db.execute("SELECT * FROM assets ORDER BY id DESC LIMIT 150")]
+                return [asset_dict(row) for row in db.execute("SELECT * FROM assets a WHERE "+access.scope_sql(db)+" ORDER BY id DESC LIMIT 150")]
             if method == "GET" and path == "/api/survey":
                 return [survey_dict(row) for row in db.execute("SELECT * FROM survey_items ORDER BY id")]
             if method == "GET" and path == "/api/tickets":
-                return [ticket_dict(row) for row in db.execute("SELECT * FROM tickets ORDER BY id DESC")]
-            if method == "GET" and path.startswith("/api/tickets/"):
+                return [ticket_dict(row) for row in db.execute("SELECT t.* FROM tickets t LEFT JOIN assets a ON a.id=t.asset_id WHERE "+access.scope_sql(db)+" ORDER BY t.id DESC")]
+            if method == "GET" and re.fullmatch(r"/api/tickets/[0-9]+", path):
                 try:
                     ticket_id = int(path.rsplit("/", 1)[1])
                 except ValueError:
@@ -445,8 +466,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def smart_api(self, db, method, path, query, body):
         if method == "GET" and path == "/api/overview":
-            assets = db.execute("SELECT COUNT(*),COALESCE(SUM(status IN ('รออนุมัติ','รอตรวจสอบ')),0) FROM assets").fetchone()
-            repairs = db.execute("SELECT COUNT(*),COALESCE(SUM(status NOT IN ('ปิดงาน','ยกเลิก','ไม่อนุมัติ')),0),COALESCE(SUM(CASE WHEN status NOT IN ('ยกเลิก','ไม่อนุมัติ') THEN actual_cost ELSE 0 END),0) FROM tickets").fetchone()
+            assets = db.execute("SELECT COUNT(*),COALESCE(SUM(status IN ('รออนุมัติ','รอตรวจสอบ')),0) FROM assets a WHERE "+access.scope_sql(db)).fetchone()
+            repairs = db.execute("SELECT COUNT(*),COALESCE(SUM(t.status NOT IN ('ปิดงาน','ยกเลิก','ไม่อนุมัติ')),0),COALESCE(SUM(CASE WHEN t.status NOT IN ('ยกเลิก','ไม่อนุมัติ') THEN actual_cost ELSE 0 END),0) FROM tickets t LEFT JOIN assets a ON a.id=t.asset_id WHERE "+access.scope_sql(db)).fetchone()
             return {"assets": assets[0], "pendingAssets": assets[1], "tickets": repairs[0], "activeRepairs": repairs[1], "actualRepairCost": repairs[2], "activeCategories": db.execute("SELECT COUNT(*) FROM asset_categories WHERE is_active=1").fetchone()[0]}
         if path == "/api/branding":
             if method == "GET":
@@ -798,7 +819,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
             folder = None
             try:
-                actor = parse_qs(parsed.query).get("actor", [""])[0]
+                with connect() as db:
+                    query=parse_qs(parsed.query);ctx=access.authenticate(db,self,'GET',path,{})
+                    access.authorize(db,ctx,'GET',path,query,{})
+                    actor=query.get('actor',[''])[0]
                 if path == "/api/backups/download":
                     folder, output = create_bundle(DB_PATH, actor)
                 else:
@@ -825,10 +849,10 @@ class Handler(BaseHTTPRequestHandler):
             except (ApiError, GuidanceError, GovernanceError) as exc:
                 self.send_json({"error": str(exc)}, exc.status)
             except Exception as exc:
-                print(f"API error: {exc!r}")
+                print(f"API error: {exc!r}", flush=True)
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -858,7 +882,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
             folder = None
             try:
-                actor = parse_qs(parsed.query).get("actor", [""])[0]
+                with connect() as db:
+                    query=parse_qs(parsed.query);ctx=access.authenticate(db,self,'GET',path,{})
+                    access.authorize(db,ctx,'GET',path,query,{})
+                    actor=query.get('actor',[''])[0]
                 if path == "/api/backups/download":
                     folder, output = create_bundle(DB_PATH, actor)
                 else:
@@ -887,7 +914,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -932,7 +959,7 @@ class Handler(BaseHTTPRequestHandler):
         except sqlite3.IntegrityError as exc:
             self.send_json({"error": "ข้อมูลซ้ำหรือไม่ผ่านข้อกำหนด: " + str(exc)}, 409)
         except Exception as exc:
-            print(f"API error: {exc!r}")
+            print(f"API error: {exc!r}", flush=True)
             self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
 
     def do_POST(self):
@@ -980,6 +1007,9 @@ def main() -> None:
     initialize()
     initialize_governance(DB_PATH)
     initialize_workspace(DB_PATH)
+    initialize_shared_catalog(DB_PATH)
+    initialize_asset_import(DB_PATH)
+    access.initialize(DB_PATH)
     stop_scheduler = threading.Event()
     def run_scheduler():
         WORK_SCHEDULER["running"] = True

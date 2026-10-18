@@ -1,5 +1,6 @@
 """Editable master-data endpoints for asset categories and depreciation policies."""
 from __future__ import annotations
+from access_control import scope_sql
 
 import json
 import math
@@ -47,7 +48,7 @@ def _categories(db: sqlite3.Connection, query: dict) -> list[dict[str, Any]]:
     rows = db.execute(f"""SELECT c.id,c.category_name AS name,c.source_workbook AS source,c.notes,
         c.parent_category_id AS parentCategoryId,p.category_name AS parentName,
         c.is_active AS isActive,c.updated_at AS updatedAt,
-        (SELECT COUNT(*) FROM assets a WHERE a.category_id=c.id) AS linkedAssets,
+        (SELECT COUNT(*) FROM assets a WHERE a.category_id=c.id AND {scope_sql(db)}) AS linkedAssets,
         (SELECT COUNT(*) FROM asset_category_policy_links l WHERE l.category_id=c.id) AS linkedPolicies
         FROM asset_categories c LEFT JOIN asset_categories p ON p.id=c.parent_category_id
         {where} ORDER BY c.is_active DESC,c.category_name,c.id""").fetchall()

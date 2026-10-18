@@ -1,3 +1,4 @@
+from access_control import document_scope_sql
 """Receiving and allocation documents. Roles follow the prototype's simulated role selector."""
 import base64
 import binascii
@@ -144,12 +145,12 @@ def handle(db,method,path,query,body):
     if method=='GET' and path=='/api/supply/pending':
         actor=one('role')
         if actor not in ROLES:fail('เลือกบทบาทที่ระบบรองรับ',403)
-        return {'items':[{**dict(r),'summary':json.loads(r['data_json'])['department']} for r in db.execute("SELECT s.id,s.number,s.account_id,s.data_json,a.name AS accountName FROM supply_documents s JOIN asset_accounts a ON a.id=s.account_id WHERE s.kind='issue' AND s.status='pending' AND json_extract(s.rules_json,'$.approvalRole')=? ORDER BY s.id DESC LIMIT 100",(actor,))]}
+        return {'items':[{**dict(r),'summary':json.loads(r['data_json'])['department']} for r in db.execute("SELECT s.id,s.number,s.account_id,s.data_json,a.name AS accountName FROM supply_documents s JOIN asset_accounts a ON a.id=s.account_id WHERE s.kind='issue' AND "+document_scope_sql(db)+" AND s.status='pending' AND json_extract(s.rules_json,'$.approvalRole')=? ORDER BY s.id DESC LIMIT 100",(actor,))]}
     if method=='GET' and path=='/api/supply/documents':
         try:aid=ident(int(one('accountId')))
         except (ValueError,TypeError):fail('เลือกหน่วยงานก่อน')
         check_account(db,aid,None)
-        rows=db.execute('SELECT id,kind,number,status,revision,created_at,updated_at,data_json FROM supply_documents WHERE account_id=? ORDER BY id DESC LIMIT 200',(aid,)).fetchall()
+        rows=db.execute('SELECT id,kind,number,status,revision,created_at,updated_at,data_json FROM supply_documents s WHERE account_id=? AND '+document_scope_sql(db)+' ORDER BY id DESC LIMIT 200',(aid,)).fetchall()
         return {'items':[{**{k:r[k] for k in r.keys() if k!='data_json'},'summary':json.loads(r['data_json']).get('supplier') or json.loads(r['data_json']).get('department')} for r in rows]}
     if method=='GET' and path=='/api/supply/available':
         try:aid=ident(int(one('accountId')))

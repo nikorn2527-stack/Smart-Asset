@@ -1,5 +1,6 @@
 """Relational inventory, source lookup, register, and ITAM-style sticker APIs."""
 from __future__ import annotations
+from access_control import scope_sql
 
 import base64
 import html
@@ -110,7 +111,7 @@ def _inventory_item(row: sqlite3.Row) -> dict[str, Any]:
         "vendor": row["vendor_name"] or "", "warrantyEnd": row["warranty_end"] or "",
         "usefulLifeYears": row["linked_useful_life_years"], "monthlyDepreciation": row["monthly_depreciation"],
         "annualDepreciation": row["annual_depreciation"], "accumulatedDepreciation": row["linked_accumulated_depreciation"],
-        "netBookValue": row["linked_net_book_value"], "hasRegister": bool(row["register_id"]),
+        "depreciationValue":row["depreciation_value"], "netBookValue": row["linked_net_book_value"], "hasRegister": bool(row["register_id"]),
         "sourceDocumentId": row["source_document_id"], "sourceRowNo": row["source_row_no"],
     }
 
@@ -406,9 +407,9 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
     if method=="GET" and path=="/api/inventory":
         return inventory(db,query)
     if method=="GET" and path=="/api/register/featured":
-        row=db.execute("SELECT asset_id FROM asset_register_details ORDER BY id DESC LIMIT 1").fetchone()
+        row=db.execute("SELECT r.asset_id FROM asset_register_details r JOIN assets a ON a.id=r.asset_id WHERE "+scope_sql(db)+" ORDER BY r.id DESC LIMIT 1").fetchone()
         if not row:
-            row=db.execute("SELECT id AS asset_id FROM assets ORDER BY id LIMIT 1").fetchone()
+            row=db.execute("SELECT id AS asset_id FROM assets a WHERE "+scope_sql(db)+" ORDER BY id LIMIT 1").fetchone()
         result=asset_register(db,int(row["asset_id"])) if row else None
         return result if result else ({"error":"ยังไม่มีรายการครุภัณฑ์ในฐานข้อมูล"},404)
     if method=="GET" and path=="/api/catalog/categories":
@@ -470,7 +471,7 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
         rows=db.execute("SELECT id,rule_no AS ruleNo,category_name AS category,useful_life_years AS years,annual_rate_percent AS annualRate,scope,note,source_page AS sourcePage FROM depreciation_policies ORDER BY CAST(rule_no AS REAL),rule_no").fetchall()
         return {"items":[dict(row) for row in rows],"total":len(rows)}
     if method=="GET" and path=="/api/catalog/sources":
-        return [dict(row) for row in db.execute("SELECT id,filename,title,source_kind AS sourceKind,source_scope AS sourceScope,extraction_method AS extractionMethod,notes FROM source_documents ORDER BY id")]
+        return [dict(row) for row in db.execute("SELECT id,filename,title,source_kind AS sourceKind,source_scope AS sourceScope,extraction_method AS extractionMethod,notes FROM source_documents s WHERE s.source_kind IN ('fsn_manual','starter_catalog','reference') OR EXISTS(SELECT 1 FROM assets a WHERE a.source_document_id=s.id AND "+scope_sql(db)+") ORDER BY s.id")]
     match=re.fullmatch(r"/api/assets/(\d+)/register",path)
     if method=="GET" and match:
         result=asset_register(db,int(match.group(1)))

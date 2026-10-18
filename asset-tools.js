@@ -187,6 +187,11 @@
       $('#registerSourceInfo').textContent=sourceNames.length?`แหล่งหลักฐาน: ${sourceNames.join(' · ')}`:'ข้อมูลจากทะเบียนปัจจุบัน · ยังไม่มีเอกสารนำเข้าที่เชื่อมไว้';
       const provenance={asset:{id:a.id,code:a.code,name:a.name,sourceDocumentId:a.sourceDocumentId,sourceRowNo:a.sourceRowNo},sourceRows:data.sourceRows||[],acquisitions:data.acquisitions||[],depreciationSnapshots:data.depreciationSnapshots||[],fsnMatches:data.fsnMatches||[]};
       $('#registerSourceJson').textContent=JSON.stringify(provenance,null,2);
+      let imported=$('#registerImportedFields');
+      if(!imported){imported=document.createElement('details');imported.id='registerImportedFields';imported.className='register-imported-fields';$('#registerSourceJson').closest('details').before(imported);}
+      imported.hidden=!(data.sourceRows||[]).length;
+      imported.innerHTML='<summary>ข้อมูลทุกหัวข้อตามไฟล์นำเข้า</summary>'+(data.sourceRows||[]).map(row=>`<section><p>${esc(row.source_filename)} · แถว ${row.source_row_no}</p><div class="table-wrap"><table><thead><tr><th>หัวข้อในต้นฉบับ</th><th>ค่าที่นำเข้า</th></tr></thead><tbody>${Object.entries(row.rawData||{}).map(([name,value])=>`<tr><th>${esc(name)}</th><td>${esc(value!==null&&typeof value==='object'?JSON.stringify(value):value??'')}</td></tr>`).join('')}</tbody></table></div></section>`).join('');
+
       window.govAssetRegisterData=data;
       document.dispatchEvent(new CustomEvent('govasset:register-loaded',{detail:data}));
     } catch(error){

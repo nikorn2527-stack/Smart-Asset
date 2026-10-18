@@ -112,16 +112,24 @@ FEED = """WITH feed AS (
  OR (s.status='pending' AND :role=json_extract(s.rules_json,'$.approvalRole'))
  OR (s.status='approved' AND :role=json_extract(s.rules_json,'$.issueRole'))
  OR (s.status='issued' AND :role IN ('ผู้แจ้ง','เจ้าหน้าที่พัสดุ'))
+), scoped_feed AS (
+ SELECT * FROM feed f WHERE :scopeAccount IS NULL
+ OR (f.entity='asset' AND EXISTS(SELECT 1 FROM assets a WHERE a.id=f.entityId AND a.numbering_account_id=:scopeAccount AND (:scopeBranch IS NULL OR a.branch_id=:scopeBranch)))
+ OR (f.entity='ticket' AND EXISTS(SELECT 1 FROM tickets t JOIN assets a ON a.id=t.asset_id WHERE t.id=f.entityId AND a.numbering_account_id=:scopeAccount AND (:scopeBranch IS NULL OR a.branch_id=:scopeBranch)))
+ OR (f.entity='work' AND EXISTS(SELECT 1 FROM scheduled_work w JOIN assets a ON a.id=w.asset_id WHERE w.id=f.entityId AND a.numbering_account_id=:scopeAccount AND (:scopeBranch IS NULL OR a.branch_id=:scopeBranch)))
+ OR (f.entity='supply' AND EXISTS(SELECT 1 FROM supply_documents s WHERE s.id=f.entityId AND s.account_id=:scopeAccount AND (:scopeBranch IS NULL OR s.branch_id=:scopeBranch)))
 ), inbox AS (
- SELECT feed.*,r.read_at AS readAt FROM feed LEFT JOIN notification_reads r
- ON r.recipient_role=:role AND r.notification_key=feed.key
+ SELECT feed.*,r.read_at AS readAt FROM scoped_feed feed LEFT JOIN notification_reads r
+ ON r.recipient_role=:recipient AND r.notification_key=feed.key
 )
 """
 
 
 def parameters(db, recipient):
     now = datetime.now(TZ)
-    return {'role': recipient, 'today': now.date().isoformat(),
+    ctx=getattr(db,'access',None)
+    identity=(str(ctx['user']['id'])+':'+str(ctx['accountId'])+':'+str(ctx['branchId'])+':'+recipient) if ctx else recipient
+    return {'scopeAccount':ctx['accountId'] if ctx else None,'scopeBranch':ctx['branchId'] if ctx else None,'recipient':identity,'role': recipient, 'today': now.date().isoformat(),
             'upcoming': (now.date()+timedelta(days=settings(db)['reminderDays'])).isoformat(),
             'cutoff': (now-timedelta(days=30)).isoformat()}
 
@@ -151,7 +159,7 @@ def inbox(db, query):
         db.commit()
     return {'items': [dict(row) for row in rows], 'total': total, 'allTotal': summary['total'],
             'unreadCount': summary['unread'], 'offset': offset, 'limit': limit,
-            'recipientRole': recipient, 'serverTime': stamp(), 'scope': 'simulated-role'}
+            'recipientRole': recipient, 'serverTime': stamp(), 'scope': 'authenticated-user' if getattr(db,'access',None) else 'simulated-role'}
 
 
 def handle(db, method, path, query, body):
@@ -170,7 +178,7 @@ def handle(db, method, path, query, body):
         params['readAt'] = stamp()
         where = '' if all_items else ' WHERE key IN ('+','.join(':key'+str(i) for i in range(len(keys)))+')'
         params.update({'key'+str(i): k for i,k in enumerate(keys)})
-        db.execute(FEED+'INSERT OR IGNORE INTO notification_reads(recipient_role,notification_key,read_at) SELECT :role,key,:readAt FROM inbox'+where,params)
+        db.execute(FEED+'INSERT OR IGNORE INTO notification_reads(recipient_role,notification_key,read_at) SELECT :recipient,key,:readAt FROM inbox'+where,params)
         return {'ok': True, 'marked': db.execute('SELECT changes()').fetchone()[0]}
     if path == '/api/workflow/settings':
         if method == 'GET':

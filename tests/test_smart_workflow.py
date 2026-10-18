@@ -28,7 +28,7 @@ class HTTPFixture(unittest.TestCase):
         cls.base = f'http://127.0.0.1:{cls.port}'
         cls.log = open(Path(cls.temp.name) / 'server.log', 'w+')
         cls.proc = subprocess.Popen([sys.executable, 'server.py'], cwd=ROOT,
-            env={**os.environ, 'ASSET_DB_PATH': str(cls.db), 'PORT': str(cls.port), 'HOST':'127.0.0.1', 'PUBLIC_BASE_URL':'','WORK_SCHEDULER_INTERVAL_SECONDS':'1'},
+            env={**os.environ, 'ASSET_DB_PATH': str(cls.db), 'PORT': str(cls.port), 'HOST':'127.0.0.1', 'PUBLIC_BASE_URL':'','WORK_SCHEDULER_INTERVAL_SECONDS':'1','ASSET_AUTH_REQUIRED':getattr(cls,'auth_required','0')},
             stdout=cls.log, stderr=cls.log)
         for _ in range(100):
             try:
@@ -173,7 +173,7 @@ class SmartWorkflow(HTTPFixture):
         cls.proc.terminate()
         cls.proc.wait(timeout=10)
         cls.proc=subprocess.Popen([sys.executable,'server.py'],cwd=ROOT,
-            env={**os.environ,'ASSET_DB_PATH':str(cls.db),'PORT':str(cls.port),'HOST':'127.0.0.1','PUBLIC_BASE_URL':'','WORK_SCHEDULER_INTERVAL_SECONDS':'1'},
+            env={**os.environ,'ASSET_DB_PATH':str(cls.db),'PORT':str(cls.port),'HOST':'127.0.0.1','PUBLIC_BASE_URL':'','WORK_SCHEDULER_INTERVAL_SECONDS':'1','ASSET_AUTH_REQUIRED':getattr(cls,'auth_required','0')},
             stdout=cls.log,stderr=cls.log)
         for _ in range(100):
             try:

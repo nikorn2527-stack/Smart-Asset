@@ -81,7 +81,7 @@ let assets=[], approvalAssets=[], sheet=[], repairs=[], appConfig={approvalThres
 let inventoryRows=null, inventoryTotal=0, inventoryOffset=0, inventoryLimit=50;
 let fsnRows=null, fsnTotal=0, fsnOffset=0, fsnLimit=50, liveCategories=null, liveDepreciationRows=null;
 let inventorySearchTimer=null, fsnSearchTimer=null, inventoryRequest=0;
-let currentRole=localStorage.getItem('govAssetPrototype.role') || ROLE_REQUESTER;
+let currentRole=window.govAssetAccess?.session?.actor||localStorage.getItem('govAssetPrototype.role') || ROLE_REQUESTER;
 let activeTicketId=null;
 const assetApprovalsInFlight=new Set();
 let fontScale=Number(localStorage.getItem('govAssetPrototype.fontScale')) || 1;
@@ -175,7 +175,7 @@ function renderCatalog() { const search=($('#codeSearch')?.value||'').trim().toL
 async function loadFsn(offset=0){fsnOffset=Math.max(0,offset);try{const q=$('#codeSearch')?.value||'';const params=new URLSearchParams({q,limit:String(fsnLimit),offset:String(fsnOffset)});const result=await api(`/api/catalog/fsn?${params}`);fsnRows=result.items;fsnTotal=result.total;renderCatalog();}catch(error){showError(error);}}
 function switchView(name) {
   if (!document.getElementById(`view-${name}`)) return;
-  const parents={'operational-master':'settings','supply-settings':'settings',administration:'settings',register:'assets',survey:'assets',codes:'settings',numbering:'settings',depreciation:'settings',stickers:'settings'};
+  const parents={equipment:'settings','access-admin':'settings','operational-master':'settings','supply-settings':'settings',administration:'settings',register:'assets',survey:'assets',codes:'settings',numbering:'settings',depreciation:'settings',stickers:'settings'};
   const activeMenu=parents[name]||name;
   $$('.view').forEach(section=>section.classList.toggle('active',section.id===`view-${name}`));
   $$('.nav-item[data-view]').forEach(button=>{
@@ -183,7 +183,7 @@ function switchView(name) {
     button.classList.toggle('active',active);
     if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
   });
-  const titles={'operational-master':'ข้อมูลหลักหน่วยงาน',supply:'รับเข้า / เบิกจ่าย','supply-settings':'เงื่อนไขรับเข้าและเบิกจ่าย',administration:'ตั้งหมวดและค่าเสื่อม',work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่า',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตามงาน',approvals:'คิวรออนุมัติ',register:'เอกสารทะเบียนคุมทรัพย์สิน',stickers:'แบบสติกเกอร์และการพิมพ์',depreciation:'อายุใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'หมวดและเอกสารอ้างอิง',numbering:'จัดการเลขครุภัณฑ์'};
+  const titles={equipment:'บัญชีอุปกรณ์และนำเข้าทะเบียน','access-admin':'ผู้ใช้งานและสิทธิ์','operational-master':'ข้อมูลหลักหน่วยงาน',supply:'รับเข้า / เบิกจ่าย','supply-settings':'เงื่อนไขรับเข้าและเบิกจ่าย',administration:'ตั้งหมวดและค่าเสื่อม',work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่า',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตามงาน',approvals:'คิวรออนุมัติ',register:'เอกสารทะเบียนคุมทรัพย์สิน',stickers:'แบบสติกเกอร์และการพิมพ์',depreciation:'อายุใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'หมวดและเอกสารอ้างอิง',numbering:'จัดการเลขครุภัณฑ์'};
   const title=titles[name]||'ภาพรวม';
   $('#crumbCurrent').textContent=parents[name]?`${titles[activeMenu]} / ${title}`:title;
   document.title=`${title} — ${window.govAssetBranding?.appName || 'GovAsset'}`;

@@ -156,6 +156,7 @@ def resolve(db, body, allocate=False):
     if body.get('catalogId'):
         entry=db.execute('SELECT * FROM account_catalog WHERE id=? AND account_id=? AND category_id=?',(ident(body['catalogId']),aid,cid)).fetchone()
         if not entry: raise GovernanceError('รายการบัญชีไม่ตรงหน่วยงานหรือหมวด')
+        if 'shared_catalog_id' in entry.keys() and entry['shared_catalog_id'] and not db.execute('SELECT 1 FROM shared_equipment_catalog WHERE id=? AND is_active=1',(entry['shared_catalog_id'],)).fetchone():raise GovernanceError('ชนิดอุปกรณ์กลางนี้ปิดใช้งานแล้ว')
         if not entry['code'] and not body.get('manualCode'):raise GovernanceError('ชนิดนี้ยังไม่มีรหัสครบ เติมเลขในตารางหมวดก่อนออกเลขใหม่')
         values={**values,**json.loads(entry['values_json'])}
     branch=db.execute('SELECT code FROM account_branches WHERE id=?',(bid,)).fetchone() if bid else None
@@ -244,10 +245,11 @@ def handle(db, method, path, query, body):
         try:aid=int(query.get('accountId',[''])[0]);offset=max(0,int(query.get('offset',['0'])[0]))
         except (ValueError,TypeError):raise GovernanceError('เลือกหน่วยงานหรือหน้ารายการให้ถูกต้อง')
         q=str(query.get('q',[''])[0]).strip()[:200]
-        where='account_id=?';args=[aid]
+        check_account(db,aid)
+        where='1=1';args=[]
         if q:where+=' AND (name LIKE ? OR group_code LIKE ? OR type_code LIKE ?)';args.extend(['%'+q+'%']*3)
-        total=db.execute('SELECT COUNT(*) FROM account_manual_references WHERE '+where,args).fetchone()[0]
-        return {'items':[dict(r) for r in db.execute('SELECT * FROM account_manual_references WHERE '+where+' ORDER BY page,id LIMIT 50 OFFSET ?',[*args,offset])],'total':total,'offset':offset,'limit':50}
+        total=db.execute('SELECT COUNT(*) FROM equipment_references WHERE '+where,args).fetchone()[0]
+        return {'items':[dict(r) for r in db.execute('SELECT r.*,(SELECT filename FROM equipment_standards WHERE id=1) AS filename FROM equipment_references r WHERE '+where+' ORDER BY page,id LIMIT 50 OFFSET ?',[*args,offset])],'total':total,'offset':offset,'limit':50}
     if method=='GET' and path=='/api/governance/catalog':
         try:aid=int(query.get('accountId',[''])[0]);cid=int(query.get('categoryId',[''])[0])
         except (ValueError,TypeError):raise GovernanceError('เลือกหน่วยงานและหมวด')
@@ -273,6 +275,12 @@ def handle(db, method, path, query, body):
             db.execute('UPDATE asset_accounts SET name=?,code=?,notes=?,revision=revision+1 WHERE id=?',(name,code,notes,old['id']))
             audit(db,actor,'accounts',old['id'],dict(old),body);return {'id':old['id'],'revision':old['revision']+1}
         cur=db.execute('INSERT INTO asset_accounts(name,code,notes) VALUES(?,?,?)',(name,code,notes))
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='shared_equipment_catalog'").fetchone():
+            from shared_catalog import link_account
+            link_account(db,cur.lastrowid)
+            if body.get('useSharedStandard'):
+                pid=db.execute("INSERT INTO number_profiles(account_id,name,pattern,number_kind,source) VALUES(?,?,'{group:4}-{type:3}-{detail:4}-{seq:4}','inventory',?)",(cur.lastrowid,'หลักเกณฑ์ร่วม + เลขรันประจำชิ้น','หลักเกณฑ์ PDF ร่วมกัน')).lastrowid
+                db.execute('INSERT INTO account_bindings(account_id,profile_id) VALUES(?,?)',(cur.lastrowid,pid))
     elif path=='/api/governance/branches':
         aid=ident(body.get('accountId'));check_account(db,aid)
         name=text(body.get('name'),'ชื่อสาขา');code=text(body.get('code'),'รหัสสาขา',30)
