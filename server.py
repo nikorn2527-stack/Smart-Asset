@@ -275,6 +275,7 @@ def initialize() -> None:
             ("final_cost_approved_by", "TEXT NOT NULL DEFAULT ''"),
             ("data_origin", "TEXT NOT NULL DEFAULT 'prototype'"),
             ("approval_threshold_snapshot", "REAL"),
+            ("reporter_note", "TEXT NOT NULL DEFAULT ''"),
         ):
             if column not in ticket_columns:
                 db.execute(f"ALTER TABLE tickets ADD COLUMN {column} {declaration}")
@@ -318,7 +319,7 @@ def survey_dict(row: sqlite3.Row) -> dict:
 def ticket_dict(row: sqlite3.Row) -> dict:
     return {
         "id": row["id"], "ticketNo": row["ticket_no"], "assetId": row["asset_id"], "assetCode": row["asset_code"],
-        "assetName": row["asset_name"], "location": row["location"], "issue": row["issue"], "urgency": row["urgency"],
+        "assetName": row["asset_name"], "location": row["location"], "reporterNote": row["reporter_note"], "issue": row["issue"], "urgency": row["urgency"],
         "requester": row["requester"], "contact": row["contact"], "status": row["status"],
         "approvalThreshold": row["approval_threshold_snapshot"],
         "approvalRequired": bool(row["approval_required"]), "approvalReason": row["approval_reason"],
@@ -423,6 +424,13 @@ class Handler(BaseHTTPRequestHandler):
             extended = handle_asset_api(db, method, path, query, body)
             if extended is not None:
                 return extended
+            if method == "GET" and path == "/api/assets/search":
+                text = clean_text(query.get("q", [""])[0], 200, "คำค้น", required=False)
+                if not text:
+                    return {"items": [], "hasMore": False}
+                like = "%" + text.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+                rows = db.execute("SELECT a.id,a.name,a.code,a.location,a.status,account.name AS accountName,branch.name AS branchName FROM assets a LEFT JOIN asset_accounts account ON account.id=a.numbering_account_id LEFT JOIN account_branches branch ON branch.id=a.branch_id WHERE "+access.scope_sql(db)+" AND (a.name LIKE ? ESCAPE '!' OR a.code LIKE ? ESCAPE '!' OR a.old_asset_code LIKE ? ESCAPE '!') ORDER BY CASE WHEN a.code=? THEN 0 ELSE 1 END,a.code,a.id LIMIT 13", (like,like,like,text)).fetchall()
+                return {"items": [dict(r) for r in rows[:12]], "hasMore": len(rows)>12}
             if method == "GET" and path == "/api/assets/pending":
                 return [asset_dict(row) for row in db.execute("SELECT * FROM assets a WHERE status='รออนุมัติ' AND "+access.scope_sql(db)+" ORDER BY id DESC")]
             if method == "GET" and path == "/api/assets":
@@ -511,7 +519,7 @@ class Handler(BaseHTTPRequestHandler):
                 return public_asset(db, row)
             if method == "POST" and match[2]:
                 clean_text(body.get("contact"), 160, "ช่องทางติดต่อ")
-                ticket, status = self.create_ticket(db, {**{k: body[k] for k in ("issue", "requester", "contact", "urgency") if k in body}, "assetId": row["id"], "assetName": row["name"], "assetCode": row["code"], "location": row["location"] or body.get("location", "")})
+                ticket, status = self.create_ticket(db, {**{k: body[k] for k in ("issue", "requester", "contact", "urgency", "reporterNote", "locationMismatch") if k in body}, "assetId": row["id"], "assetName": row["name"], "assetCode": row["code"], "location": row["location"] or body.get("location", "")})
                 receipt = secrets.token_urlsafe(24)
                 db.execute("INSERT INTO ticket_receipts(ticket_id,token) VALUES(?,?)", (ticket["id"], receipt))
                 return {"ticketNo": ticket["ticketNo"], "receiptToken": receipt, "status": ticket["status"]}, status
@@ -582,7 +590,11 @@ class Handler(BaseHTTPRequestHandler):
     def create_ticket(self, db: sqlite3.Connection, body: dict):
         asset_name = clean_text(body.get("assetName"), 300, "ครุภัณฑ์")
         issue = clean_text(body.get("issue"), 3000, "อาการ")
-        location = clean_text(body.get("location"), 300, "สถานที่")
+        location = clean_text(body.get("location", ""), 300, "สถานที่", required=False)
+        reporter_note = clean_text(body.get("reporterNote", ""), 2000, "หมายเหตุผู้แจ้ง", required=False)
+        mismatch = body.get("locationMismatch") in (True,"on","true")
+        if mismatch and not reporter_note:
+            raise ApiError("กรุณาระบุที่ตั้งจริงหรือรายละเอียดที่คลาดเคลื่อนในหมายเหตุเพิ่มเติม")
         requester = clean_text(body.get("requester"), 160, "ชื่อผู้แจ้ง")
         contact = clean_text(body.get("contact", ""), 160, "ช่องทางติดต่อ", required=False)
         urgency = clean_text(body.get("urgency", "ปกติ"), 30, "ความเร่งด่วน")
@@ -610,27 +622,34 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError("รหัสอ้างอิงครุภัณฑ์ไม่ถูกต้อง")
             if len(str(raw_id)) > 19 or int(raw_id) > 9223372036854775807:
                 raise ApiError("รหัสอ้างอิงครุภัณฑ์ไม่ถูกต้อง")
-            asset = db.execute("SELECT id,code,name FROM assets WHERE id=?", (int(raw_id),)).fetchone()
+            asset = db.execute("SELECT a.id,a.code,a.name,a.location FROM assets a WHERE "+access.scope_sql(db)+" AND a.id=?", (int(raw_id),)).fetchone()
             if asset is None:
                 raise ApiError("ไม่พบครุภัณฑ์ที่แจ้งซ่อม", 404)
             asset_name, asset_code = asset["name"], asset["code"]
         elif asset_code:
-            matches = db.execute("SELECT id,code,name FROM assets WHERE code=? ORDER BY id LIMIT 2", (asset_code,)).fetchall()
+            matches = db.execute("SELECT a.id,a.code,a.name,a.location FROM assets a WHERE "+access.scope_sql(db)+" AND a.code=? ORDER BY a.id LIMIT 2", (asset_code,)).fetchall()
             if not matches:
                 raise ApiError("ไม่พบรหัสครุภัณฑ์ กรุณาเลือกจากทะเบียน", 404)
             if len(matches) > 1:
                 raise ApiError("พบรหัสครุภัณฑ์ซ้ำ กรุณาเปิดรายละเอียดรายการที่ต้องการแล้วกดแจ้งซ่อม")
             asset = matches[0]
         else:
-            matches = db.execute("SELECT id,code,name FROM assets WHERE name=? ORDER BY id LIMIT 2", (asset_name,)).fetchall()
+            matches = db.execute("SELECT a.id,a.code,a.name,a.location FROM assets a WHERE "+access.scope_sql(db)+" AND a.name=? ORDER BY a.id LIMIT 2", (asset_name,)).fetchall()
             if len(matches) > 1:
                 raise ApiError("มีครุภัณฑ์ชื่อซ้ำ กรุณาระบุรหัสครุภัณฑ์")
             asset = matches[0] if matches else None
         if asset:
             asset_name, asset_code = asset["name"], asset["code"]
-        cur = db.execute("""INSERT INTO tickets(ticket_no,asset_id,asset_code,asset_name,location,issue,urgency,requester,contact,status,created_at,updated_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""", (ticket_no, asset["id"] if asset else None, asset["code"] if asset else asset_code, asset_name, location, issue, urgency, requester, contact, "รับแจ้งใหม่", stamp, stamp))
-        db.execute("INSERT INTO ticket_events(ticket_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)", (cur.lastrowid, requester, "สร้าง Ticket", "", "รับแจ้งใหม่", "รับคำขอและออกเลข Ticket อัตโนมัติ", stamp))
+            location = asset["location"] or "ยังไม่ระบุที่ตั้งในทะเบียน"
+            if access.required() and not asset["location"] and not reporter_note:
+                raise ApiError("ทะเบียนยังไม่มีที่ตั้ง กรุณาระบุที่ตั้งจริงในหมายเหตุเพิ่มเติม")
+        elif access.required():
+            raise ApiError("กรุณาเลือกครุภัณฑ์จากทะเบียนเพื่อผูกคำขอกับรายการจริง")
+        elif not location:
+            raise ApiError("กรุณาระบุสถานที่")
+        cur = db.execute("""INSERT INTO tickets(ticket_no,asset_id,asset_code,asset_name,location,issue,urgency,requester,contact,status,created_at,updated_at,reporter_note)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (ticket_no, asset["id"] if asset else None, asset["code"] if asset else asset_code, asset_name, location, issue, urgency, requester, contact, "รับแจ้งใหม่", stamp, stamp, reporter_note))
+        db.execute("INSERT INTO ticket_events(ticket_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)", (cur.lastrowid, requester, "สร้าง Ticket", "", "รับแจ้งใหม่", "รับคำขอและออกเลข Ticket อัตโนมัติ" + ("\nหมายเหตุผู้แจ้ง: " + reporter_note if reporter_note else ""), stamp))
         if work_id is not None:
             db.execute("UPDATE scheduled_work SET repair_ticket_id=? WHERE id=?", (cur.lastrowid, work_id))
         row = db.execute("SELECT * FROM tickets WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -852,7 +871,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}", flush=True)
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -914,7 +933,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return

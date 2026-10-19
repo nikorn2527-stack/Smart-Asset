@@ -39,11 +39,7 @@
       });
       dialog.querySelectorAll('[data-smart-ticket]').forEach(button => button.onclick = () => { dialog.close(); app.openTicket(Number(button.dataset.smartTicket)); });
       $('#smartRepair', dialog).onclick = () => {
-        dialog.close(); app.openRepairDialog();
-        $('#repairAsset').value = a.name; $('#repairAssetCode').value = a.code; $('#repairLocation').value = a.location;
-        let input = $('#repairForm input[name="assetId"]');
-        if (!input) { input = document.createElement('input'); input.type='hidden'; input.name='assetId'; $('#repairForm').append(input); }
-        input.value = a.id;
+        dialog.close(); app.openRepairDialog(a);
       };
       $('#copySmartUrl', dialog).onclick = async () => {
         try { await navigator.clipboard.writeText(data.qrUrl); app.toast('คัดลอกลิงก์ประจำครุภัณฑ์แล้ว'); }

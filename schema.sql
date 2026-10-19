@@ -297,6 +297,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   location TEXT NOT NULL,
   issue TEXT NOT NULL,
   urgency TEXT NOT NULL DEFAULT 'ปกติ',
+  reporter_note TEXT NOT NULL DEFAULT '',
   requester TEXT NOT NULL,
   contact TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL,

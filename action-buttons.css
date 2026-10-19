@@ -1,0 +1,12 @@
+/* Semantic action colors: save, return, cancel, edit, inspect, and destructive actions. */
+:is(.button,.scan-button)[data-action-tone]{--action-bg:#eaf2fc;--action-border:#6992c2;--action-ink:#174b80;background:var(--action-bg);border:1px solid var(--action-border);color:var(--action-ink);box-shadow:none;font-weight:600;transition:filter .15s,box-shadow .15s}
+:is(.button,.scan-button)[data-action-tone=confirm]{--action-bg:#08764c;--action-border:#065f3d;--action-ink:#fff}
+:is(.button,.scan-button)[data-action-tone=back]{--action-bg:#245eaa;--action-border:#194b8c;--action-ink:#fff}
+:is(.button,.scan-button)[data-action-tone=cancel]{--action-bg:#f1f4f7;--action-border:#7c8b9b;--action-ink:#334155}
+:is(.button,.scan-button)[data-action-tone=edit]{--action-bg:#fff1bf;--action-border:#a67b16;--action-ink:#68450a}
+:is(.button,.scan-button)[data-action-tone=danger]{--action-bg:#b42318;--action-border:#8e1b13;--action-ink:#fff}
+:is(.button,.scan-button)[data-action-tone]:hover:not(:disabled){color:var(--action-ink);border-color:var(--action-border);background:var(--action-bg);filter:brightness(.94);box-shadow:0 2px 5px #123d5622}
+:is(.button,.scan-button)[data-action-tone]:focus-visible{outline:3px solid #2769bd;outline-offset:3px}
+:is(.button,.scan-button)[data-action-tone]:disabled{background:repeating-linear-gradient(135deg,#eef1f4,#eef1f4 6px,#e4e9ee 6px,#e4e9ee 12px);border:1px dashed #98a3af;color:#637080;opacity:1;cursor:not-allowed;box-shadow:none;filter:none}
+:is(.button,.scan-button)[data-action-tone]:disabled:not([data-action-busy=true])::after{content:' · ไม่พร้อม';font-size:.85em}
+:is(.button,.scan-button)[data-action-tone][data-action-busy=true]:disabled{cursor:wait}

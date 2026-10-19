@@ -15,3 +15,7 @@ body{background:#f3f6fa}.panel{border-radius:16px;box-shadow:0 3px 16px #16354a0
 .smart-hero{flex-wrap:wrap}
 .smart-hero>div{min-width:0;max-width:100%}
 .smart-hero>div>div{flex-wrap:wrap}
+
+.scan-card input[readonly]{background:#edf3f7;color:#27485d;cursor:default}
+.scan-card .scan-location-check{display:flex;align-items:flex-start;gap:9px;font-weight:500}
+.scan-location-check input{width:18px;height:18px;padding:0;margin:0;flex:none;accent-color:#245eaa}

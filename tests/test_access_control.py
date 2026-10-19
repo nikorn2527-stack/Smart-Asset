@@ -116,3 +116,50 @@ class AccessControl(HTTPFixture):
         c.call('/api/tickets/'+str(tickets[1]),expected=404)
         c.call('/api/tickets/'+str(tickets[0])+'/'+str(tickets[1]),expected=404)
         self.assertEqual([t['id'] for t in c.call('/api/tickets')],tickets[:1])
+
+    def test_repair_search_and_code_resolution_use_the_current_scope(self):
+        c,_=self.user(create=True)
+        code='REPAIR-'+uuid.uuid4().hex
+        with sqlite3.connect(self.db) as db:
+            db.execute('UPDATE assets SET code=? WHERE id IN (?,?)',(code,self.ids[0],self.ids[2]))
+        from urllib.parse import urlencode
+        found=c.call('/api/assets/search?'+urlencode({'q':code}))
+        self.assertEqual([a['id'] for a in found['items']],[self.ids[0]])
+        self.assertEqual(found['items'][0]['location'],'ที่ตั้ง')
+        found=c.call('/api/assets/search?'+urlencode({'q':'ของสาขาหนึ่ง'}))
+        self.assertEqual([a['id'] for a in found['items']],[self.ids[0]])
+        self.assertEqual(c.call('/api/assets/search?'+urlencode({'q':'%'}))['items'],[])
+        self.assertEqual(c.call('/api/assets/search?'+urlencode({'q':'ของอีกองค์กร'}))['items'],[])
+        ticket=c.call('/api/tickets',{'assetName':'ชื่อจากผู้ส่ง','assetCode':code,'location':'สถานที่ปลอม','requester':'ผู้แจ้ง','issue':'เปิดไม่ติด'},expected=201)
+        self.assertEqual(ticket['assetId'],self.ids[0]);self.assertEqual(ticket['assetName'],'ของสาขาหนึ่ง');self.assertEqual(ticket['location'],'ที่ตั้ง')
+
+    def test_repair_location_is_registry_snapshot_and_reporter_note_is_separate(self):
+        c,_=self.user(create=True)
+        body={'assetId':self.ids[0],'assetName':'ชื่อที่ไม่ใช้','assetCode':'ไม่ใช้','location':'ห้องที่ไม่ใช้','requester':'ผู้แจ้ง','issue':'ใช้งานไม่ได้','locationMismatch':True}
+        c.call('/api/tickets',body,expected=400)
+        body['reporterNote']='ปัจจุบันอยู่ห้องตรวจ 2 ขอให้เจ้าหน้าที่ตรวจสอบทะเบียน'
+        ticket=c.call('/api/tickets',body,expected=201)
+        self.assertEqual(ticket['location'],'ที่ตั้ง');self.assertEqual(ticket['reporterNote'],body['reporterNote'])
+        detail=c.call('/api/tickets/'+str(ticket['id']))
+        self.assertEqual(detail['reporterNote'],body['reporterNote']);self.assertTrue(any(body['reporterNote'] in e['note'] for e in detail['events']))
+        with sqlite3.connect(self.db) as db:
+            self.assertEqual(db.execute('SELECT location FROM assets WHERE id=?',(self.ids[0],)).fetchone()[0],'ที่ตั้ง')
+            db.execute("UPDATE assets SET location='' WHERE id=?",(self.ids[0],))
+        body.pop('reporterNote');body['locationMismatch']=False
+        c.call('/api/tickets',body,expected=400)
+        body['reporterNote']='ใช้งานที่ห้องเวชระเบียน ขอให้เพิ่มที่ตั้งในทะเบียน'
+        self.assertEqual(c.call('/api/tickets',body,expected=201)['location'],'ยังไม่ระบุที่ตั้งในทะเบียน')
+        c.call('/api/tickets',{'assetName':'ไม่มีในทะเบียน','location':'ห้อง','requester':'ผู้แจ้ง','issue':'เสีย'},expected=400)
+
+    def test_public_qr_repair_keeps_registry_location_and_discrepancy_note(self):
+        token=self.admin.call(f'/api/assets/{self.ids[0]}/smart')['qrUrl'].rsplit('/',1)[1]
+        anonymous=Client(self.base)
+        body={'issue':'เปิดไม่ติด','requester':'ผู้สแกน','contact':'123','location':'ที่ตั้งที่ไม่ใช้','assetId':self.ids[2],'locationMismatch':True}
+        anonymous.call(f'/api/scan/{token}/repairs',body,expected=400)
+        body['reporterNote']='ที่ตั้งจริงอยู่ห้องตรวจ 3 ขอให้ตรวจสอบทะเบียน'
+        receipt=anonymous.call(f'/api/scan/{token}/repairs',body,expected=201)
+        self.assertIn('receiptToken',receipt)
+        with sqlite3.connect(self.db) as db:
+            row=db.execute('SELECT t.asset_id,t.location,t.reporter_note FROM tickets t JOIN ticket_receipts r ON r.ticket_id=t.id WHERE r.token=?',(receipt['receiptToken'],)).fetchone()
+            self.assertEqual(row,(self.ids[0],'ที่ตั้ง',body['reporterNote']))
+            self.assertEqual(db.execute('SELECT location FROM assets WHERE id=?',(self.ids[0],)).fetchone()[0],'ที่ตั้ง')

@@ -95,3 +95,15 @@ body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>label,
 body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>.button{margin-top:0;margin-bottom:0}
 .line-recipient-row>button{margin-bottom:0}
 :is(.asset-dialog,.admin-form,.supply-toolbar,.supply-detail,.supply-settings,.inventory-row-form,.workspace-row-detail,.workspace-toolbar,.admin-account-bar,.equipment-dialog,.equipment-upload,.access-dialog,.om-dialog,.settings-panel,.line-settings) :is(select,input:not([type=checkbox],[type=radio],[type=file],[type=hidden],[type=range],[type=color])){height:42px;min-height:42px}
+
+.repair-dialog input[readonly]{background:#edf3f7;border-color:#c1cfda;color:#27485d;cursor:default}
+.repair-search-results{display:grid;gap:6px;max-height:240px;overflow:auto;border:1px solid #a7bdcf;border-radius:8px;padding:6px;margin:8px 0 14px;background:#f5f9fc}
+.repair-search-results>button{display:grid;gap:4px;text-align:left;border:1px solid #c5d5e2;border-radius:6px;padding:10px;background:#fff;color:var(--ink);font:inherit;cursor:pointer}
+.repair-search-results>button:hover,.repair-search-results>button:focus-visible{background:#eaf4ff;outline:2px solid #2769bd;outline-offset:-2px}
+.repair-search-results span,.repair-search-results small{font-size:12px;overflow-wrap:anywhere}
+.repair-dialog label.repair-location-check{display:flex;align-items:flex-start;gap:8px;font-weight:500;margin:12px 0 6px}
+.repair-location-check input{width:18px;height:18px;min-height:18px;margin:2px 0 0;flex:none;accent-color:#245eaa}
+.reporter-note b{white-space:pre-wrap;overflow-wrap:anywhere}
+.repair-dialog .field-hint{font-size:12px;line-height:1.5;margin:6px 0 10px;color:var(--muted)}
+.repair-dialog .dialog-head{position:sticky;top:0;background:#fff;z-index:2;padding-bottom:10px}
+.repair-dialog .dialog-actions{position:sticky;bottom:0;background:#fff;z-index:1;padding:12px 0 4px;border-top:1px solid var(--line)}
