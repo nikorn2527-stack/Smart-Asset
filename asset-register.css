@@ -470,3 +470,58 @@
     flex-direction: column;
   }
 }
+
+/* Modal 12-Column Ledger Preview */
+.modal-ledger-wrap {
+  background: #ffffff;
+  border: 1px solid #d2dfe8;
+  border-radius: 12px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.modal-ledger-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed #b7c8d5;
+  font-size: 11px;
+}
+
+.modal-ledger-meta div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.modal-ledger-meta span {
+  color: #64798b;
+}
+
+.modal-ledger-meta b {
+  color: #123d56;
+}
+
+.modal-ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.modal-ledger-table th,
+.modal-ledger-table td {
+  border: 1px solid #b7c8d5;
+  padding: 6px 8px;
+  vertical-align: middle;
+}
+
+.modal-ledger-table th {
+  background: #f0f5f8;
+  font-weight: 700;
+  text-align: center;
+  font-size: 10px;
+  color: #123d56;
+  white-space: nowrap;
+}
+

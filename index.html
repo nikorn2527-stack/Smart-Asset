@@ -80,9 +80,14 @@
               <div class="table-wrap"><table><thead><tr><th>รายการ</th><th>รหัส FSN</th><th>กลุ่ม / ประเภท</th><th>สถานะ</th></tr></thead><tbody id="recentRows"></tbody></table></div>
               <div class="panel-foot"><span>แสดงรายการตัวอย่างล่าสุด</span><button class="text-button" data-open-view="assets">เปิดทะเบียน <span>→</span></button></div>
             </section>
-            <section class="panel workflow-panel"><div class="panel-heading"><div><h2>ขั้นตอนการกำหนดรหัส</h2><p>ลำดับงานตามคู่มือ FSN</p></div><span class="round-icon">↗</span></div>
-              <ol class="steps"><li class="done"><span class="step-mark">✓</span><div><b>สำรวจรายการพัสดุ</b><small>บันทึกรายละเอียดและจำนวน</small></div><span class="step-state">แนวทาง</span></li><li class="done"><span class="step-mark">✓</span><div><b>จัดเข้ากลุ่ม 4 หลัก</b><small>กลุ่มและประเภทครุภัณฑ์</small></div><span class="step-state">แนวทาง</span></li><li class="current"><span class="step-mark">3</span><div><b>ระบุชนิด 3 หลัก</b><small>เลือกชนิดจากบัญชีหน่วยงาน</small></div><span class="step-state active-state">ถัดไป</span></li><li><span class="step-mark">4</span><div><b>กำหนดรายละเอียด 4 หลัก</b><small>ตรวจเลขลำดับและออกเลข</small></div></li></ol>
-              <button class="button outline full" data-open-view="survey">เริ่มรายการสำรวจ <span>→</span></button>
+            <section class="panel workflow-panel"><div class="panel-heading"><div><h2>วงจรพัสดุภาครัฐ 4 เสาหลัก</h2><p>Asset Lifecycle ตามระเบียบกระทรวงการคลังฯ</p></div><span class="round-icon">🏛️</span></div>
+              <ol class="steps">
+                <li class="done"><span class="step-mark">1</span><div><b>1. รับเข้าและตรวจรับ</b><small>ตรวจรับตาม PO/สัญญา และตั้งต้นขึ้นทะเบียน</small></div><button class="text-button" type="button" data-open-view="supply">เปิด <span>→</span></button></li>
+                <li class="done"><span class="step-mark">2</span><div><b>2. ทะเบียนและคุมทรัพย์สิน</b><small>เลข 4 ชุด ใบคุม 12 ช่อง และ Smart QR</small></div><button class="text-button" type="button" data-open-view="assets">เปิด <span>→</span></button></li>
+                <li class="current"><span class="step-mark">3</span><div><b>3. ตรวจนับและ PM</b><small>สำรวจประจำปี สแกน QR และตรวจสภาพ</small></div><button class="text-button" type="button" data-open-view="work">เปิด <span>→</span></button></li>
+                <li><span class="step-mark">4</span><div><b>4. แจ้งซ่อมและบริการ</b><small>ออก Ticket คุมวงเงินอนุมัติ และประวัติซ่อม</small></div><button class="text-button" type="button" data-open-view="repairs">เปิด <span>→</span></button></li>
+              </ol>
+              <button class="button primary full" type="button" data-open-view="assets">เปิดทะเบียนครุภัณฑ์ (เสาหลักที่ 2) <span>→</span></button>
             </section>
           </div>
           <section class="panel repair-overview"><div class="panel-heading"><div><h2>งานแจ้งซ่อมล่าสุด</h2><p>ติดตามความคืบหน้าตั้งแต่รับแจ้งจนถึงปิดงาน</p></div><button class="text-button" data-open-view="repairs">ดูงานซ่อมทั้งหมด <span>→</span></button></div><div class="table-wrap"><table><thead><tr><th>เลขที่แจ้ง</th><th>รายการ / อาการ</th><th>ความเร่งด่วน</th><th>สถานะ</th></tr></thead><tbody id="dashboardRepairRows"></tbody></table></div><div class="panel-foot"><span>ข้อมูลสาธิตใน SQLite</span><button class="text-button" data-open-view="repairs">เปิดระบบแจ้งซ่อม <span>→</span></button></div></section>
