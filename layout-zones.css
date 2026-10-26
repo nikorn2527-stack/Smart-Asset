@@ -2306,16 +2306,31 @@ table thead th {
   padding-bottom: 24px !important;
 }
 
-/* 7. Sticker Designer View */
+/* 7. Sticker Designer View - Single Screen Studio (Zero Page-Scroll) */
+#view-stickers.active {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  gap: 6px !important;
+}
+
+#view-stickers .sticker-studio-header {
+  flex: none !important;
+  margin: 0 !important;
+}
+
 #view-stickers .sticker-layout {
-  flex: 1 1 auto !important;
+  flex: 1 1 0 !important;
   min-height: 0 !important;
   height: 100% !important;
   overflow: hidden !important;
   display: grid !important;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) !important;
-  gap: 16px !important;
-  margin-bottom: 6px !important;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) !important;
+  gap: 12px !important;
+  margin-bottom: 0 !important;
 }
 
 #view-stickers .sticker-asset-panel {
@@ -2327,15 +2342,54 @@ table thead th {
 }
 
 #view-stickers #stickerAssetResults {
-  flex: 1 1 auto !important;
+  flex: 1 1 0 !important;
   min-height: 0 !important;
   overflow-y: auto !important;
 }
 
 #view-stickers .sticker-editor-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+#view-stickers .sticker-editor-workarea {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 350px) !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+#view-stickers .sticker-preview-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 10px 14px !important;
+}
+
+#view-stickers .sticker-preview-wrap {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  margin: 8px 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: auto !important;
+}
+
+#view-stickers .sticker-properties-panel {
+  display: flex !important;
+  flex-direction: column !important;
   height: 100% !important;
   min-height: 0 !important;
   overflow-y: auto !important;
+  padding: 10px 12px !important;
 }
 
 /* 8. Survey Working Sheet View */

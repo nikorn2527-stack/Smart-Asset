@@ -93,7 +93,7 @@ async function api(path, options={}) {
   if(options.method&&options.method!=='GET')document.dispatchEvent(new CustomEvent('govasset:data-changed',{detail:{path}}));
   return payload;
 }
-function toast(message) { const el=$('#toast'); el.textContent=message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),3800); }
+function toast(message) { const el=$('#toast'); if(!el) return; el.innerHTML=`<span class="toast-icon">✓</span> <span>${esc(message)}</span>`; el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),3800); }
 function showError(error) { const message=error?.message || 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้'; toast(message); const badge=$('#dbIndicator'); if(badge){badge.textContent='เชื่อมต่อระบบไม่ได้';badge.classList.add('offline');} }
 function setConnected() { const badge=$('#dbIndicator'); if(badge){badge.innerHTML='<i></i> ระบบพร้อมใช้งาน';badge.classList.remove('offline');} }
 function populateAssetCategoryOptions(rows) {

@@ -8,20 +8,65 @@
   let searchTimer = null, registerLoadEpoch = 0;
   const elementLabels = {text:'ข้อความ',qr:'QR Code',rect:'กรอบ/แถบสี',image:'ภาพ'};
   const variableMap = {
-    AssetNo:'code', AssetName:'name', AssetSiteCode:'code', Serial:'serialNumber', Type:'assetType', Brand:'brand', Model:'model',
-    Building:'building', Floor:'floor', Room:'room', Department:'department', DepartmentCode:'departmentCode', Location:'location',
-    Site:'organization', ContractNo:'poNo', Vendor:'vendor', DeviceStatus:'status', CurrentAssignee:'', WarrantyEnd:'warrantyEnd',
-    PurchaseDate:'acquiredOn', PurchasePrice:'purchasePrice', Ip:'', Mac:'', QrUrl:'code', orgName:'orgName', companyName:'companyName'
+    AssetNo:'code', Code:'code', AssetSiteCode:'code', FsnCode:'fsnCode', OldCode:'inventoryCode',
+    AssetName:'name', Name:'name', Detail:'detail', Category:'group', Group:'group',
+    Type:'assetType', AssetType:'assetType', Brand:'brand', Model:'model',
+    Serial:'serialNumber', SerialNumber:'serialNumber',
+    Location:'location', Room:'room', Floor:'floor', Building:'building',
+    Department:'department', DepartmentCode:'departmentCode',
+    Custodian:'custodian', CurrentAssignee:'custodian',
+    Site:'orgName', OrgName:'orgName', orgName:'orgName',
+    Hotline:'hotline', hotline:'hotline',
+    PurchasePrice:'purchasePrice', purchasePrice:'purchasePrice',
+    AcquisitionDate:'acquiredOn', PurchaseDate:'acquiredOn', acquiredOn:'acquiredOn',
+    FiscalYear:'fiscalYear', fiscalYear:'fiscalYear',
+    PoNo:'poNo', ContractNo:'poNo', poNo:'poNo',
+    GfmisNo:'gfmisNo', gfmisNo:'gfmisNo',
+    Vendor:'vendor', vendor:'vendor',
+    WarrantyEnd:'warrantyEnd', warrantyEnd:'warrantyEnd',
+    UsefulLife:'usefulLife', usefulLife:'usefulLife',
+    Status:'status', DeviceStatus:'status', status:'status',
+    QrUrl:'code', qrUrl:'code', Ip:'ip', Mac:'mac', companyName:'companyName'
   };
   function toast(message) { app.toast(message); }
-  function selectedPreviewAsset() { return [...state.selected.values()][0] || state.assets[0] || {code:'รหัสครุภัณฑ์',name:'ชื่อครุภัณฑ์',location:'สถานที่ตั้ง',organization:state.settings.orgName||'หน่วยงาน'}; }
+  function selectedPreviewAsset() {
+    return [...state.selected.values()][0] || state.assets[0] || {
+      code:'7110-002-0001-0001', fsnCode:'7110-002-0001', inventoryCode:'สถ.0005-0031',
+      name:'ตู้เหล็กเก็บเอกสาร 4 ลิ้นชัก', group:'ครุภัณฑ์สำนักงาน', assetType:'ตู้เก็บเอกสาร',
+      model:'รุ่นมาตรฐาน 4 ชั้น', serialNumber:'SN-DEMO-9988', location:'กลุ่มงานพัสดุและสินทรัพย์ อาคาร 1 ชั้น 2',
+      department:'ฝ่ายบริหารทั่วไป', custodian:'นายสมศักดิ์ รักงาน', purchasePrice:8500,
+      acquiredOn:'2025-10-01', fiscalYear:'2569', poNo:'PO-69-0012', gfmisNo:'GF-2569-8801',
+      vendor:'บริษัท พัสดุภัณฑ์ไทย จำกัด', warrantyEnd:'2028-09-30', usefulLife:5, status:'ใช้งานปกติ'
+    };
+  }
+  function formatCleanDate(str) {
+    if (!str) return '';
+    const m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return String(str);
+    const y = parseInt(m[1], 10), mo = parseInt(m[2], 10), d = parseInt(m[3], 10);
+    if (y < 1920) return '';
+    const thM = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const thY = y < 2400 ? y + 543 : y;
+    return `${d} ${thM[mo-1]} ${thY}`;
+  }
+  function formatPreviewValue(field, val) {
+    if (val === null || val === undefined || val === '') return '';
+    if (field === 'purchasePrice') {
+      const n = Number(val);
+      if (!isNaN(n)) return `${n.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} บาท`;
+    }
+    if (['acquiredOn', 'warrantyEnd'].includes(field)) {
+      return formatCleanDate(val);
+    }
+    return String(val);
+  }
   function previewText(text) {
     const asset = selectedPreviewAsset();
     const values = {...asset, ...state.settings};
     return String(text || '').replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (_, key) => {
       const field = variableMap[key] || key;
-      const value = values[field] ?? values[key] ?? '';
-      return String(value ?? '');
+      const rawVal = values[field] ?? values[key] ?? '';
+      return formatPreviewValue(field, rawVal);
     });
   }
   async function loadStickerAssets(offset = 0) {
@@ -111,51 +156,367 @@
     state.template.elements.push(e); state.selectedElementId=e.id; renderElementList(); renderProperties(); renderPreview();
   }
   function renderProperties() {
-    const root=$('#stickerElementProperties'), el=state.template?.elements?.find(item=>item.id===state.selectedElementId);
-    $('#stickerSelectedElementLabel').textContent=el?elementName(el):'เลือกข้อความหรือวัตถุในตัวอย่าง';
-    if(!el){root.innerHTML='<p class="item-meta">เลือกองค์ประกอบบนฉลาก หรือกดปุ่มเพิ่มองค์ประกอบ</p>';return;}
-    const field=(label,prop,value,type='number',extra='')=>`<label>${label}<input data-element-prop="${prop}" type="${type}" value="${esc(value??'')}" ${extra}></label>`;
-    let html=`<div class="sticker-property-grid">${field('X (มม.)','x',el.x,'number','step="0.1"')}${field('Y (มม.)','y',el.y,'number','step="0.1"')}${field('กว้าง (มม.)','width',el.width,'number','min="0.2" step="0.1"')}${field('สูง (มม.)','height',el.height,'number','min="0.2" step="0.1"')}${field('ลำดับชั้น','zIndex',el.zIndex??0,'number','step="1"')}${field('หมุน (องศา)','rotation',el.rotation??0,'number','step="1"')}`;
-    if(el.type==='text') html+=`<label class="wide">ข้อความ / ตัวแปร<textarea data-element-prop="content">${esc(el.content||'')}</textarea></label>${field('ขนาดตัวอักษร (pt)','fontSize',el.fontSize??7,'number','min="1" max="72" step="0.5"')}${field('น้ำหนักตัวอักษร','fontWeight',el.fontWeight??500,'number','min="100" max="900" step="100"')}<label>สีตัวอักษร<input data-element-prop="color" type="color" value="${/^#[0-9a-f]{6}$/i.test(el.color||'')?el.color:'#172b3a'}"></label><label>จัดแนว<select data-element-prop="align"><option value="left" ${el.align==='left'?'selected':''}>ซ้าย</option><option value="center" ${el.align==='center'?'selected':''}>กลาง</option><option value="right" ${el.align==='right'?'selected':''}>ขวา</option></select></label>`;
-    if(el.type==='qr') html+=`<label class="wide">ข้อความ QR<textarea data-element-prop="content">${esc(el.content||'{{QrUrl}}')}</textarea></label>`;
-    if(el.type==='rect') html+=`<label>สีพื้น<input data-element-prop="background" type="color" value="${/^#[0-9a-f]{6}$/i.test(el.background||'')?el.background:'#e8f5f3'}"></label><label>สีเส้น<input data-element-prop="borderColor" type="color" value="${/^#[0-9a-f]{6}$/i.test(el.border||'')?el.border:'#147d78'}"></label>`;
-    if(el.type==='image') html+=`<label class="wide">URL ภาพ (https://) <input data-element-prop="source" type="url" value="${esc(el.source||'')}" placeholder="https://..."></label>`;
-    html+='</div>'; root.innerHTML=html;
-    root.querySelectorAll('[data-element-prop]').forEach(input=>input.addEventListener('input',()=>{
-      const key=input.dataset.elementProp; let value=input.value;
-      if(input.type==='number')value=Number(value);
-      if(key==='borderColor')el.border=`1px solid ${value}`;else el[key]=value;
-      renderPreview(); renderElementList();
-    }));
-  }
-  function renderPreview() {
-    const root=$('#stickerPreview'); if(!root||!state.template)return;
-    const w=Math.max(5,Number(state.template.canvas.width)||75.2),h=Math.max(5,Number(state.template.canvas.height)||36);
-    const scale=Math.min(7.5,560/w,330/h),pxW=w*scale,pxH=h*scale;
-    $('#stickerCanvasSizeLabel').textContent=`${w.toLocaleString('th-TH')} × ${h.toLocaleString('th-TH')} มม.`;
-    const asset=selectedPreviewAsset();
-    const nodes=(state.template.elements||[]).slice().sort((a,b)=>(a.zIndex||0)-(b.zIndex||0)).map(el=>{
-      const style=`left:${Number(el.x||0)*scale}px;top:${Number(el.y||0)*scale}px;width:${Number(el.width||0)*scale}px;height:${Number(el.height||0)*scale}px;z-index:${Number(el.zIndex||0)};opacity:${Number(el.opacity??1)};transform:rotate(${Number(el.rotation||0)}deg);`;
-      const selected=el.id===state.selectedElementId?'selected':'';
-      if(el.type==='rect')return `<div class="sticker-preview-node ${selected}" data-preview-id="${esc(el.id)}" style="${style}background:${esc(el.background||'transparent')};border:${esc(el.border||'none')};border-radius:${Number(el.borderRadius||0)*scale}px"></div>`;
-      if(el.type==='qr')return `<div class="sticker-preview-node sticker-preview-qr ${selected}" data-preview-id="${esc(el.id)}" style="${style}">QR</div>`;
-      if(el.type==='image')return `<img class="sticker-preview-node sticker-preview-image ${selected}" data-preview-id="${esc(el.id)}" style="${style}" src="${/^https:\/\//.test(el.source||'')?esc(el.source):''}" alt="">`;
-      const size=Number(el.fontSize||7)*scale*25.4/72, align=el.align||'left';
-      return `<div class="sticker-preview-node sticker-preview-text ${selected}" data-preview-id="${esc(el.id)}" style="${style}font-size:${size}px;font-weight:${Number(el.fontWeight||500)};color:${esc(el.color||'#172b3a')};text-align:${align};align-items:${el.valign==='bottom'?'flex-end':el.valign==='center'?'center':'flex-start'};justify-content:${align==='center'?'center':align==='right'?'flex-end':'flex-start'}">${esc(previewText(el.content||''))}</div>`;
-    }).join('');
-    root.innerHTML=`<div class="sticker-preview-canvas" style="width:${pxW}px;height:${pxH}px;overflow:${state.template.overflow==='visible'?'visible':'hidden'}">${nodes}</div>`;
-    root.querySelectorAll('[data-preview-id]').forEach(node=>{
-      node.addEventListener('pointerdown',event=>startDrag(event,node.dataset.previewId,scale));
-      node.addEventListener('click',event=>{event.stopPropagation();selectElement(node.dataset.previewId);});
+    const root = $('#stickerElementProperties'), el = state.template?.elements?.find(item => item.id === state.selectedElementId);
+    $('#stickerSelectedElementLabel').textContent = el ? elementName(el) : 'เลือกข้อความหรือวัตถุในตัวอย่าง';
+    if (!el) {
+      root.innerHTML = '<p class="item-meta">คลิกเลือกข้อความหรือวัตถุบนฉลากเพื่อตั้งค่า หรือกดปุ่มเพิ่มด้านบน</p>';
+      return;
+    }
+    const canvasW = Number(state.template?.canvas?.width) || 75.2;
+
+    const numField = (label, prop, val, step = '0.1', unit = 'มม.') => `
+      <label class="prop-field-num">
+        <span class="prop-label">${label}</span>
+        <div class="input-with-unit">
+          <input data-element-prop="${prop}" type="number" step="${step}" value="${esc(val ?? 0)}">
+          <small>${unit}</small>
+        </div>
+      </label>`;
+
+    let html = `
+      <div class="prop-section">
+        <div class="prop-section-title">📐 ตำแหน่งและขนาด (ลากจุดมุมบนฉลากได้)</div>
+        <div class="sticker-property-grid">
+          ${numField('ระยะจากซ้าย (X)', 'x', el.x, '0.1', 'มม.')}
+          ${numField('ระยะจากบน (Y)', 'y', el.y, '0.1', 'มม.')}
+          ${numField('ความกว้าง', 'width', el.width, '0.1', 'มม.')}
+          ${numField('ความสูง', 'height', el.height, '0.1', 'มม.')}
+        </div>
+        <div class="prop-quick-align">
+          <span class="prop-sublabel">จัดตำแหน่งบนฉลาก:</span>
+          <div class="btn-group-mini">
+            <button type="button" class="mini-prop-btn" data-align-canvas="left" title="ชิดขอบซ้าย">⫷ ชิดซ้าย</button>
+            <button type="button" class="mini-prop-btn" data-align-canvas="center" title="กึ่งกลางแผ่น">≡ กึ่งกลาง</button>
+            <button type="button" class="mini-prop-btn" data-align-canvas="right" title="ชิดขอบขวา">⫸ ชิดขวา</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    if (el.type === 'text') {
+      const fSize = Number(el.fontSize || 7);
+      const fWeight = Number(el.fontWeight || 500);
+      const fAlign = el.align || 'left';
+      const fColor = /^#[0-9a-f]{6}$/i.test(el.color || '') ? el.color : '#172b3a';
+
+      html += `
+        <div class="prop-section">
+          <div class="prop-section-title">✏️ ข้อความและตัวแปรข้อมูล</div>
+          <label class="wide">
+            <span class="prop-label">ข้อความที่แสดง (พิมพ์ข้อความ หรือใส่ตัวแปร <code>{{...}}</code>)</span>
+            <textarea id="propContentInput" data-element-prop="content" rows="3">${esc(el.content || '')}</textarea>
+          </label>
+          <div class="quick-var-chips">
+            <span class="prop-sublabel">แทรกตัวแปรด่วน:</span>
+            <div class="chips-row">
+              <button type="button" class="quick-chip" data-insert-var="{{AssetNo}}">＋ รหัสครุภัณฑ์</button>
+              <button type="button" class="quick-chip" data-insert-var="{{AssetName}}">＋ ชื่อครุภัณฑ์</button>
+              <button type="button" class="quick-chip" data-insert-var="{{Location}}">＋ สถานที่ตั้ง</button>
+              <button type="button" class="quick-chip" data-insert-var="{{Department}}">＋ แผนก</button>
+              <button type="button" class="quick-chip" data-insert-var="{{Serial}}">＋ S/N</button>
+              <button type="button" class="quick-chip" data-insert-var="{{WarrantyEnd}}">＋ วันสิ้นสุดประกัน</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="prop-section">
+          <div class="prop-section-title">🔤 รูปแบบตัวอักษร</div>
+          <div class="format-control-row">
+            <label class="prop-field-num flex-1">
+              <span class="prop-label">ขนาดตัวอักษร (pt)</span>
+              <div class="input-with-unit">
+                <input data-element-prop="fontSize" type="number" min="2" max="72" step="0.5" value="${fSize}">
+                <small>pt</small>
+              </div>
+            </label>
+            <div class="font-presets">
+              <button type="button" class="size-preset-btn ${fSize === 6 ? 'active' : ''}" data-set-size="6">6</button>
+              <button type="button" class="size-preset-btn ${fSize === 8 ? 'active' : ''}" data-set-size="8">8</button>
+              <button type="button" class="size-preset-btn ${fSize === 10 ? 'active' : ''}" data-set-size="10">10</button>
+              <button type="button" class="size-preset-btn ${fSize === 12 ? 'active' : ''}" data-set-size="12">12</button>
+              <button type="button" class="size-preset-btn ${fSize === 14 ? 'active' : ''}" data-set-size="14">14</button>
+            </div>
+          </div>
+
+          <div class="format-toggle-group">
+            <span class="prop-label">ความหนาตัวอักษร:</span>
+            <div class="toggle-buttons">
+              <button type="button" class="toggle-btn ${fWeight <= 400 ? 'active' : ''}" data-set-weight="400">ปกติ</button>
+              <button type="button" class="toggle-btn ${fWeight === 500 || fWeight === 600 ? 'active' : ''}" data-set-weight="600">ปานกลาง</button>
+              <button type="button" class="toggle-btn ${fWeight >= 700 ? 'active' : ''}" data-set-weight="700">ตัวหนา</button>
+            </div>
+          </div>
+
+          <div class="format-toggle-group">
+            <span class="prop-label">การจัดชิดขอบ:</span>
+            <div class="toggle-buttons">
+              <button type="button" class="toggle-btn ${fAlign === 'left' ? 'active' : ''}" data-set-align="left">⫷ ชิดซ้าย</button>
+              <button type="button" class="toggle-btn ${fAlign === 'center' ? 'active' : ''}" data-set-align="center">≡ กึ่งกลาง</button>
+              <button type="button" class="toggle-btn ${fAlign === 'right' ? 'active' : ''}" data-set-align="right">⫸ ชิดขวา</button>
+            </div>
+          </div>
+
+          <div class="format-color-row">
+            <label class="color-picker-label">
+              <span class="prop-label">สีตัวอักษร</span>
+              <div class="color-picker-box">
+                <input data-element-prop="color" type="color" value="${fColor}">
+                <span class="color-hex">${fColor}</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      `;
+    }
+
+    if (el.type === 'qr') {
+      html += `
+        <div class="prop-section">
+          <div class="prop-section-title">📱 ข้อมูล QR Code</div>
+          <label class="wide">
+            <span class="prop-label">เนื้อหาสำหรับสร้าง QR (ค่าเริ่มต้นสร้างลิงก์ Smart QR อัตโนมัติ)</span>
+            <textarea id="propContentInput" data-element-prop="content" rows="2">${esc(el.content || '{{QrUrl}}')}</textarea>
+          </label>
+          <p class="field-hint">สแกนเพื่อเปิดประวัติครุภัณฑ์และแจ้งซ่อมออนไลน์ทันที</p>
+        </div>
+      `;
+    }
+
+    if (el.type === 'rect') {
+      const bg = /^#[0-9a-f]{6}$/i.test(el.background || '') ? el.background : '#e8f5f3';
+      const border = /^#[0-9a-f]{6}$/i.test(el.border || '') ? el.border : '#147d78';
+      html += `
+        <div class="prop-section">
+          <div class="prop-section-title">🎨 แถบสีและเส้นขอบ</div>
+          <div class="sticker-property-grid">
+            <label class="color-picker-label">
+              <span class="prop-label">สีพื้นหลัง</span>
+              <div class="color-picker-box">
+                <input data-element-prop="background" type="color" value="${bg}">
+                <span class="color-hex">${bg}</span>
+              </div>
+            </label>
+            <label class="color-picker-label">
+              <span class="prop-label">สีเส้นขอบ</span>
+              <div class="color-picker-box">
+                <input data-element-prop="borderColor" type="color" value="${border}">
+                <span class="color-hex">${border}</span>
+              </div>
+            </label>
+          </div>
+          ${numField('ความโค้งมนขอบ (Radius)', 'borderRadius', el.borderRadius || 0, '0.5', 'มม.')}
+        </div>
+      `;
+    }
+
+    if (el.type === 'image') {
+      html += `
+        <div class="prop-section">
+          <div class="prop-section-title">🖼️ ตราสัญลักษณ์ / ภาพ</div>
+          <label class="wide">
+            <span class="prop-label">URL รูปภาพ (https://)</span>
+            <input data-element-prop="source" type="url" value="${esc(el.source || '')}" placeholder="https://example.com/logo.png">
+          </label>
+        </div>
+      `;
+    }
+
+    html += `
+      <div class="prop-section">
+        <div class="prop-section-title">🔄 การหมุนและลำดับชั้น</div>
+        <div class="sticker-property-grid">
+          ${numField('หมุนองศา', 'rotation', el.rotation || 0, '1', '°')}
+          ${numField('ลำดับชั้น (Z-Index)', 'zIndex', el.zIndex || 0, '1', '')}
+        </div>
+      </div>
+    `;
+
+    root.innerHTML = html;
+
+    root.querySelectorAll('[data-element-prop]').forEach(input => {
+      input.addEventListener('input', () => {
+        const key = input.dataset.elementProp;
+        let value = input.value;
+        if (input.type === 'number') value = Number(value);
+        if (key === 'borderColor') el.border = `1px solid ${value}`;
+        else el[key] = value;
+        const hex = input.closest('.color-picker-box')?.querySelector('.color-hex');
+        if (hex) hex.textContent = value;
+        renderPreview();
+        renderElementList();
+      });
+    });
+
+    root.querySelectorAll('[data-align-canvas]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const align = btn.dataset.alignCanvas;
+        const w = Number(el.width || 5);
+        if (align === 'left') el.x = 0;
+        else if (align === 'center') el.x = Math.max(0, Math.round(((canvasW - w) / 2) * 10) / 10);
+        else if (align === 'right') el.x = Math.max(0, Math.round((canvasW - w) * 10) / 10);
+        renderProperties();
+        renderPreview();
+      });
+    });
+
+    root.querySelectorAll('[data-set-size]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        el.fontSize = Number(btn.dataset.setSize);
+        renderProperties();
+        renderPreview();
+      });
+    });
+
+    root.querySelectorAll('[data-set-weight]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        el.fontWeight = Number(btn.dataset.setWeight);
+        renderProperties();
+        renderPreview();
+      });
+    });
+
+    root.querySelectorAll('[data-set-align]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        el.align = btn.dataset.setAlign;
+        renderProperties();
+        renderPreview();
+      });
+    });
+
+    root.querySelectorAll('[data-insert-var]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const v = btn.dataset.insertVar;
+        const txt = root.querySelector('#propContentInput');
+        if (txt) {
+          const start = txt.selectionStart || txt.value.length;
+          const end = txt.selectionEnd || txt.value.length;
+          const prev = txt.value;
+          txt.value = prev.substring(0, start) + v + prev.substring(end);
+          el.content = txt.value;
+          renderPreview();
+          renderElementList();
+        }
+      });
     });
   }
-  function startDrag(event,id,scale) {
-    if(event.button!==0)return;
-    const element=state.template.elements.find(e=>e.id===id);if(!element)return;
-    state.selectedElementId=id; const sx=event.clientX,sy=event.clientY,ox=Number(element.x||0),oy=Number(element.y||0);
-    const move=e=>{element.x=Math.round((ox+(e.clientX-sx)/scale)*10)/10;element.y=Math.round((oy+(e.clientY-sy)/scale)*10)/10;const node=$(`[data-preview-id="${CSS.escape(id)}"]`);if(node){node.style.left=`${element.x*scale}px`;node.style.top=`${element.y*scale}px`;}};
-    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);renderElementList();renderProperties();};
-    window.addEventListener('pointermove',move);window.addEventListener('pointerup',up,{once:true});event.preventDefault();
+
+  function renderPreview() {
+    const root = $('#stickerPreview'); if (!root || !state.template) return;
+    const w = Math.max(5, Number(state.template.canvas.width) || 75.2), h = Math.max(5, Number(state.template.canvas.height) || 36);
+    const scale = Math.min(7.5, 560 / w, 330 / h), pxW = w * scale, pxH = h * scale;
+    $('#stickerCanvasSizeLabel').textContent = `${w.toLocaleString('th-TH')} × ${h.toLocaleString('th-TH')} มม.`;
+
+    const nodes = (state.template.elements || []).slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(el => {
+      const isSelected = el.id === state.selectedElementId;
+      const style = `left:${Number(el.x || 0) * scale}px;top:${Number(el.y || 0) * scale}px;width:${Number(el.width || 0) * scale}px;height:${Number(el.height || 0) * scale}px;z-index:${Number(el.zIndex || 0)};opacity:${Number(el.opacity ?? 1)};transform:rotate(${Number(el.rotation || 0)}deg);`;
+      const selectedClass = isSelected ? 'selected' : '';
+      const handles = isSelected ? `
+        <div class="sticker-resize-handle handle-se" data-resize-handle="se" title="ลากเพื่อขยาย/ย่อ"></div>
+        <div class="sticker-resize-handle handle-e" data-resize-handle="e" title="ลากเพื่อปรับความกว้าง"></div>
+        <div class="sticker-resize-handle handle-s" data-resize-handle="s" title="ลากเพื่อปรับความสูง"></div>
+      ` : '';
+
+      if (el.type === 'rect') {
+        return `<div class="sticker-preview-node ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}background:${esc(el.background || 'transparent')};border:${esc(el.border || 'none')};border-radius:${Number(el.borderRadius || 0) * scale}px">${handles}</div>`;
+      }
+      if (el.type === 'qr') {
+        return `<div class="sticker-preview-node sticker-preview-qr ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}"><span>QR Code</span>${handles}</div>`;
+      }
+      if (el.type === 'image') {
+        return `<div class="sticker-preview-node sticker-preview-image ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}"><img src="${/^https:\/\//.test(el.source || '') ? esc(el.source) : ''}" alt="">${handles}</div>`;
+      }
+      const size = Number(el.fontSize || 7) * scale * 25.4 / 72, align = el.align || 'left';
+      return `<div class="sticker-preview-node sticker-preview-text ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}font-size:${size}px;font-weight:${Number(el.fontWeight || 500)};color:${esc(el.color || '#172b3a')};text-align:${align};align-items:${el.valign === 'bottom' ? 'flex-end' : el.valign === 'center' ? 'center' : 'flex-start'};justify-content:${align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start'}">${esc(previewText(el.content || ''))}${handles}</div>`;
+    }).join('');
+
+    root.innerHTML = `<div class="sticker-preview-canvas" style="width:${pxW}px;height:${pxH}px;overflow:${state.template.overflow === 'visible' ? 'visible' : 'hidden'}">${nodes}</div>`;
+
+    root.querySelectorAll('[data-preview-id]').forEach(node => {
+      node.addEventListener('pointerdown', event => startDrag(event, node.dataset.previewId, scale));
+      node.addEventListener('click', event => { event.stopPropagation(); selectElement(node.dataset.previewId); });
+    });
+
+    root.querySelectorAll('[data-resize-handle]').forEach(handle => {
+      handle.addEventListener('pointerdown', event => {
+        event.stopPropagation();
+        const nodeId = handle.closest('[data-preview-id]')?.dataset.previewId;
+        if (nodeId) startResize(event, nodeId, handle.dataset.resizeHandle, scale);
+      });
+    });
+  }
+
+  function startResize(event, id, handle, scale) {
+    if (event.button !== 0) return;
+    const element = state.template.elements.find(e => e.id === id);
+    if (!element) return;
+    state.selectedElementId = id;
+    const sx = event.clientX, sy = event.clientY;
+    const ow = Number(element.width || 5), oh = Number(element.height || 5);
+    const canvasW = Number(state.template.canvas.width) || 75.2;
+    const canvasH = Number(state.template.canvas.height) || 36;
+
+    const move = e => {
+      const dx = (e.clientX - sx) / scale;
+      const dy = (e.clientY - sy) / scale;
+      if (handle === 'se' || handle === 'e') {
+        const newW = Math.max(1, Math.round((ow + dx) * 10) / 10);
+        element.width = Math.min(newW, Math.round((canvasW - (element.x || 0)) * 10) / 10);
+      }
+      if (handle === 'se' || handle === 's') {
+        const newH = Math.max(1, Math.round((oh + dy) * 10) / 10);
+        element.height = Math.min(newH, Math.round((canvasH - (element.y || 0)) * 10) / 10);
+      }
+      const node = $(`[data-preview-id="${CSS.escape(id)}"]`);
+      if (node) {
+        node.style.width = `${element.width * scale}px`;
+        node.style.height = `${element.height * scale}px`;
+      }
+      const wInput = $(`[data-element-prop="width"]`);
+      const hInput = $(`[data-element-prop="height"]`);
+      if (wInput) wInput.value = element.width;
+      if (hInput) hInput.value = element.height;
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      renderElementList();
+      renderProperties();
+      renderPreview();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up, { once: true });
+    event.preventDefault();
+  }
+
+  function startDrag(event, id, scale) {
+    if (event.button !== 0) return;
+    if (event.target.closest('.sticker-resize-handle')) return;
+    const element = state.template.elements.find(e => e.id === id);
+    if (!element) return;
+    state.selectedElementId = id;
+    const sx = event.clientX, sy = event.clientY, ox = Number(element.x || 0), oy = Number(element.y || 0);
+    const move = e => {
+      element.x = Math.round((ox + (e.clientX - sx) / scale) * 10) / 10;
+      element.y = Math.round((oy + (e.clientY - sy) / scale) * 10) / 10;
+      const node = $(`[data-preview-id="${CSS.escape(id)}"]`);
+      if (node) {
+        node.style.left = `${element.x * scale}px`;
+        node.style.top = `${element.y * scale}px`;
+      }
+      const xInput = $(`[data-element-prop="x"]`);
+      const yInput = $(`[data-element-prop="y"]`);
+      if (xInput) xInput.value = element.x;
+      if (yInput) yInput.value = element.y;
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      renderElementList();
+      renderProperties();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up, { once: true });
+    event.preventDefault();
   }
   async function saveTemplate(active=false) {
     if(!state.template)return;
