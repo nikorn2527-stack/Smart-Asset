@@ -130,9 +130,11 @@ def selected_binding(db, aid, bid, cid, on):
         return eligible[0] if eligible else None
     return choose('profile_id'),choose('policy_id')
 
-def policy_snapshot(db, pid):
+def policy_snapshot(db, pid, binding_id=None):
     row=db.execute('SELECT * FROM depreciation_policies WHERE id=? AND is_active=1',(pid,)).fetchone()
-    if not row: raise GovernanceError('หลักเกณฑ์ค่าเสื่อมถูกปิดใช้งานหรือไม่พบ')
+    if not row:
+        hint = f" (Binding #{binding_id})" if binding_id else ""
+        raise GovernanceError(f"หลักเกณฑ์ค่าเสื่อมถูกปิดใช้งานหรือไม่พบ{hint} กรุณาตรวจสอบหรือเปลี่ยนหลักเกณฑ์ในหน้าธรรมาภิบาล")
     return dict(row)
 
 def resolve(db, body, allocate=False):
@@ -198,7 +200,7 @@ def resolve(db, body, allocate=False):
         resolved['seq']=str(next_value).zfill(seqwidth)
         if allocate: db.execute('INSERT INTO account_sequences(account_id,profile_id,scope_key,value) VALUES(?,?,?,?) ON CONFLICT(account_id,profile_id,scope_key) DO UPDATE SET value=excluded.value',(aid,profile['id'],key,next_value))
     code=body['manualCode'] if manual else TOKEN.sub(lambda m:resolved[m[1]],pattern)
-    ps=policy_snapshot(db,pb['policy_id']) if pb else None
+    ps=policy_snapshot(db,pb['policy_id'],pb['id']) if pb else None
     override=body.get('policyOverrideId')
     reason=''
     if override:
@@ -217,7 +219,11 @@ def calculate(snapshot, cost, acquired, as_of=None):
         if not math.isfinite(cost) or cost<0:raise ValueError()
     except (ValueError,TypeError):return {'status':'incomplete','message':'ระบุราคาทุนและวันเริ่มคิดค่าเสื่อมก่อนคำนวณ'}
     residual=cost*float(snapshot.get('residual_value_percent') or 0)/100
-    if snapshot['calculation_method']=='useful_life': annual=(cost-residual)/float(snapshot['useful_life_years'])
+    if snapshot.get('calculation_method')=='useful_life':
+        try: years = float(snapshot.get('useful_life_years') or 0)
+        except (ValueError,TypeError): years = 0
+        if years <= 0: return {'status':'review','message':'หลักเกณฑ์ยังไม่ได้ระบุอายุการใช้งานที่ถูกต้อง (ต้องมากกว่า 0 ปี)'}
+        annual=(cost-residual)/years
     else: annual=cost*float(snapshot.get('annual_rate_percent') or 0)/100
     days=max(0,(end-start).days);acc=min(cost-residual,max(0,annual*days/365))
     return {'status':'calculated','annual':round(annual,2),'accumulated':round(acc,2),'netBookValue':round(cost-acc,2),'residual':round(residual,2),'asOf':end.isoformat(),'days':days,'convention':'จำนวนวันจริง / 365; ไม่นับวันเริ่มต้น; จำกัดไม่ต่ำกว่ามูลค่าคงเหลือ'}

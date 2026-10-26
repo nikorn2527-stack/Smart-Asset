@@ -134,9 +134,19 @@ def _event(db: sqlite3.Connection, entity_type: str, entity_id: int, actor: str,
     )
 
 
+def _resolve_actor(db: sqlite3.Connection, body: dict) -> str:
+    ctx = getattr(db, "access", None)
+    if ctx and ctx.get("user") and ctx["user"].get("username"):
+        return ctx["user"]["username"]
+    return _text(body.get("actor", "เจ้าหน้าที่พัสดุ"), "ผู้บันทึก", 120)
+
+
 def _save_category(db: sqlite3.Connection, body: dict, category_id: int | None = None):
     name = _text(body.get("name"), "ชื่อหมวด", 300)
     notes = _text(body.get("notes", ""), "หมายเหตุ", 1000, required=False, multiline=True)
+    dup = db.execute("SELECT id FROM asset_categories WHERE category_name=? AND id!=? AND is_active=1", (name, category_id or -1)).fetchone()
+    if dup:
+        return {"error": f"ชื่อหมวด '{name}' มีอยู่ในระบบแล้ว กรุณาใช้ชื่ออื่น"}, 409
     parent = body.get("parentCategoryId") or None
     if parent is not None:
         try:
@@ -147,7 +157,15 @@ def _save_category(db: sqlite3.Connection, body: dict, category_id: int | None =
             raise ValueError("หมวดไม่สามารถเป็นหมวดแม่ของตัวเอง")
         if not db.execute("SELECT 1 FROM asset_categories WHERE id=? AND is_active=1", (parent,)).fetchone():
             raise ValueError("ไม่พบหมวดแม่ที่เลือก")
-    actor = _text(body.get("actor", "เจ้าหน้าที่พัสดุ"), "ผู้บันทึก", 120)
+        curr = parent
+        visited = {category_id} if category_id else set()
+        while curr is not None:
+            if curr in visited:
+                raise ValueError("ไม่สามารถกำหนดหมวดแม่ที่จะทำให้เกิดการอ้างอิงวนลูปได้")
+            visited.add(curr)
+            row = db.execute("SELECT parent_category_id FROM asset_categories WHERE id=?", (curr,)).fetchone()
+            curr = row[0] if row and row[0] else None
+    actor = _resolve_actor(db, body)
     if category_id is None:
         cur = db.execute("INSERT INTO asset_categories(category_name,source_workbook,parent_category_id,notes,is_active,updated_at) VALUES(?,?,?,?,1,CURRENT_TIMESTAMP)", (name, "", parent, notes))
         new_id = int(cur.lastrowid)
@@ -160,6 +178,7 @@ def _save_category(db: sqlite3.Connection, body: dict, category_id: int | None =
     before = _snapshot_category(current)
     is_active = int(bool(body.get("isActive", current["is_active"])))
     db.execute("UPDATE asset_categories SET category_name=?,parent_category_id=?,notes=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (name, parent, notes, is_active, category_id))
+    db.execute("UPDATE assets SET group_name=? WHERE category_id=?", (name, category_id))
     after = {"id": category_id, "name": name, "notes": notes, "parentCategoryId": parent, "isActive": bool(is_active)}
     _event(db, "category", category_id, actor, "restore" if is_active and not current["is_active"] else "update", before, after)
     return after
@@ -169,8 +188,12 @@ def _deactivate_category(db: sqlite3.Connection, category_id: int, body: dict):
     current = db.execute("SELECT * FROM asset_categories WHERE id=?", (category_id,)).fetchone()
     if not current:
         return {"error": "ไม่พบหมวดนี้"}, 404
+    active_children = db.execute("SELECT id, category_name FROM asset_categories WHERE parent_category_id=? AND is_active=1", (category_id,)).fetchall()
+    if active_children:
+        child_names = [r["category_name"] for r in active_children]
+        return {"error": f"ไม่สามารถปิดใช้งานหมวดนี้ได้เนื่องจากยังมีหมวดย่อยที่เปิดใช้งานอยู่: {', '.join(child_names)} กรุณาย้ายหรือปิดหมวดย่อยก่อน"}, 400
     before = _snapshot_category(current)
-    actor = _text(body.get("actor", "เจ้าหน้าที่พัสดุ"), "ผู้บันทึก", 120)
+    actor = _resolve_actor(db, body)
     after = {**before, "isActive": False}
     db.execute("UPDATE asset_categories SET is_active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?", (category_id,))
     _event(db, "category", category_id, actor, "delete", before, after)
@@ -179,7 +202,10 @@ def _deactivate_category(db: sqlite3.Connection, category_id: int, body: dict):
 
 def _save_policy(db: sqlite3.Connection, body: dict, policy_id: int | None = None):
     rule_no, category, years, rate, method, residual, scope, note, category_ids = _policy_fields(db, body)
-    actor = _text(body.get("actor", "เจ้าหน้าที่พัสดุ"), "ผู้บันทึก", 120)
+    dup_rule = db.execute("SELECT id FROM depreciation_policies WHERE rule_no=? AND id!=? AND is_active=1", (rule_no, policy_id or -1)).fetchone()
+    if dup_rule:
+        return {"error": f"รหัส/เลขที่หลักเกณฑ์ '{rule_no}' มีอยู่ในระบบแล้ว กรุณาใช้เลขอื่น"}, 409
+    actor = _resolve_actor(db, body)
     if policy_id is None:
         cur = db.execute("INSERT INTO depreciation_policies(rule_no,category_name,useful_life_years,annual_rate_percent,scope,note,calculation_method,residual_value_percent,is_active,updated_at) VALUES(?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP)", (rule_no, category, years, rate, scope, note, method, residual))
         policy_id = int(cur.lastrowid)
@@ -206,8 +232,19 @@ def _deactivate_policy(db: sqlite3.Connection, policy_id: int, body: dict):
     current = db.execute("SELECT * FROM depreciation_policies WHERE id=?", (policy_id,)).fetchone()
     if not current:
         return {"error": "ไม่พบหลักเกณฑ์ค่าเสื่อมนี้"}, 404
+    active_bindings = db.execute("""
+        SELECT b.id, a.name AS account_name, br.name AS branch_name, c.category_name
+        FROM account_bindings b
+        JOIN asset_accounts a ON a.id = b.account_id
+        LEFT JOIN account_branches br ON br.id = b.branch_id
+        LEFT JOIN asset_categories c ON c.id = b.category_id
+        WHERE b.policy_id = ? AND b.is_active = 1
+    """, (policy_id,)).fetchall()
+    if active_bindings:
+        details = [f"{b['account_name']}" + (f" สาขา {b['branch_name']}" if b['branch_name'] else "") + (f" หมวด {b['category_name']}" if b['category_name'] else "") + f" (Binding #{b['id']})" for b in active_bindings]
+        return {"error": f"ไม่สามารถปิดใช้งานหลักเกณฑ์นี้ได้เนื่องจากยังผูกกับเงื่อนไขการใช้งาน: {', '.join(details)} กรุณาเปลี่ยนหลักเกณฑ์ในหน้าธรรมาภิบาลก่อนปิดใช้งาน"}, 400
     before = _snapshot_policy(current)
-    actor = _text(body.get("actor", "เจ้าหน้าที่พัสดุ"), "ผู้บันทึก", 120)
+    actor = _resolve_actor(db, body)
     after = {**before, "isActive": False}
     db.execute("UPDATE depreciation_policies SET is_active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?", (policy_id,))
     _event(db, "depreciation_policy", policy_id, actor, "delete", before, after)
