@@ -94,7 +94,7 @@ async function api(path, options={}) {
   return payload;
 }
 function toast(message) { const el=$('#toast'); el.textContent=message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),3800); }
-function showError(error) { const message=error?.message || 'เชื่อมต่อ SQLite ไม่สำเร็จ'; toast(message); const badge=$('#dbIndicator'); if(badge){badge.textContent='เชื่อมต่อระบบไม่ได้';badge.classList.add('offline');} }
+function showError(error) { const message=error?.message || 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้'; toast(message); const badge=$('#dbIndicator'); if(badge){badge.textContent='เชื่อมต่อระบบไม่ได้';badge.classList.add('offline');} }
 function setConnected() { const badge=$('#dbIndicator'); if(badge){badge.innerHTML='<i></i> ระบบพร้อมใช้งาน';badge.classList.remove('offline');} }
 function populateAssetCategoryOptions(rows) {
   const categories=(Array.isArray(rows)?rows:[]).filter(item=>item&&item.isActive!==false&&Number.isInteger(Number(item.id))&&Number(item.id)>0);
@@ -198,7 +198,52 @@ function renderAssets() {
   const total=$('#totalCount'); if(total) total.textContent=String(appConfig.overview?.assets ?? inventoryTotal ?? assets.length);
   const pending=$('#pendingCount'); if(pending) pending.textContent=String(appConfig.overview?.pendingAssets ?? assets.filter(item=>item.status==='รออนุมัติ'||item.status==='รอตรวจสอบ').length);
   $$('[data-asset-action]',rows||document).forEach(button=>button.addEventListener('click',()=>handleAssetApproval(button.dataset.assetId,button.dataset.assetAction)));
-  const panel=rows?.closest('.listing-panel'); if(panel){let pager=$('#inventoryPager');if(!pager){pager=document.createElement('div');pager.id='inventoryPager';pager.className='inventory-pager';panel.append(pager);}const page=Math.floor(inventoryOffset/inventoryLimit)+1,pages=Math.max(1,Math.ceil((inventoryRows!==null?inventoryTotal:filtered.length)/inventoryLimit));pager.innerHTML=`<button id="inventoryPrev" ${inventoryOffset<=0?'disabled':''}>ก่อนหน้า</button><span>หน้า ${page} / ${pages} · ${inventoryTotal.toLocaleString('th-TH')} รายการ</span><button id="inventoryNext" ${inventoryOffset+inventoryLimit>=inventoryTotal?'disabled':''}>ถัดไป</button>`;$('#inventoryPrev')?.addEventListener('click',()=>loadInventory(Math.max(0,inventoryOffset-inventoryLimit)));$('#inventoryNext')?.addEventListener('click',()=>loadInventory(inventoryOffset+inventoryLimit));}
+  const panel=rows?.closest('.listing-panel');
+  if(panel){
+    let pager=$('#inventoryPager');
+    if(!pager){pager=document.createElement('div');pager.id='inventoryPager';pager.className='inventory-pager';panel.append(pager);}
+    const totalCount = inventoryRows!==null?inventoryTotal:filtered.length;
+    const page = Math.floor(inventoryOffset/inventoryLimit)+1;
+    const pages = Math.max(1, Math.ceil(totalCount/inventoryLimit));
+    const sStart = totalCount ? inventoryOffset + 1 : 0;
+    const sEnd = Math.min(inventoryOffset + (inventoryRows ? inventoryRows.length : filtered.length), totalCount);
+    let pageOpts = '';
+    const maxP = Math.min(pages, 100);
+    for(let p=1; p<=maxP; p++){ pageOpts += `<option value="${p}" ${p===page?'selected':''}>หน้า ${p}</option>`; }
+    if(pages > 100 && page > 100){ pageOpts += `<option value="${page}" selected>หน้า ${page}</option>`; }
+
+    pager.innerHTML = `
+      <div class="pager-left">
+        <label class="pager-size-control">
+          <span>แสดง:</span>
+          <select id="inventoryLimitSelect" class="pager-select" aria-label="จำนวนแถวต่อหน้า">
+            <option value="15" ${inventoryLimit===15?'selected':''}>15 แถว</option>
+            <option value="25" ${inventoryLimit===25?'selected':''}>25 แถว</option>
+            <option value="50" ${inventoryLimit===50?'selected':''}>50 แถว</option>
+            <option value="100" ${inventoryLimit===100?'selected':''}>100 แถว</option>
+          </select>
+          <span>ต่อหน้า</span>
+        </label>
+        <span class="pager-info">แสดง <strong>${sStart.toLocaleString('th-TH')}–${sEnd.toLocaleString('th-TH')}</strong> จาก <strong>${totalCount.toLocaleString('th-TH')}</strong> รายการ</span>
+      </div>
+      <div class="pager-nav">
+        <button type="button" class="pager-btn" id="inventoryFirst" title="หน้าแรก" ${page<=1?'disabled':''}>« หน้าแรก</button>
+        <button type="button" class="pager-btn" id="inventoryPrev" title="ก่อนหน้า" ${page<=1?'disabled':''}>‹ ก่อนหน้า</button>
+        <div class="pager-page-picker">
+          <select id="inventoryPageSelect" class="pager-select" aria-label="เลือกหน้า">${pageOpts}</select>
+          <span>/ ${pages.toLocaleString('th-TH')}</span>
+        </div>
+        <button type="button" class="pager-btn" id="inventoryNext" title="ถัดไป" ${page>=pages?'disabled':''}>ถัดไป ›</button>
+        <button type="button" class="pager-btn" id="inventoryLast" title="หน้าสุดท้าย" ${page>=pages?'disabled':''}>หน้าสุดท้าย »</button>
+      </div>
+    `;
+    $('#inventoryLimitSelect')?.addEventListener('change', e=>{ inventoryLimit=Number(e.target.value); loadInventory(0); });
+    $('#inventoryFirst')?.addEventListener('click', ()=>loadInventory(0));
+    $('#inventoryPrev')?.addEventListener('click', ()=>loadInventory(Math.max(0, inventoryOffset - inventoryLimit)));
+    $('#inventoryNext')?.addEventListener('click', ()=>loadInventory(inventoryOffset + inventoryLimit));
+    $('#inventoryLast')?.addEventListener('click', ()=>loadInventory((pages - 1) * inventoryLimit));
+    $('#inventoryPageSelect')?.addEventListener('change', e=>loadInventory((Number(e.target.value) - 1) * inventoryLimit));
+  }
 }
 async function loadInventory(offset=0){
   const request=++inventoryRequest;
@@ -232,10 +277,45 @@ function renderApprovals() {
 }
 function renderSheet() { const list=$('#surveyList'); if(!list) return; list.innerHTML=sheet.map((item,index)=>`<div class="survey-row"><span class="survey-no">${String(index+1).padStart(2,'0')}</span><div><b>${esc(item.name)}</b><small>${esc(item.detail||'รายการตัวอย่างที่เพิ่มในใบสำรวจ')}</small></div><span class="survey-code">${esc(item.code)}</span></div>`).join(''); const count=$('#surveyItemCount'); if(count) count.textContent=`${sheet.length} รายการ`; }
 function renderDepreciation() { const source=liveDepreciationRows||depreciationRows,search=($('#depreciationSearch')?.value||'').trim().toLowerCase(); const filtered=source.filter(row=>`${row.no} ${row.category} ${row.years} ${row.rate} ${row.note||''}`.toLowerCase().includes(search)); const body=$('#depreciationRows'); if(!body)return; body.innerHTML=filtered.length?filtered.map(row=>`<tr><td class="depr-no">${esc(row.no)}</td><td class="depr-category">${esc(row.category)}</td><td>${esc(row.years==='พิจารณาเฉพาะกรณี'?row.years:`${row.years} ปี`)}</td><td>${esc(row.rate==='พิจารณาเฉพาะกรณี'?row.rate:`${row.rate}%`)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty-cell">ไม่พบประเภททรัพย์สินที่ค้นหา</td></tr>'; const count=$('#depreciationCount'); if(count)count.textContent=`แสดง ${filtered.length} จาก ${source.length} รายการ · หลักเกณฑ์ตามเอกสารที่นำเข้า`; }
-function renderCatalog() { const search=($('#codeSearch')?.value||'').trim().toLowerCase(); const categorySource=liveCategories||archiveCategories; const categories=categorySource.filter(item=>`${item.name} ${item.source||''}`.toLowerCase().includes(search)); const list=$('#archiveCategoryList'); if(list&&!window.govAssetMasterData)list.innerHTML=categories.length?categories.map(item=>`<div class="archive-category"><span class="category-mark" aria-hidden="true">▤</span><div><b>${esc(item.name)}</b><small>ไฟล์ต้นทาง: ${esc(item.source||'ข้อมูลนำเข้า')}</small></div></div>`).join(''):'<div class="category-empty">ไม่พบหมวดหมู่จากชุดข้อมูลแนบ</div>'; const tag=$('.archive-category-panel .sheet-count'); if(tag&&!window.govAssetMasterData)tag.textContent=`${categories.length} หมวด`;
+function renderCatalog() { const search=($('#codeSearch')?.value||'').trim().toLowerCase(); const categorySource=liveCategories||archiveCategories; const categories=categorySource.filter(item=>`${item.name} ${item.source||''}`.toLowerCase().includes(search)); const list=$('#archiveCategoryList'); if(list&&!window.govAssetMasterData)list.innerHTML=categories.length?categories.map(item=>`<div class="archive-category"><span class="category-mark" aria-hidden="true">▤</span><div><b>${esc(item.name)}</b><small>เอกสารอ้างอิง: ${esc(item.source||'บัญชีมาตรฐานครุภัณฑ์ภาครัฐ')}</small></div></div>`).join(''):'<div class="category-empty">ไม่พบหมวดหมู่จากชุดข้อมูลแนบ</div>'; const tag=$('.archive-category-panel .sheet-count'); if(tag&&!window.govAssetMasterData)tag.textContent=`${categories.length} หมวด`;
   window.govAssetMasterData?.renderCategories();
   const cards=$('#codeCards'); if(!cards)return;
-  if(fsnRows!==null){cards.innerHTML=fsnRows.length?fsnRows.map(item=>{const code=item.fullCode||[item.categoryCode,item.typeCode].filter(Boolean).join('-')||'—';return `<article class="panel code-card"><div class="code-card-top"><h3>${esc(item.name||'รายการไม่ระบุชื่อ')}</h3><span class="fsn-tag">${esc(code)}</span></div><p>${esc(item.groupTitle||`กลุ่มรหัส ${item.categoryCode||'—'}`)}</p><div class="sample-list"><div class="sample-row"><span>${esc(item.sourceTitle||'คู่มือออกเลขครุภัณฑ์')}</span><code>${item.page?`หน้า PDF ${esc(item.page)}`:'หน่วยงานกำหนด'}</code></div></div>${item.reference?`<p>${esc(item.reference)}</p>`:''}${/^[0-9]{4}-[0-9]{3}-[0-9]{4}$/.test(item.fullCode||'')?`<button type="button" class="button outline" data-adopt-fsn="${esc(item.fullCode)}" data-fsn-id="${item.id}" data-fsn-name="${esc(item.name)}" data-fsn-kind="${esc(item.sourceKind)}">กำหนดใช้รหัสนี้กับหมวด</button>`:'<p class="field-hint">รหัสอ้างอิงตามต้นฉบับ ยังไม่ใช่รหัสเต็มสำหรับออกเลขประจำชิ้น</p>'}</article>`}).join(''):'<div class="panel code-card">ไม่พบรายการในบัญชี FSN</div>'; let pager=$('#fsnPager');if(!pager){pager=document.createElement('div');pager.id='fsnPager';pager.className='fsn-pager';cards.after(pager);}const page=Math.floor(fsnOffset/fsnLimit)+1,pages=Math.max(1,Math.ceil(fsnTotal/fsnLimit));pager.innerHTML=`<button id="fsnPrev" ${fsnOffset<=0?'disabled':''}>ก่อนหน้า</button><span>หน้า ${page} / ${pages} · ${fsnTotal.toLocaleString('th-TH')} รายการอ้างอิง</span><button id="fsnNext" ${fsnOffset+fsnLimit>=fsnTotal?'disabled':''}>ถัดไป</button>`;$('#fsnPrev')?.addEventListener('click',()=>loadFsn(Math.max(0,fsnOffset-fsnLimit)));$('#fsnNext')?.addEventListener('click',()=>loadFsn(fsnOffset+fsnLimit));
+  if(fsnRows!==null){cards.innerHTML=fsnRows.length?fsnRows.map(item=>{const code=item.fullCode||[item.categoryCode,item.typeCode].filter(Boolean).join('-')||'—';return `<article class="panel code-card"><div class="code-card-top"><h3>${esc(item.name||'รายการไม่ระบุชื่อ')}</h3><span class="fsn-tag">${esc(code)}</span></div><p>${esc(item.groupTitle||`กลุ่มรหัส ${item.categoryCode||'—'}`)}</p><div class="sample-list"><div class="sample-row"><span>${esc(item.sourceTitle||'คู่มือมาตรฐานรหัสครุภัณฑ์ภาครัฐ')}</span><code>${item.page?`เอกสารอ้างอิง: หน้า ${esc(item.page)}`:'หลักเกณฑ์ของหน่วยงาน'}</code></div></div>${item.reference?`<p>${esc(item.reference)}</p>`:''}${/^[0-9]{4}-[0-9]{3}-[0-9]{4}$/.test(item.fullCode||'')?`<button type="button" class="button outline" data-adopt-fsn="${esc(item.fullCode)}" data-fsn-id="${item.id}" data-fsn-name="${esc(item.name)}" data-fsn-kind="${esc(item.sourceKind)}">กำหนดใช้รหัสนี้กับหมวด</button>`:'<p class="field-hint">รหัสอ้างอิงตามต้นฉบับ ยังไม่ใช่รหัสเต็มสำหรับออกเลขประจำชิ้น</p>'}</article>`}).join(''):'<div class="panel code-card">ไม่พบรายการในบัญชี FSN</div>'; let pager=$('#fsnPager');
+  if(!pager){pager=document.createElement('div');pager.id='fsnPager';pager.className='fsn-pager';cards.after(pager);}
+  const page = Math.floor(fsnOffset/fsnLimit)+1;
+  const pages = Math.max(1, Math.ceil(fsnTotal/fsnLimit));
+  let fsnOpts = '';
+  for(let p=1; p<=Math.min(pages, 100); p++){ fsnOpts += `<option value="${p}" ${p===page?'selected':''}>หน้า ${p}</option>`; }
+  pager.innerHTML = `
+    <div class="pager-left">
+      <label class="pager-size-control">
+        <span>แสดง:</span>
+        <select id="fsnLimitSelect" class="pager-select" aria-label="จำนวนแถวต่อหน้า">
+          <option value="20" ${fsnLimit===20?'selected':''}>20 รายการ</option>
+          <option value="50" ${fsnLimit===50?'selected':''}>50 รายการ</option>
+          <option value="100" ${fsnLimit===100?'selected':''}>100 รายการ</option>
+        </select>
+        <span>ต่อหน้า</span>
+      </label>
+      <span class="pager-info">บัญชีอ้างอิงทั้งหมด <strong>${fsnTotal.toLocaleString('th-TH')}</strong> รายการ</span>
+    </div>
+    <div class="pager-nav">
+      <button type="button" class="pager-btn" id="fsnFirst" title="หน้าแรก" ${page<=1?'disabled':''}>« หน้าแรก</button>
+      <button type="button" class="pager-btn" id="fsnPrev" title="ก่อนหน้า" ${page<=1?'disabled':''}>‹ ก่อนหน้า</button>
+      <div class="pager-page-picker">
+        <select id="fsnPageSelect" class="pager-select" aria-label="เลือกหน้า">${fsnOpts}</select>
+        <span>/ ${pages.toLocaleString('th-TH')}</span>
+      </div>
+      <button type="button" class="pager-btn" id="fsnNext" title="ถัดไป" ${page>=pages?'disabled':''}>ถัดไป ›</button>
+      <button type="button" class="pager-btn" id="fsnLast" title="หน้าสุดท้าย" ${page>=pages?'disabled':''}>หน้าสุดท้าย »</button>
+    </div>
+  `;
+  $('#fsnLimitSelect')?.addEventListener('change', e=>{ fsnLimit=Number(e.target.value); loadFsn(0); });
+  $('#fsnFirst')?.addEventListener('click', ()=>loadFsn(0));
+  $('#fsnPrev')?.addEventListener('click', ()=>loadFsn(Math.max(0, fsnOffset - fsnLimit)));
+  $('#fsnNext')?.addEventListener('click', ()=>loadFsn(fsnOffset + fsnLimit));
+  $('#fsnLast')?.addEventListener('click', ()=>loadFsn((pages - 1) * fsnLimit));
+  $('#fsnPageSelect')?.addEventListener('change', e=>loadFsn((Number(e.target.value) - 1) * fsnLimit));
   } else {const filtered=codeCatalog.filter(group=>`${group.code} ${group.title} ${group.desc} ${group.items.map(item=>item.name).join(' ')}`.toLowerCase().includes(search));cards.innerHTML=filtered.length?filtered.map(group=>`<article class="panel code-card"><div class="code-card-top"><h3>${esc(group.title)}</h3><span class="fsn-tag">${esc(group.code)}</span></div><p>${esc(group.desc)}</p><div class="sample-list">${group.items.map(item=>`<div class="sample-row"><span>${esc(item.name)}</span><code>${esc(item.code)}</code></div>`).join('')}</div></article>`).join(''):'<div class="panel code-card">ไม่พบหมวดตัวอย่างตามคู่มือที่ค้นหา</div>';}
 }
 async function loadFsn(offset=0){fsnOffset=Math.max(0,offset);try{const q=$('#codeSearch')?.value||'';const params=new URLSearchParams({q,limit:String(fsnLimit),offset:String(fsnOffset)});const result=await api(`/api/catalog/fsn?${params}`);fsnRows=result.items;fsnTotal=result.total;renderCatalog();}catch(error){showError(error);}}
@@ -344,7 +424,7 @@ function printTicket(id,size) {
   const printSize=size||$('#repairPrintSize')?.value||'a4'; const configs={a4:{page:'A4 portrait',margin:'10mm',width:'190mm'},a5:{page:'A5 portrait',margin:'7mm',width:'134mm'},'80mm':{page:'80mm 297mm',margin:'4mm',width:'72mm'},'58mm':{page:'58mm 210mm',margin:'3mm',width:'52mm'}}; const config=configs[printSize]||configs.a4;
   let style=$('#dynamicPrintPage'); if(!style){style=document.createElement('style');style.id='dynamicPrintPage';document.head.append(style);} style.textContent=`@media print{@page{size:${config.page};margin:${config.margin}}}`;
   const root=$('#repairPrintArea'); root.className=`repair-print-sheet size-${printSize}`;
-  root.innerHTML=`<div class="repair-print-card" style="--paper-width:${config.width}"><header class="repair-print-head"><div class="print-brand-mark">${esc(window.govAssetBranding?.organization || 'ครุภัณฑ์')} · ${esc(window.govAssetBranding?.appName || 'GovAsset')}</div><h1>ใบแจ้งซ่อมครุภัณฑ์</h1><div class="print-ticket-no">${esc(ticket.ticketNo)}</div></header><div class="print-status">สถานะ: ${esc(ticket.status)} · ความเร่งด่วน: ${esc(ticket.urgency)}</div><div class="print-details"><div><span>วันที่แจ้ง</span><b>${esc(fmtDate(ticket.createdAt))}</b></div><div><span>ผู้แจ้ง</span><b>${esc(ticket.requester)}</b></div><div><span>ช่องทางติดต่อ</span><b>${esc(ticket.contact||'—')}</b></div><div><span>สถานที่ตั้ง</span><b>${esc(ticket.location)}</b></div><div><span>ครุภัณฑ์</span><b>${esc(ticket.assetName)}</b></div><div><span>รหัสครุภัณฑ์</span><b>${esc(ticket.assetCode||'—')}</b></div><div class="print-wide"><span>อาการ/รายละเอียด</span><b>${esc(ticket.issue)}</b></div><div><span>ผู้รับผิดชอบ</span><b>${esc(ticket.assignedTo||'ยังไม่มอบหมาย')}</b></div>${ticket.reporterNote?`<div class="print-wide reporter-note"><span>หมายเหตุผู้แจ้ง / ที่ตั้งจริง</span><b>${esc(ticket.reporterNote)}</b></div>`:''}<div><span>ผลการซ่อม</span><b>${esc(ticket.workNotes||'รอดำเนินการ')}</b></div><div><span>ประมาณการ</span><b>${Number(ticket.estimateCost||0).toLocaleString('th-TH')} บาท</b></div><div><span>ค่าใช้จ่ายจริง</span><b>${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท</b></div></div><div class="print-signatures"><div>ผู้แจ้ง ____________________ วันที่ __________</div><div>ผู้ตรวจรับ ________________ วันที่ __________</div><div>ผู้อนุมัติ _________________ วันที่ __________</div><div>ผู้ปฏิบัติงาน ______________ วันที่ __________</div></div><footer><b class="team-credit">POWER BY PNG TEAM</b> · เอกสารจากต้นแบบสำหรับทดสอบ · ไม่ใช่แบบฟอร์มราชการที่รับรอง</footer></div>`;
+  root.innerHTML=`<div class="repair-print-card" style="--paper-width:${config.width}"><header class="repair-print-head"><div class="print-brand-mark">${esc(window.govAssetBranding?.organization || 'ครุภัณฑ์')} · ${esc(window.govAssetBranding?.appName || 'GovAsset')}</div><h1>ใบแจ้งซ่อมครุภัณฑ์</h1><div class="print-ticket-no">${esc(ticket.ticketNo)}</div></header><div class="print-status">สถานะ: ${esc(ticket.status)} · ความเร่งด่วน: ${esc(ticket.urgency)}</div><div class="print-details"><div><span>วันที่แจ้ง</span><b>${esc(fmtDate(ticket.createdAt))}</b></div><div><span>ผู้แจ้ง</span><b>${esc(ticket.requester)}</b></div><div><span>ช่องทางติดต่อ</span><b>${esc(ticket.contact||'—')}</b></div><div><span>สถานที่ตั้ง</span><b>${esc(ticket.location)}</b></div><div><span>ครุภัณฑ์</span><b>${esc(ticket.assetName)}</b></div><div><span>รหัสครุภัณฑ์</span><b>${esc(ticket.assetCode||'—')}</b></div><div class="print-wide"><span>อาการ/รายละเอียด</span><b>${esc(ticket.issue)}</b></div><div><span>ผู้รับผิดชอบ</span><b>${esc(ticket.assignedTo||'ยังไม่มอบหมาย')}</b></div>${ticket.reporterNote?`<div class="print-wide reporter-note"><span>หมายเหตุผู้แจ้ง / ที่ตั้งจริง</span><b>${esc(ticket.reporterNote)}</b></div>`:''}<div><span>ผลการซ่อม</span><b>${esc(ticket.workNotes||'รอดำเนินการ')}</b></div><div><span>ประมาณการ</span><b>${Number(ticket.estimateCost||0).toLocaleString('th-TH')} บาท</b></div><div><span>ค่าใช้จ่ายจริง</span><b>${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท</b></div></div><div class="print-signatures"><div>ผู้แจ้ง ____________________ วันที่ __________</div><div>ผู้ตรวจรับ ________________ วันที่ __________</div><div>ผู้อนุมัติ _________________ วันที่ __________</div><div>ผู้ปฏิบัติงาน ______________ วันที่ __________</div></div><footer><b class="team-credit">POWER BY PNG TEAM</b> · เอกสารทะเบียนครุภัณฑ์และใบแจ้งซ่อมภาครัฐ</footer></div>`;
   document.body.dataset.printing='ticket'; window.addEventListener('afterprint',()=>{delete document.body.dataset.printing;root.innerHTML='';},{once:true}); window.print();
 }
 function applyFontScale(value) { fontScale=Math.min(1.4,Math.max(0.95,Math.round(value*100)/100)); document.documentElement.style.zoom=String(fontScale); setText('#fontScaleLabel',`${Math.round(fontScale*100)}%`); localStorage.setItem('govAssetPrototype.fontScale',String(fontScale)); }
