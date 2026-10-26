@@ -19,7 +19,11 @@ class StarterCatalog(unittest.TestCase):
         self.db=sqlite3.connect(self.path);self.db.row_factory=sqlite3.Row
 
     def tearDown(self):
-        self.db.close();self.temp.cleanup()
+        self.db.close()
+        try:
+            self.temp.cleanup()
+        except Exception:
+            pass
 
     def office(self):
         return self.db.execute("SELECT id FROM asset_categories WHERE category_name='ครุภัณฑ์สำนักงาน' ORDER BY id LIMIT 1").fetchone()[0]
@@ -80,13 +84,16 @@ class StarterCatalog(unittest.TestCase):
         self.assertNotIn('7110-002-0001-0050',serialized)
         self.assertEqual(exported['sequenceFloors'],{'7110-002-0001':50})
         self.assertEqual(exported['summary']['typesWithoutFullCode'],1)
-        pack=json.loads(PACK.read_text())
+        pack=json.loads(PACK.read_text(encoding='utf-8'))
         self.assertEqual(pack['summary']['categories'],19)
         self.assertEqual(pack['summary']['categoryCodes'],1918)
         self.assertEqual(sum(len(t['codes']) for c in pack['categories'] for t in c['types']),3276)
 
 
-from test_smart_workflow import HTTPFixture
+try:
+    from test_smart_workflow import HTTPFixture
+except ModuleNotFoundError:
+    from tests.test_smart_workflow import HTTPFixture
 from urllib.parse import urlencode
 
 

@@ -32,7 +32,11 @@ class LineNotifications(unittest.TestCase):
         self.env.start();self.handler=object.__new__(server.Handler)
 
     def tearDown(self):
-        self.env.stop();self.temp.cleanup()
+        self.env.stop()
+        try:
+            self.temp.cleanup()
+        except Exception:
+            pass
 
     @contextmanager
     def connect(self):
