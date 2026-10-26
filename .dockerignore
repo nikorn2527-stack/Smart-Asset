@@ -13,3 +13,9 @@ data/
 *.rar
 *.csv
 __pycache__/
+.git/
+.venv/
+.vscode/
+.next/
+node_modules/
+tests/

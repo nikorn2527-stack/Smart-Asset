@@ -27,3 +27,6 @@ attachments/
 .venvs/
 .pytest_cache/
 *.pyc
+node_modules/
+.next/
+.vscode/

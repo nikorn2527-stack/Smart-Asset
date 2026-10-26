@@ -46,7 +46,10 @@ class HTTPFixture(unittest.TestCase):
         cls.proc.terminate()
         cls.proc.wait(timeout=10)
         cls.log.close()
-        cls.temp.cleanup()
+        try:
+            cls.temp.cleanup()
+        except Exception:
+            pass
 
     @classmethod
     def call(cls, path, body=None, method=None, expected=200):

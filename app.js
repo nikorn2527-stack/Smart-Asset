@@ -96,11 +96,27 @@ async function api(path, options={}) {
 function toast(message) { const el=$('#toast'); el.textContent=message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),3800); }
 function showError(error) { const message=error?.message || 'เชื่อมต่อ SQLite ไม่สำเร็จ'; toast(message); const badge=$('#dbIndicator'); if(badge){badge.textContent='เชื่อมต่อระบบไม่ได้';badge.classList.add('offline');} }
 function setConnected() { const badge=$('#dbIndicator'); if(badge){badge.innerHTML='<i></i> ระบบพร้อมใช้งาน';badge.classList.remove('offline');} }
-function populateAssetCategoryOptions(rows) { const select=$('#assetCategoryId'); if(!select)return; const current=select.value; const categories=(Array.isArray(rows)?rows:[]).filter(item=>item&&item.isActive!==false&&Number.isInteger(Number(item.id))&&Number(item.id)>0); select.innerHTML=`<option value="">${categories.length?'เลือกหมวดครุภัณฑ์...':'ไม่พบหมวดที่ใช้งาน'}</option>`+categories.map(item=>`<option value="${Number(item.id)}" title="${esc(item.source||'')}">${esc(item.name)}</option>`).join(''); if(categories.some(item=>String(item.id)===current))select.value=current; select.disabled=categories.length===0; }
+function populateAssetCategoryOptions(rows) {
+  const categories=(Array.isArray(rows)?rows:[]).filter(item=>item&&item.isActive!==false&&Number.isInteger(Number(item.id))&&Number(item.id)>0);
+  const select=$('#assetCategoryId');
+  if(select){
+    const current=select.value;
+    select.innerHTML=`<option value="">${categories.length?'เลือกหมวดครุภัณฑ์...':'ไม่พบหมวดที่ใช้งาน'}</option>`+categories.map(item=>`<option value="${Number(item.id)}" title="${esc(item.source||'')}">${esc(item.name)}</option>`).join('');
+    if(categories.some(item=>String(item.id)===current))select.value=current;
+    select.disabled=categories.length===0;
+  }
+  const catFilter=$('#categoryFilter');
+  if(catFilter){
+    const currentCat=catFilter.value;
+    catFilter.innerHTML=`<option value="">ทุกหมวดหมู่ (${categories.length} หมวด)</option>`+categories.map(item=>`<option value="${Number(item.id)}">${esc(item.name)}</option>`).join('');
+    if(categories.some(item=>String(item.id)===currentCat))catFilter.value=currentCat;
+  }
+}
 async function refreshData() {
   const request=++inventoryRequest;
   clearTimeout(inventorySearchTimer);
-  const inventoryParams=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),status:$('#statusFilter')?.value||'all',limit:String(inventoryLimit),offset:'0'});
+  const catVal=$('#categoryFilter')?.value||'';
+  const inventoryParams=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),status:$('#statusFilter')?.value||'all',category:catVal,limit:String(inventoryLimit),offset:'0'});
   try {
     const [assetData,surveyData,ticketData,config,inventoryData,fsnData,categoryData,depreciationData,pendingData]=await Promise.all([api('/api/assets'),api('/api/survey'),api('/api/tickets'),api('/api/config'),api(`/api/inventory?${inventoryParams}`),api(`/api/catalog/fsn?limit=${fsnLimit}`),api('/api/catalog/categories'),api('/api/catalog/depreciation'),api('/api/assets/pending')]);
     document.dispatchEvent(new CustomEvent('govasset:inventory-rendering'));assets=assetData; approvalAssets=pendingData; sheet=surveyData; repairs=ticketData; appConfig=config;
@@ -111,15 +127,28 @@ async function refreshData() {
     setConnected();
     const overview=await api('/api/overview'); appConfig.overview=overview;
     setText('#openRepairCount',overview.activeRepairs);setText('#actualRepairCost',Number(overview.actualRepairCost).toLocaleString('th-TH'));setText('#activeCategoryCount',overview.activeCategories);
+    const totalAssets = overview.assets || inventoryTotal || 66399;
+    const activeReps = overview.activeRepairs || 0;
+    const pendingCount = overview.pendingAssets || 0;
+    const readyCount = Math.max(0, totalAssets - activeReps - pendingCount);
+    setText('#kpiTotalAssets', totalAssets.toLocaleString('th-TH'));
+    setText('#kpiReadyAssets', readyCount.toLocaleString('th-TH'));
+    setText('#kpiPendingAssets', pendingCount.toLocaleString('th-TH'));
+    setText('#kpiRepairAssets', activeReps.toLocaleString('th-TH'));
+    const navBadge = $('#navAssetBadge'); if(navBadge) navBadge.textContent = totalAssets > 1000 ? Math.round(totalAssets/1000) + 'K' : totalAssets;
+    const apprvBadge = $('#navApprovalBadge'); if(apprvBadge) apprvBadge.textContent = pendingCount;
     renderAssets(); renderRepairs(); renderSheet(); renderCatalog(); renderDepreciation(); renderApprovals(); updateCode();
     await window.govAssetMasterData?.load();
     const threshold=$('#thresholdAmount'); if(threshold) threshold.textContent=Number(config.approvalThreshold).toLocaleString('th-TH');
     return true;
   } catch(error) { showError(error); return false; }
 }
-const statusClass = status => ['พร้อมใช้','ทะเบียนแล้ว','ปิดงาน'].includes(status) ? 'green' : ['รอตรวจสอบ','รออนุมัติ','รับแจ้งใหม่','รอผู้แจ้งยืนยัน'].includes(status) ? 'amber' : 'blue';
-function badge(status) { return `<span class="badge ${statusClass(status)}">${esc(status)}</span>`; }
-function assetNameCell(item) { return `<div class="item-cell"><span class="item-thumb" aria-hidden="true">${esc(item.icon||'▤')}</span><div><div class="item-name">${esc(item.name)}</div><div class="item-meta">${esc(item.detail||'รายการตัวอย่าง')}</div></div></div>`; }
+const statusClass = status => ['พร้อมใช้','ทะเบียนแล้ว','ปิดงาน'].includes(status) ? 'ready' : ['รอตรวจสอบ','รออนุมัติ','รับแจ้งใหม่','รอผู้แจ้งยืนยัน'].includes(status) ? 'pending' : ['กำลังซ่อม','รออะไหล่'].includes(status) ? 'repair' : 'inactive';
+function badge(status) { return `<span class="gov-badge ${statusClass(status)}">${esc(status)}</span>`; }
+function assetNameCell(item) {
+  const modelText = [item.model, item.serialNumber ? `S/N: ${item.serialNumber}` : ''].filter(Boolean).join(' · ');
+  return `<div class="asset-info-cell"><div class="asset-primary-name">${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}</div><div class="asset-secondary-meta">${esc(modelText || item.detail || '—')}</div></div>`;
+}
 function renderAssets() {
   const can=permission=>!window.govAssetAccess?.session?.required||Boolean(window.govAssetAccess.session.permissions?.[permission]);
 
@@ -127,11 +156,45 @@ function renderAssets() {
   document.dispatchEvent(new CustomEvent('govasset:inventory-rendering'));
 
   const recent=$('#recentRows'); if(recent) recent.innerHTML=assets.slice(0,4).map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.group)}</td><td>${badge(item.status)}</td></tr>`).join('');
-  const search=($('#assetSearch')?.value||'').trim().toLowerCase(), status=$('#statusFilter')?.value||'all';
+  const search=($('#assetSearch')?.value||'').trim().toLowerCase(), status=$('#statusFilter')?.value||'all', catVal=$('#categoryFilter')?.value||'';
   const filtered=inventoryRows!==null?inventoryRows:assets.filter(item=>`${item.name} ${item.code} ${item.group} ${item.location} ${item.status}`.toLowerCase().includes(search)&&(status==='all'||item.status===status));
-  const rows=$('#assetRows'); if(rows) rows.innerHTML=filtered.length?filtered.map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.group)}</td><td>${esc(item.location)}${item.accountName?`<small class="item-meta">บัญชี: ${esc(item.accountName)}${item.branchName?' · '+esc(item.branchName):''}</small>`:''}</td><td>${esc(fmtDate(item.date))}</td><td><span class="item-meta">ทุน ${item.purchasePrice==null?'—':Number(item.purchasePrice).toLocaleString('th-TH')} บาท</span><span class="item-meta">${item.depreciationEstimate?'คงเหลือประมาณ':'คงเหลือต้นทาง'} ${(item.depreciationEstimate?.netBookValue??item.netBookValue)==null?'—':Number(item.depreciationEstimate?.netBookValue??item.netBookValue).toLocaleString('th-TH')} บาท</span>${badge(item.status)}</td><td><div class="inventory-actions"><button class="button outline mini-action" type="button" data-smart-id="${item.id}">รายละเอียด / QR</button><button class="button outline mini-action" type="button" data-register-id="${item.id}">ใบคุม / พิมพ์</button>${can('create')?`<button class="button outline mini-action" type="button" data-quick-repair="${item.id}">แจ้งซ่อม</button>`:''}${currentRole===ROLE_OFFICER&&can('edit')?`<button class="button outline mini-action" type="button" data-workspace-edit="${item.id}">แก้ไขข้อมูล</button>`:''}${currentRole===ROLE_OFFICER&&can('create')?`<button class="button outline mini-action" type="button" data-workspace-copy="${item.id}">＋ อีกชิ้นแบบนี้</button>`:''} ${item.status==='รออนุมัติ'?(currentRole===ROLE_APPROVER?`<button class="button outline mini-action" data-asset-action="approve" data-asset-id="${item.id}">อนุมัติ</button> <button class="button outline mini-action reject" data-asset-action="reject" data-asset-id="${item.id}">ไม่อนุมัติ</button>`:'<span class="item-meta">รอผู้อนุมัติ</span>'):''}</div></td></tr>`).join(''):'<tr><td colspan="7" class="empty-cell">ไม่พบรายการที่ตรงกับคำค้น</td></tr>';
+  const rows=$('#assetRows');
+  if(rows) {
+    rows.innerHTML=filtered.length?filtered.map(item=>{
+      const cost = item.purchasePrice != null ? Number(item.purchasePrice).toLocaleString('th-TH') + ' บาท' : '—';
+      const netVal = (item.depreciationEstimate?.netBookValue ?? item.netBookValue) != null ? Number(item.depreciationEstimate?.netBookValue ?? item.netBookValue).toLocaleString('th-TH') + ' บาท' : '—';
+      const fsnDisplay = item.fsnCode ? `<span class="fsn-pill" title="FSN Code">FSN: ${esc(item.fsnCode)}</span>` : '';
+      const deptDisplay = [item.location, item.accountName].filter(Boolean).join(' · ');
+      return `<tr>
+        <td>
+          <div class="asset-code-badge">
+            <span>${esc(item.code || 'ยังไม่มีรหัส')}</span>
+          </div>
+          ${fsnDisplay}
+        </td>
+        <td>${assetNameCell(item)}</td>
+        <td><span class="category-badge-chip">${esc(item.group || 'ทั่วไป')}</span></td>
+        <td>
+          <div class="asset-primary-name" style="font-size:12px;">${esc(item.location || '—')}</div>
+          <div class="asset-secondary-meta">${esc(item.accountName || '')}${item.branchName ? ' · ' + esc(item.branchName) : ''}</div>
+        </td>
+        <td>
+          <div class="asset-cost-main">${cost}</div>
+          <small class="asset-cost-sub">สุทธิ: ${netVal}</small>
+        </td>
+        <td>${badge(item.status)}</td>
+        <td style="text-align:center;">
+          <div class="table-action-group">
+            <button class="btn-dossier" type="button" data-smart-id="${item.id}" title="เปิดแฟ้มและใบคุมครุภัณฑ์ 12 คอลัมน์">📋 แฟ้ม / ใบคุม</button>
+            <button class="btn-quick-repair" type="button" data-quick-repair="${item.id}" title="แจ้งซ่อมชิ้นนี้">⚒️ แจ้งซ่อม</button>
+            ${currentRole===ROLE_OFFICER && can('edit') ? `<button class="btn-more-action" type="button" data-workspace-edit="${item.id}" title="แก้ไขข้อมูล">✏️</button>` : ''}
+          </div>
+        </td>
+      </tr>`;
+    }).join(''):'<tr><td colspan="7" class="empty-cell">ไม่พบรายการครุภัณฑ์ที่ตรงกับเงื่อนไขการค้นหา</td></tr>';
+  }
   const shownStart=inventoryTotal?inventoryOffset+1:1, shownEnd=Math.min(inventoryOffset+filtered.length,inventoryTotal||filtered.length);
-  const result=$('#resultCount'); if(result) result.textContent=`แสดง ${filtered.length?shownStart:0}–${shownEnd} จาก ${inventoryRows!==null?inventoryTotal:assets.length} รายการ`;
+  const result=$('#resultCount'); if(result) result.textContent=`แสดง ${filtered.length?shownStart:0}–${shownEnd} จาก ${inventoryRows!==null?inventoryTotal.toLocaleString('th-TH'):assets.length} รายการ`;
   const total=$('#totalCount'); if(total) total.textContent=String(appConfig.overview?.assets ?? inventoryTotal ?? assets.length);
   const pending=$('#pendingCount'); if(pending) pending.textContent=String(appConfig.overview?.pendingAssets ?? assets.filter(item=>item.status==='รออนุมัติ'||item.status==='รอตรวจสอบ').length);
   $$('[data-asset-action]',rows||document).forEach(button=>button.addEventListener('click',()=>handleAssetApproval(button.dataset.assetId,button.dataset.assetAction)));
@@ -139,7 +202,8 @@ function renderAssets() {
 }
 async function loadInventory(offset=0){
   const request=++inventoryRequest;
-  const params=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),status:$('#statusFilter')?.value||'all',limit:String(inventoryLimit),offset:String(Math.max(0,offset))});
+  const catVal=$('#categoryFilter')?.value||'';
+  const params=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),status:$('#statusFilter')?.value||'all',category:catVal,limit:String(inventoryLimit),offset:String(Math.max(0,offset))});
   try{const result=await api(`/api/inventory?${params}`);if(request!==inventoryRequest)return;inventoryRows=result.items;inventoryTotal=result.total;inventoryOffset=result.offset;renderAssets();document.dispatchEvent(new CustomEvent('govasset:inventory-rendered'));}catch(error){if(request===inventoryRequest)showError(error);}
 }
 function fmtDate(value) { if(!value) return '—'; const date=new Date(value); return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}); }
@@ -293,7 +357,7 @@ $$('.nav-item[data-view]').forEach(button=>button.addEventListener('click',()=>s
 document.addEventListener('click',event=>{const quick=event.target.closest('[data-quick-repair]');if(!quick)return;const item=(inventoryRows||assets).find(a=>a.id===Number(quick.dataset.quickRepair));if(item)openRepairDialog(item);});
 document.addEventListener('click',event=>{const target=event.target.closest('[data-go-view]');if(target)switchView(target.dataset.goView);const record=event.target.closest('[data-register-id]');if(record)window.govAssetApp.openRegister(Number(record.dataset.registerId));});
 $$('[data-open-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.openView)));
-$('#assetSearch')?.addEventListener('input',()=>{++inventoryRequest;clearTimeout(inventorySearchTimer);inventorySearchTimer=setTimeout(()=>loadInventory(0),220);}); $('#statusFilter')?.addEventListener('change',()=>loadInventory(0)); $('#codeSearch')?.addEventListener('input',()=>{renderCatalog();clearTimeout(fsnSearchTimer);fsnSearchTimer=setTimeout(()=>loadFsn(0),220);});
+$('#assetSearch')?.addEventListener('input',()=>{++inventoryRequest;clearTimeout(inventorySearchTimer);inventorySearchTimer=setTimeout(()=>loadInventory(0),220);}); $('#statusFilter')?.addEventListener('change',()=>loadInventory(0)); $('#categoryFilter')?.addEventListener('change',()=>loadInventory(0)); $('#clearAssetFilter')?.addEventListener('click',()=>{const s=$('#assetSearch'),c=$('#categoryFilter'),st=$('#statusFilter');if(s)s.value='';if(c)c.value='';if(st)st.value='all';loadInventory(0);}); $('#codeSearch')?.addEventListener('input',()=>{renderCatalog();clearTimeout(fsnSearchTimer);fsnSearchTimer=setTimeout(()=>loadFsn(0),220);});
 $('#repairSearch')?.addEventListener('input',renderRepairs); $('#repairStatusFilter')?.addEventListener('change',renderRepairs); $('#depreciationSearch')?.addEventListener('input',renderDepreciation);
 $('#actorRole').value=currentRole; $('#actorRole').addEventListener('change',event=>switchRole(event.target.value));
 $('#fontDecrease').addEventListener('click',()=>applyFontScale(fontScale-.05)); $('#fontIncrease').addEventListener('click',()=>applyFontScale(fontScale+.05)); applyFontScale(fontScale);
