@@ -53,7 +53,16 @@
   });
   const editor=document.createElement('dialog');editor.className='asset-dialog register-editor';editor.setAttribute('aria-label','แก้ไขเอกสารทะเบียนคุมทรัพย์สิน');document.body.append(editor);
   const printOld=$('#printRegister'),printButton=printOld.cloneNode(true);printOld.replaceWith(printButton);printButton.textContent='พิมพ์ / บันทึก PDF';
-  const dateText=v=>{if(!v)return '';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);if(!m)return String(v);return `${Number(m[3])} ${['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][Number(m[2])-1]} ${Number(m[1])<2400?Number(m[1])+543:Number(m[1])}`;};
+  const dateText=v=>{
+    if(!v)return '';
+    const str=String(v).trim();
+    if(/^1899-12-(30|31)/.test(str)||/^1900-01-0[01]/.test(str))return '';
+    const m=str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(!m)return str.replace(/T00:00:00.*$/,'');
+    const y=Number(m[1]);
+    if(y<1920)return '';
+    return `${Number(m[3])} ${['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][Number(m[2])-1]} ${y<2400?y+543:y}`;
+  };
   const plain=v=>v==null?'':String(v);
   function defaultForm(data){
     const a=data.asset||{},r=data.register||{},acq=(data.acquisitions||[]).at(-1)||{},d=(data.depreciationSnapshots||[]).at(-1)||{};

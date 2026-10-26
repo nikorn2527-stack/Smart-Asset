@@ -251,7 +251,14 @@ async function loadInventory(offset=0){
   const params=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),status:$('#statusFilter')?.value||'all',category:catVal,limit:String(inventoryLimit),offset:String(Math.max(0,offset))});
   try{const result=await api(`/api/inventory?${params}`);if(request!==inventoryRequest)return;inventoryRows=result.items;inventoryTotal=result.total;inventoryOffset=result.offset;renderAssets();document.dispatchEvent(new CustomEvent('govasset:inventory-rendered'));}catch(error){if(request===inventoryRequest)showError(error);}
 }
-function fmtDate(value) { if(!value) return '—'; const date=new Date(value); return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}); }
+function fmtDate(value) {
+  if(!value) return '—';
+  const str = String(value).trim();
+  if (/^1899-12-(30|31)/.test(str) || /^1900-01-0[01]/.test(str)) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime()) || date.getFullYear() < 1920) return '—';
+  return date.toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'numeric'});
+}
 function repairStatusClass(status) { return ['ปิดงาน','ซ่อมเสร็จ'].includes(status)?'green':['รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง','รับแจ้งใหม่','รอผู้แจ้งยืนยัน','รอมอบหมาย','รอแก้ไขค่าใช้จ่าย'].includes(status)?'amber':status==='ไม่อนุมัติ'?'red':status==='รออะไหล่'?'violet':'blue'; }
 function repairBadge(status) { return `<span class="badge ${repairStatusClass(status)}">${esc(status)}</span>`; }
 function urgencyBadge(urgency) { const type=urgency==='เร่งด่วนมาก'?'critical':urgency==='เร่งด่วน'?'high':'normal'; return `<span class="urgency ${type}">${esc(urgency)}</span>`; }

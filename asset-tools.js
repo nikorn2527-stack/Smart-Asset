@@ -189,8 +189,22 @@
       $('#registerSourceJson').textContent=JSON.stringify(provenance,null,2);
       let imported=$('#registerImportedFields');
       if(!imported){imported=document.createElement('details');imported.id='registerImportedFields';imported.className='register-imported-fields';$('#registerSourceJson').closest('details').before(imported);}
-      imported.hidden=!(data.sourceRows||[]).length;
-      imported.innerHTML='<summary>ข้อมูลทุกหัวข้อตามไฟล์นำเข้า</summary>'+(data.sourceRows||[]).map(row=>`<section><p>${esc(row.source_filename)} · แถว ${row.source_row_no}</p><div class="table-wrap"><table><thead><tr><th>หัวข้อในต้นฉบับ</th><th>ค่าที่นำเข้า</th></tr></thead><tbody>${Object.entries(row.rawData||{}).map(([name,value])=>`<tr><th>${esc(name)}</th><td>${esc(value!==null&&typeof value==='object'?JSON.stringify(value):value??'')}</td></tr>`).join('')}</tbody></table></div></section>`).join('');
+      function formatCleanValue(val){
+        if(val===null||val===undefined||val==='')return '-';
+        if(typeof val==='object')return JSON.stringify(val);
+        const str=String(val).trim();
+        if(/^1899-12-(30|31)/.test(str)||/^1900-01-0[01]/.test(str))return '-';
+        const m=str.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+        if(m){
+          const y=parseInt(m[1],10),mo=parseInt(m[2],10),d=parseInt(m[3],10);
+          if(y<1920)return '-';
+          const thM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+          const thY=y<2400?y+543:y;
+          return `${d} ${thM[mo-1]} ${thY}`;
+        }
+        return str.replace(/T00:00:00(?:\.000)?(?:Z|[+-]\d{2}:\d{2})?$/,'');
+      }
+      imported.innerHTML='<summary>ข้อมูลทุกหัวข้อตามไฟล์นำเข้า</summary>'+(data.sourceRows||[]).map(row=>`<section><p class="imported-file-label">เอกสารนำเข้า: ${esc(row.source_filename||'ไฟล์ข้อมูล')}</p><div class="table-wrap"><table><thead><tr><th>หัวข้อในต้นฉบับ</th><th>ค่าที่นำเข้า</th></tr></thead><tbody>${Object.entries(row.rawData||{}).map(([name,value])=>`<tr><th>${esc(name)}</th><td>${esc(formatCleanValue(value))}</td></tr>`).join('')}</tbody></table></div></section>`).join('');
 
       window.govAssetRegisterData=data;
       document.dispatchEvent(new CustomEvent('govasset:register-loaded',{detail:data}));
