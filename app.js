@@ -521,5 +521,5 @@ $('#helpBtn').addEventListener('click',()=>$('#manualDialog').showModal()); $('#
 $('.close-notice')?.addEventListener('click',event=>event.currentTarget.closest('.notice').remove());
 $('#ticketDialog').addEventListener('click',event=>{if(event.target===$('#ticketDialog'))$('#ticketDialog').close();});
 applyFontScale(fontScale);
-window.govAssetApp={api,toast,showError,refreshData,switchView,goBack,fmtDate,openTicket,openRepairDialog,getRole:()=>currentRole,loadFsn,openAssetDialog};
+window.govAssetApp={api,toast,showError,refreshData,switchView,goBack,fmtDate,openTicket,openRepairDialog,getRole:()=>currentRole,canManageSettings:()=>{const s=window.govAssetAccess?.session;return s?.required?Boolean(s.isAdmin):currentRole===ROLE_OFFICER;},loadFsn,openAssetDialog};
 refreshData();

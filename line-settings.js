@@ -9,7 +9,7 @@
   if(lineTarget.id==='tabPaneLine'){lineTarget.append(root);root.open=true;}
   else{lineTarget.after(root);}
   let cfg=null,epoch=0,statusEpoch=0,loading=false,saving=false,testing=false;
-  const editable=()=>app.getRole()==='เจ้าหน้าที่พัสดุ';
+  const editable=()=>app.canManageSettings();
   function controls(){const ready=editable()&&!!cfg&&!loading&&!saving;$('#lineFields').disabled=!ready;$('#saveLineSettings').disabled=!ready;$('#reloadLineSettings').disabled=loading||saving;$('#testLineConnection').disabled=!ready||testing||!cfg.tokenConfigured||!cfg.baseUrl||!cfg.recipients.length;}
   function routes(){return [...$('#lineRecipients').querySelectorAll('.line-recipient-row')].map(row=>({role:$('[data-line-role]',row).value,targetId:$('[data-line-target]',row).value.trim(),label:$('[data-line-label]',row).value.trim()}));}
   function renderRoutes(values){$('#lineRecipients').innerHTML=values.map((r,i)=>`<div class="line-recipient-row"><label>บทบาท<select data-line-role>${roles.map(role=>`<option ${role===r.role?'selected':''}>${esc(role)}</option>`).join('')}</select></label><label>LINE user/group/room ID<input data-line-target value="${esc(r.targetId)}" required pattern="[UCR][0-9a-fA-F]{32}" placeholder="U… / C… / R…"></label><label>ชื่อเรียกผู้รับ<input data-line-label value="${esc(r.label)}" required maxlength="80" placeholder="เช่น กลุ่มผู้อนุมัติ"></label><button type="button" class="text-button" data-remove-line="${i}">เอาออก</button></div>`).join('')||'<p class="field-hint">ยังไม่ได้กำหนดผู้รับ</p>';}
@@ -31,7 +31,7 @@
     }catch(error){if(full?request===epoch:request===statusEpoch&&configEpoch===epoch)$('#lineFormStatus').textContent=error.message;}
     finally{if(full&&request===epoch)loading=false;controls();}
   }
-  function access(){++epoch;++statusEpoch;loading=false;const allowed=editable();$('#lineOperatorPanel').hidden=!allowed;$('#lineAccessHint').textContent=allowed?'คีย์ลับเก็บที่เซิร์ฟเวอร์ หน้านี้แสดงเฉพาะสถานะการกำหนดค่า':'เลือกบทบาทเจ้าหน้าที่พัสดุเพื่อเชื่อมต่อ LINE';if(allowed&&root.open)load();controls();}
+  function access(){++epoch;++statusEpoch;loading=false;const allowed=editable();$('#lineOperatorPanel').hidden=!allowed;$('#lineAccessHint').textContent=allowed?'คีย์ลับเก็บที่เซิร์ฟเวอร์ หน้านี้แสดงเฉพาะสถานะการกำหนดค่า':(window.govAssetAccess?.session?.required?'การเชื่อมต่อ LINE ใช้สิทธิ์ผู้ดูแลระบบส่วนกลาง':'เลือกบทบาทเจ้าหน้าที่พัสดุเพื่อเชื่อมต่อ LINE');if(allowed&&root.open)load();controls();}
   root.addEventListener('toggle',()=>{if(root.open)access();});
   document.addEventListener('govasset:role-changed',access);
   $('#reloadLineSettings').onclick=()=>load();

@@ -214,14 +214,14 @@
   $('#brandingForm').elements.appName.addEventListener('input', e => $('#brandingPreviewName').textContent=e.target.value);
   $('#brandingForm').onsubmit=async event=>{
     event.preventDefault();
-    if(app.getRole()!=='เจ้าหน้าที่พัสดุ'){$('#brandingStatus').textContent='สำหรับเจ้าหน้าที่พัสดุที่มีสิทธิ์บันทึกการตั้งค่าระบบ';return;}
+    if(!app.canManageSettings()){$('#brandingStatus').textContent=window.govAssetAccess?.session?.required?'การบันทึกการตั้งค่าระบบใช้สิทธิ์ผู้ดูแลระบบส่วนกลาง':'สำหรับเจ้าหน้าที่พัสดุที่มีสิทธิ์บันทึกการตั้งค่าระบบ';return;}
     if(brandingSaving)return;
     brandingSaving=true;updateBrandingButton();
     try {
       await pendingLogo;
       if(logoError)throw new Error(logoError);
       const form=event.target;
-      const b=await app.api('/api/branding',{method:'PUT',body:JSON.stringify({...Object.fromEntries(new FormData(form)),logo,actor:app.getRole()})});
+      const b=await app.api('/api/branding',{method:'PUT',body:JSON.stringify({...Object.fromEntries(new FormData(form)),logo,revision:branding?.revision,actor:app.getRole()})});
       applyBranding(b);$('#brandingLogo').value='';$('#brandingStatus').textContent='บันทึกแล้ว ชื่อและโลโก้จะใช้ร่วมกับหน้าสแกนและฉลาก QR';app.toast('บันทึกอัตลักษณ์หน่วยงานแล้ว');
     }catch(error){$('#brandingStatus').textContent=error.message;}finally{brandingSaving=false;updateBrandingButton();}
   };

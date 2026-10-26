@@ -25,6 +25,7 @@ from smart_assets import base_url, branding, public_asset, public_receipt, qr_ur
 from work_api import handle as handle_work_api, WorkError, generate_due
 from register_forms import handle as handle_register_form
 from notifications import handle as handle_notifications, NotificationError, approval_threshold
+from settings_guard import settings_editor
 from numbering import valid_for_category, next_code, classification_type_exists
 from starter_catalog import seed as seed_starter_catalog
 from governance import GovernanceError, handle as handle_governance, initialize as initialize_governance, create_asset as create_account_asset
@@ -161,6 +162,8 @@ def initialize() -> None:
             for column, declaration in extension_columns.items():
                 if column not in columns:
                     db.execute(f"ALTER TABLE assets ADD COLUMN {column} {declaration}")
+        if "revision" not in {r["name"] for r in db.execute("PRAGMA table_info(app_branding)")} and db.execute("SELECT 1 FROM sqlite_master WHERE name='app_branding'").fetchone():
+            db.execute("ALTER TABLE app_branding ADD COLUMN revision INTEGER NOT NULL DEFAULT 1")
         db.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
         db.execute("INSERT OR IGNORE INTO workflow_settings(id,approval_threshold,reminder_days,updated_at,updated_by) VALUES(1,?,3,?,?)", (APPROVAL_THRESHOLD,now_iso(),"ค่าเริ่มต้นระบบ"))
         plan_columns = {r["name"] for r in db.execute("PRAGMA table_info(work_plans)")}
@@ -482,8 +485,9 @@ class Handler(BaseHTTPRequestHandler):
                 return branding(db)
             if method != "PUT":
                 raise ApiError("ไม่รองรับคำสั่งนี้", 405)
-            if body.get("actor") != ROLE_OFFICER:
-                raise ApiError("เลือกบทบาทเจ้าหน้าที่พัสดุเพื่อแก้ไขการตั้งค่าในโหมดทดสอบ", 403)
+            def deny(message):
+                raise ApiError(message, 403)
+            editor = settings_editor(db, body.get("actor"), deny)
             app_name = clean_text(body.get("appName"), 80, "ชื่อแอป")
             organization = clean_text(body.get("organization"), 160, "ชื่อหน่วยงาน")
             public_url = clean_text(body.get("publicBaseUrl", ""), 300, "โดเมนระบบ", required=False)
@@ -492,7 +496,8 @@ class Handler(BaseHTTPRequestHandler):
                     public_url = base_url(public_url)
                 except ValueError as exc:
                     raise ApiError(str(exc))
-            logo = body.get("logo", "")
+            # Omitting "logo" keeps the stored logo; sending "" restores the default one.
+            logo = body["logo"] if "logo" in body else branding(db)["logo"]
             if not isinstance(logo, str):
                 raise ApiError("ไฟล์โลโก้ไม่ถูกต้อง")
             if logo:
@@ -506,10 +511,24 @@ class Handler(BaseHTTPRequestHandler):
                 valid = {"png": raw.startswith(b'\x89PNG\r\n\x1a\n'), "jpeg": raw.startswith(b'\xff\xd8\xff'), "webp": raw.startswith(b'RIFF') and raw[8:12] == b'WEBP'}
                 if len(raw) > 500_000 or not valid[match_logo[1]]:
                     raise ApiError("โลโก้ต้องเป็นภาพที่ถูกต้องและมีขนาดไม่เกิน 500 KB")
-            db.execute("UPDATE app_branding SET app_name=?,organization=?,logo=?,public_base_url=? WHERE id=1", (app_name, organization, logo, public_url))
-            # Keep organization names on printed labels synchronized with branding.
-            db.execute("INSERT INTO sticker_settings(key,value,updated_at) VALUES('orgName',?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP", (organization,))
-            return branding(db)
+            db.execute("BEGIN IMMEDIATE")
+            before = branding(db)
+            if type(body.get("revision")) is not int or body["revision"] != before["revision"]:
+                raise ApiError("มีผู้แก้ไขการตั้งค่าแล้ว กรุณาโหลดค่าล่าสุดก่อนบันทึก", 409)
+            db.execute("UPDATE app_branding SET app_name=?,organization=?,logo=?,public_base_url=?,revision=revision+1 WHERE id=1", (app_name, organization, logo, public_url))
+            # Labels follow the organization name until someone gives Sticker Studio its own
+            # name. A stored value equal to the old name (or none) means "still following":
+            # drop it so sticker_settings() falls back to branding. A custom name is kept.
+            stored = db.execute("SELECT value FROM sticker_settings WHERE key='orgName'").fetchone()
+            if stored is not None and stored[0] == before["organization"]:
+                db.execute("DELETE FROM sticker_settings WHERE key='orgName'")
+            after = branding(db)
+            def audit_view(item):
+                logo_value = item["logo"]
+                return {**item, "logo": hashlib.sha256(logo_value.encode()).hexdigest()[:12] if logo_value else ""}
+            db.execute("INSERT INTO app_branding_events(actor,before_json,after_json,created_at) VALUES(?,?,?,?)",
+                       (editor, json.dumps(audit_view(before), ensure_ascii=False), json.dumps(audit_view(after), ensure_ascii=False), now_iso()))
+            return after
         match = re.fullmatch(r"/api/scan/([A-Za-z0-9_-]{32})(/repairs)?", path)
         if match:
             row = db.execute("SELECT a.* FROM assets a JOIN asset_qr_links q ON q.asset_id=a.id WHERE q.token=?", (match[1],)).fetchone()

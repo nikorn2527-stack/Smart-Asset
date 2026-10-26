@@ -141,7 +141,7 @@ class SmartWorkflow(HTTPFixture):
     def test_branding_validation_persistence_and_logo(self):
         before=self.call('/api/branding')
         logo='data:image/png;base64,'+base64.b64encode((ROOT/'assets/govasset-icon-optimized.png').read_bytes()).decode()
-        data={'appName':'ทะเบียนหน่วยงาน','organization':'กองพัสดุ','logo':logo,'publicBaseUrl':'https://assets.example.go.th','actor':OFFICER}
+        data={'appName':'ทะเบียนหน่วยงาน','organization':'กองพัสดุ','logo':logo,'publicBaseUrl':'https://assets.example.go.th','actor':OFFICER,'revision':before['revision']}
         saved=self.call('/api/branding',data,method='PUT')
         self.assertEqual(saved['developer'],'POWER BY PNG TEAM')
         self.assertEqual(saved['developerColor'],'#f97316')
@@ -151,7 +151,31 @@ class SmartWorkflow(HTTPFixture):
         self.call('/api/branding',{**data,'logo':'data:image/svg+xml;base64,PHN2Zz4='},method='PUT',expected=400)
         self.call('/api/branding',{**data,'publicBaseUrl':'javascript:alert(1)'},method='PUT',expected=400)
         self.call('/api/branding',{**data,'actor':TECH},method='PUT',expected=403)
-        self.call('/api/branding',{**before,'actor':OFFICER},method='PUT')
+        self.call('/api/branding',{**before,'revision':self.call('/api/branding')['revision'],'actor':OFFICER},method='PUT')
+
+    def test_branding_revision_logo_retention_audit_and_sticker_name(self):
+        cur=self.call('/api/branding')
+        base={'appName':'ทดสอบ','organization':'หน่วยงาน ก','actor':OFFICER}
+        logo='data:image/png;base64,'+base64.b64encode((ROOT/'assets/govasset-icon-optimized.png').read_bytes()).decode()
+        self.call('/api/branding',base,method='PUT',expected=409)
+        self.call('/api/branding',{**base,'revision':cur['revision']+5},method='PUT',expected=409)
+        # A label that still follows the organization name is re-linked on save.
+        self.call('/api/sticker/settings',{'orgName':cur['organization']},method='POST')
+        first=self.call('/api/branding',{**base,'logo':logo,'revision':cur['revision']},method='PUT')
+        self.assertEqual(first['revision'],cur['revision']+1)
+        second=self.call('/api/branding',{**base,'organization':'หน่วยงาน ข','revision':first['revision']},method='PUT')
+        self.assertEqual(second['logo'],logo,'omitting logo must keep the stored logo')
+        self.assertEqual(self.call('/api/sticker/settings')['orgName'],'หน่วยงาน ข')
+        self.call('/api/branding',{**base,'revision':first['revision']},method='PUT',expected=409)
+        # A deliberately different label name is never overwritten.
+        self.call('/api/sticker/settings',{'orgName':'ชื่อบนฉลาก'},method='POST')
+        third=self.call('/api/branding',{**base,'organization':'หน่วยงาน ค','logo':'','revision':second['revision']},method='PUT')
+        self.assertEqual(third['logo'],'')
+        self.assertEqual(self.call('/api/sticker/settings')['orgName'],'ชื่อบนฉลาก')
+        with sqlite3.connect(self.db) as db:
+            rows=db.execute('SELECT actor,before_json,after_json FROM app_branding_events ORDER BY id DESC LIMIT 3').fetchall()
+        self.assertEqual(len(rows),3);self.assertTrue(all(r[0]==OFFICER for r in rows))
+        self.assertTrue(all(len(r[1])<2000 and len(r[2])<2000 for r in rows),'audit rows must not embed the logo image')
 
     def test_missing_tokens_and_private_files(self):
         self.call('/api/scan/'+'x'*32,expected=404)

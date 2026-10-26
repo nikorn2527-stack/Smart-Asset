@@ -31,7 +31,7 @@
    $('#accessPassword').onclick=()=>{dropdown.hidden=true;modal.innerHTML='<form><h2>เปลี่ยนรหัสผ่าน</h2><label>รหัสผ่านปัจจุบัน<input name="currentPassword" type="password" autocomplete="current-password" required></label><label>รหัสผ่านใหม่ (อย่างน้อย 10 ตัว)<input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label><div class="supply-actions"><button type="submit" class="button primary">บันทึกและเข้าสู่ระบบใหม่</button><button type="button" class="button outline" data-cancel>ยกเลิก</button></div><p role="status"></p></form>';$('[data-cancel]',modal).onclick=()=>modal.close();$('form',modal).onsubmit=async e=>{e.preventDefault();try{await auth('password',Object.fromEntries(new FormData(e.target)));location.reload();}catch(e){$('[role=status]',modal).textContent=e.message;}};modal.showModal();};
    if(session.permissions.manage)setupUsers(app,options);
    // Keep global configuration out of organization-only workflows; the server also enforces it.
-   if(!session.isAdmin)document.querySelectorAll('[data-settings-panel=lineSettings],[data-settings-panel=brandingForm],[data-settings-panel=workflowSettings],[data-go-view=stickers]').forEach(n=>n.hidden=true);
+   if(!session.isAdmin)document.querySelectorAll('[data-settings-panel=lineSettings],[data-settings-panel=brandingForm],[data-settings-panel=workflowSettings],[data-go-view=stickers]').forEach(n=>n.hidden=true);if(!session.isAdmin)document.querySelectorAll('.settings-tab-btn[data-settings-tab=line],#tabPaneLine').forEach(n=>n.hidden=true);
  }
  function setupUsers(app,options){
    const accessPane=$('#tabPaneAccess');

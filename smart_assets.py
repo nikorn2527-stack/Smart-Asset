@@ -32,7 +32,7 @@ def qr_url(db, asset_id, origin=""):
 def branding(db):
     row = db.execute("SELECT * FROM app_branding WHERE id=1").fetchone()
     return {"appName": row["app_name"], "organization": row["organization"],
-            "logo": row["logo"], "publicBaseUrl": row["public_base_url"],
+            "logo": row["logo"], "publicBaseUrl": row["public_base_url"], "revision": row["revision"],
             "developer": "POWER BY PNG TEAM", "developerColor": "#f97316"}
 
 
