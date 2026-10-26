@@ -694,6 +694,7 @@ table thead th {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 14px !important;
@@ -702,13 +703,18 @@ table thead th {
 
 #view-dashboard .content-grid {
   display: grid !important;
-  grid-template-columns: minmax(0, 1.6fr) minmax(295px, 1fr) !important;
-  gap: 16px !important;
+  grid-template-columns: minmax(0, 1.45fr) minmax(330px, 1fr) !important;
+  gap: 14px !important;
+  align-items: stretch !important;
 }
 
-#view-dashboard .table-wrap {
-  max-height: 340px !important;
-  overflow-y: auto !important;
+#view-dashboard .recent-panel .table-wrap {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
 }
 
 /* 2. PM & Work Inventory View */

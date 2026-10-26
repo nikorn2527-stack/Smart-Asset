@@ -155,7 +155,7 @@ function renderAssets() {
   queueMicrotask(()=>document.dispatchEvent(new CustomEvent('govasset:inventory-rendered')));
   document.dispatchEvent(new CustomEvent('govasset:inventory-rendering'));
 
-  const recent=$('#recentRows'); if(recent) recent.innerHTML=assets.slice(0,4).map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.group)}</td><td>${badge(item.status)}</td></tr>`).join('');
+  const recent=$('#recentRows'); if(recent) recent.innerHTML=assets.slice(0,5).map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.fsnCode || item.code || '—')}</span></td><td><span class="category-badge-chip">${esc(item.group || 'ทั่วไป')}</span></td><td>${badge(item.status)}</td></tr>`).join('');
   const search=($('#assetSearch')?.value||'').trim().toLowerCase(), status=$('#statusFilter')?.value||'all', catVal=$('#categoryFilter')?.value||'';
   const filtered=inventoryRows!==null?inventoryRows:assets.filter(item=>`${item.name} ${item.code} ${item.group} ${item.location} ${item.status}`.toLowerCase().includes(search)&&(status==='all'||item.status===status));
   const rows=$('#assetRows');
