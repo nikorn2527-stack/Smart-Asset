@@ -102,7 +102,7 @@ erDiagram
 - `tickets` → `ticket_events` และ `asset_events`: Ticket ซ่อม, audit trail และเหตุการณ์ทะเบียน
 - `sticker_templates` / `sticker_settings` / `sticker_print_jobs` / `sticker_print_job_items`: แบบฉลาก ค่าพิมพ์ และประวัติฉลากที่สร้าง
 
-เส้นทางข้อมูลต่อทะเบียนคุมได้จากหน้า **ทะเบียนคุม → ตรวจข้อมูลต้นทางและการเชื่อมโยง** รวม source filename/row, acquisition, depreciation snapshot และ FSN matches
+เส้นทางข้อมูลต่อทะเบียนคุมได้จากหน้า **ทะเบียนคุม → ที่มาของครุภัณฑ์จากทะเบียน** รวม source filename/row, acquisition, depreciation snapshot และ FSN matches
 
 ## ฟังก์ชันที่ทดลองได้
 

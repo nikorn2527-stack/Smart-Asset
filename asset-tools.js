@@ -594,9 +594,9 @@
       $('#registerAssetContext').textContent=`${a.code||'ยังไม่มีรหัส'} · ${a.name||'ครุภัณฑ์'}`;
       $('#registerSourceInfo').textContent=sourceNames.length?`แหล่งหลักฐาน: ${sourceNames.join(' · ')}`:'ข้อมูลจากทะเบียนปัจจุบัน · ยังไม่มีเอกสารนำเข้าที่เชื่อมไว้';
       const provenance={asset:{id:a.id,code:a.code,name:a.name,sourceDocumentId:a.sourceDocumentId,sourceRowNo:a.sourceRowNo},sourceRows:data.sourceRows||[],acquisitions:data.acquisitions||[],depreciationSnapshots:data.depreciationSnapshots||[],fsnMatches:data.fsnMatches||[]};
-      $('#registerSourceJson').textContent=JSON.stringify(provenance,null,2);
+      if($('#registerSourceJson'))$('#registerSourceJson').textContent=JSON.stringify(provenance,null,2);
       let imported=$('#registerImportedFields');
-      if(!imported){imported=document.createElement('details');imported.id='registerImportedFields';imported.className='register-imported-fields';$('#registerSourceJson').closest('details').before(imported);}
+      if(!imported){imported=document.createElement('details');imported.id='registerImportedFields';imported.className='register-imported-fields';const target=$('#registerSourceJson')?.closest('details')||$('#registerProvenanceSummary');if(target)target.after(imported);}
       function formatCleanValue(val){
         if(val===null||val===undefined||val==='')return '-';
         if(typeof val==='object')return JSON.stringify(val);
