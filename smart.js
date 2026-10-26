@@ -852,6 +852,37 @@
   }
   initSettingsTabs();
 
+  function switchApprovalTab(tabKey) {
+    const tabs = document.querySelectorAll('.approval-tab-btn');
+    const panes = {
+      tickets: $('#tabPaneApprovalTickets'),
+      assets: $('#tabPaneApprovalAssets'),
+      supply: $('#tabPaneApprovalSupply')
+    };
+    tabs.forEach(btn => {
+      const active = btn.dataset.approvalTab === tabKey;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', String(active));
+    });
+    Object.entries(panes).forEach(([key, pane]) => {
+      if (!pane) return;
+      const isCurrent = key === tabKey;
+      pane.classList.toggle('active', isCurrent);
+      pane.hidden = !isCurrent;
+    });
+  }
+  window.switchApprovalTab = switchApprovalTab;
+
+  function initApprovalTabs() {
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('.approval-tab-btn');
+      if (btn && btn.dataset.approvalTab) {
+        switchApprovalTab(btn.dataset.approvalTab);
+      }
+    });
+  }
+  initApprovalTabs();
+
   app.api('/api/branding').then(applyBranding).catch(app.showError);
   app.openAsset = openAsset;
   app.openQrSimulator = openQrSimulator;

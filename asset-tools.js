@@ -163,6 +163,7 @@
       return;
     }
     const canvasW = Number(state.template?.canvas?.width) || 75.2;
+    const canvasH = Number(state.template?.canvas?.height) || 36;
 
     const numField = (label, prop, val, step = '0.1', unit = 'มม.') => `
       <label class="prop-field-num">
@@ -183,11 +184,21 @@
           ${numField('ความสูง', 'height', el.height, '0.1', 'มม.')}
         </div>
         <div class="prop-quick-align">
-          <span class="prop-sublabel">จัดตำแหน่งบนฉลาก:</span>
-          <div class="btn-group-mini">
-            <button type="button" class="mini-prop-btn" data-align-canvas="left" title="ชิดขอบซ้าย">⫷ ชิดซ้าย</button>
-            <button type="button" class="mini-prop-btn" data-align-canvas="center" title="กึ่งกลางแผ่น">≡ กึ่งกลาง</button>
-            <button type="button" class="mini-prop-btn" data-align-canvas="right" title="ชิดขอบขวา">⫸ ชิดขวา</button>
+          <div class="prop-align-row" style="margin-bottom:6px;">
+            <span class="prop-sublabel">จัดแนวนอน:</span>
+            <div class="btn-group-mini">
+              <button type="button" class="mini-prop-btn" data-align-canvas="left" title="ชิดขอบซ้าย">⫷ ชิดซ้าย</button>
+              <button type="button" class="mini-prop-btn" data-align-canvas="center" title="กึ่งกลางแนวนอน">≡ กลาง</button>
+              <button type="button" class="mini-prop-btn" data-align-canvas="right" title="ชิดขอบขวา">⫸ ชิดขวา</button>
+            </div>
+          </div>
+          <div class="prop-align-row">
+            <span class="prop-sublabel">จัดแนวตั้ง:</span>
+            <div class="btn-group-mini">
+              <button type="button" class="mini-prop-btn" data-valign-canvas="top" title="ชิดขอบบน">⤊ ชิดบน</button>
+              <button type="button" class="mini-prop-btn" data-valign-canvas="middle" title="กึ่งกลางแนวตั้ง">⬍ กึ่งกลาง</button>
+              <button type="button" class="mini-prop-btn" data-valign-canvas="bottom" title="ชิดขอบล่าง">⤋ ชิดล่าง</button>
+            </div>
           </div>
         </div>
       </div>
@@ -313,9 +324,16 @@
       html += `
         <div class="prop-section">
           <div class="prop-section-title">🖼️ ตราสัญลักษณ์ / ภาพ</div>
+          <div class="image-file-upload-block" style="margin-bottom: 10px;">
+            <span class="prop-label">เลือกรูปภาพจากเครื่อง (PNG, JPG, SVG, WebP)</span>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+              <input type="file" id="propImageFileInput" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="font-size:12px;flex:1;">
+            </div>
+            <small style="color:#64748b;font-size:10.5px;display:block;margin-top:3px;">ระบบแปลงไฟล์เป็นข้อมูลภาพพร้อมบันทึกในแบบสติกเกอร์ทันที</small>
+          </div>
           <label class="wide">
-            <span class="prop-label">URL รูปภาพ (https://)</span>
-            <input data-element-prop="source" type="url" value="${esc(el.source || '')}" placeholder="https://example.com/logo.png">
+            <span class="prop-label">หรือระบุ URL รูปภาพ (https:// หรือ data:image/...)</span>
+            <input data-element-prop="source" id="propImageSourceInput" type="text" value="${esc(el.source || '')}" placeholder="https://example.com/logo.png หรือเลือกไฟล์ด้านบน">
           </label>
         </div>
       `;
@@ -358,6 +376,35 @@
         renderPreview();
       });
     });
+
+    root.querySelectorAll('[data-valign-canvas]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const valign = btn.dataset.valignCanvas;
+        const h = Number(el.height || 5);
+        if (valign === 'top') el.y = 0;
+        else if (valign === 'middle') el.y = Math.max(0, Math.round(((canvasH - h) / 2) * 10) / 10);
+        else if (valign === 'bottom') el.y = Math.max(0, Math.round((canvasH - h) * 10) / 10);
+        renderProperties();
+        renderPreview();
+      });
+    });
+
+    const imgFileInput = root.querySelector('#propImageFileInput');
+    if (imgFileInput) {
+      imgFileInput.addEventListener('change', e => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = evt => {
+          el.source = evt.target.result;
+          const srcInput = root.querySelector('#propImageSourceInput');
+          if (srcInput) srcInput.value = el.source;
+          renderPreview();
+          renderElementList();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
 
     root.querySelectorAll('[data-set-size]').forEach(btn => {
       btn.addEventListener('click', () => {

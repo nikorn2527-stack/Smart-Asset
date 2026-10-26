@@ -63,7 +63,9 @@
         </div>
         <div class="top-actions">
           <span class="environment" id="dbIndicator"><i></i> ระบบฐานข้อมูลพร้อมใช้งาน</span>
+          <div class="topbar-divider" aria-hidden="true"></div>
           <div class="font-controls" role="group" aria-label="ปรับขนาดตัวอักษร"><button class="icon-button" id="fontDecrease" aria-label="ลดขนาดตัวอักษร">A−</button><span id="fontScaleLabel" aria-live="polite">120%</span><button class="icon-button" id="fontIncrease" aria-label="เพิ่มขนาดตัวอักษร">A+</button></div>
+          <div class="topbar-divider" aria-hidden="true"></div>
           <label class="role-picker"><span>หน้าที่ปฏิบัติงาน</span><select id="actorRole" aria-label="เลือกบทบาทผู้ใช้สำหรับทดสอบ"><option>ผู้แจ้ง</option><option>เจ้าหน้าที่พัสดุ</option><option>ผู้อนุมัติ</option><option>ช่าง</option></select></label>
         </div>
       </header>
@@ -236,7 +238,7 @@
                     <th style="width: 180px;">สถานที่ตั้ง / ผู้รับผิดชอบ</th>
                     <th style="width: 160px;">ราคาทุน / คงเหลือสุทธิ</th>
                     <th style="width: 110px;">สถานะ</th>
-                    <th style="width: 200px; text-align: center;">การจัดการ</th>
+                    <th style="width: 200px; text-align: center;">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody id="assetRows"></tbody>
@@ -431,10 +433,48 @@
               <div class="stat-foot">ระบบบันทึก Timeline ตรวจสอบได้</div>
             </article>
           </div>
+          <div class="approval-tabs-bar" role="tablist" aria-label="แถบคิวรออนุมัติ">
+            <button type="button" class="approval-tab-btn active" role="tab" aria-selected="true" data-approval-tab="tickets">
+              <span class="tab-icon">⚒️</span> Ticket รออนุมัติ
+              <span class="tab-badge" id="approvalTabBadgeTickets">0</span>
+            </button>
+            <button type="button" class="approval-tab-btn" role="tab" aria-selected="false" data-approval-tab="assets">
+              <span class="tab-icon">▤</span> ครุภัณฑ์ใหม่รอขึ้นทะเบียน
+              <span class="tab-badge" id="approvalTabBadgeAssets">0</span>
+            </button>
+            <button type="button" class="approval-tab-btn" role="tab" aria-selected="false" data-approval-tab="supply">
+              <span class="tab-icon">📦</span> ใบเบิก / จัดสรรที่รอพิจารณา
+              <span class="tab-badge" id="approvalTabBadgeSupply">0</span>
+            </button>
+          </div>
           <div class="approvals-scroll-body">
-<section class="panel listing-panel approval-panel"><div class="panel-heading"><div><h2>Ticket ที่รออนุมัติ</h2><p>ผู้อนุมัติเลือกอนุมัติหรือไม่อนุมัติ พร้อมระบุเหตุผล</p></div><span class="sheet-count" id="approvalTicketCount">0 รายการ</span></div><div class="table-wrap"><table><thead><tr><th>Ticket</th><th>รายการ / เหตุผล</th><th>ยอดเสนอ / ยอดจริง</th><th>การดำเนินการ</th></tr></thead><tbody id="approvalTicketRows"></tbody></table></div></section>
-          <section class="panel listing-panel approval-panel"><div class="panel-heading"><div><h2>ครุภัณฑ์ใหม่ที่รอลงทะเบียน</h2><p>ผู้อนุมัติตรวจรายการซ้ำและข้อมูลประกอบก่อนบันทึกเข้าทะเบียน</p></div><span class="sheet-count" id="approvalAssetCount">0 รายการ</span></div><div class="table-wrap"><table><thead><tr><th>รหัส FSN</th><th>รายการ / ที่ตั้ง</th><th>ผู้บันทึก</th><th>การดำเนินการ</th></tr></thead><tbody id="approvalAssetRows"></tbody></table></div></section>
-        
+            <div class="approval-tab-pane active" id="tabPaneApprovalTickets" role="tabpanel">
+              <section class="panel listing-panel approval-panel">
+                <div class="panel-heading">
+                  <div><h2>Ticket ที่รออนุมัติ</h2><p>ผู้อนุมัติเลือกอนุมัติหรือไม่อนุมัติ พร้อมระบุเหตุผล</p></div>
+                  <span class="sheet-count" id="approvalTicketCount">0 รายการ</span>
+                </div>
+                <div class="table-wrap"><table><thead><tr><th>Ticket</th><th>รายการ / เหตุผล</th><th>ยอดเสนอ / ยอดจริง</th><th>การดำเนินการ</th></tr></thead><tbody id="approvalTicketRows"></tbody></table></div>
+              </section>
+            </div>
+            <div class="approval-tab-pane" id="tabPaneApprovalAssets" role="tabpanel" hidden>
+              <section class="panel listing-panel approval-panel">
+                <div class="panel-heading">
+                  <div><h2>ครุภัณฑ์ใหม่ที่รอลงทะเบียน</h2><p>ผู้อนุมัติตรวจรายการซ้ำและข้อมูลประกอบก่อนบันทึกเข้าทะเบียน</p></div>
+                  <span class="sheet-count" id="approvalAssetCount">0 รายการ</span>
+                </div>
+                <div class="table-wrap"><table><thead><tr><th>รหัส FSN</th><th>รายการ / ที่ตั้ง</th><th>ผู้บันทึก</th><th>การดำเนินการ</th></tr></thead><tbody id="approvalAssetRows"></tbody></table></div>
+              </section>
+            </div>
+            <div class="approval-tab-pane" id="tabPaneApprovalSupply" role="tabpanel" hidden>
+              <section class="panel supply-approval-card">
+                <div class="panel-heading">
+                  <div><h2>ใบเบิก / จัดสรรที่รอพิจารณา</h2><p>พิจารณาอนุมัติใบเบิกพัสดุและจัดสรรครุภัณฑ์ตามสิทธิ์</p></div>
+                  <span class="sheet-count" id="supplyApprovalCount">0 รายการ</span>
+                </div>
+                <div id="supplyApprovalRows" class="supply-approval-list"></div>
+              </section>
+            </div>
           </div></section>
 
         <section class="view" id="view-survey"><div class="subpage-nav"><button class="button outline" type="button" data-go-view="assets">← กลับทะเบียนครุภัณฑ์</button></div>

@@ -10,19 +10,19 @@
 
 /* Integrated Topbar User & Scope Section */
 .topbar-user-section{display:flex;align-items:center;gap:8px;position:relative}
-.topbar-scope-btn{display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:20px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s ease}
-.topbar-scope-btn:hover{background:#dcfce7;border-color:#86efac}
-.topbar-scope-btn .scope-icon{font-size:14px}
-.topbar-scope-btn .scope-label{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.topbar-scope-btn .scope-caret{font-size:10px;color:#15803d}
+.topbar-scope-btn{display:inline-flex;align-items:center;gap:7px;height:34px;background:#ffffff;border:1px solid #e2e8f0;color:#1e293b;border-radius:8px;padding:0 12px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s ease;box-sizing:border-box}
+.topbar-scope-btn:hover{background:#f8fafc;border-color:#cbd5e1}
+.topbar-scope-btn .scope-icon{font-size:13px;opacity:0.85}
+.topbar-scope-btn .scope-label{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.topbar-scope-btn .scope-caret{font-size:10px;color:#94a3b8}
 
 .topbar-user-menu-wrap{position:relative}
-.topbar-user-btn{display:inline-flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:20px;padding:4px 12px 4px 5px;font-size:12.5px;font-weight:600;color:#1e293b;cursor:pointer;transition:all .15s ease}
-.topbar-user-btn:hover{background:#f1f5f9;border-color:#cbd5e1}
-.topbar-user-btn .user-avatar-badge{width:26px;height:26px;border-radius:50%;background:#0f766e;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
-.topbar-user-btn .user-name-text{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.topbar-user-btn .user-role-badge{font-size:10px;color:#0f766e;background:#ccfbf1;padding:2px 6px;border-radius:10px;font-weight:700}
-.topbar-user-btn .menu-caret{font-size:10px;color:#64748b}
+.topbar-user-btn{display:inline-flex;align-items:center;gap:7px;height:34px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:0 10px 0 5px;font-size:12px;font-weight:600;color:#1e293b;cursor:pointer;transition:all .15s ease;box-sizing:border-box}
+.topbar-user-btn:hover{background:#f8fafc;border-color:#cbd5e1}
+.topbar-user-btn .user-avatar-badge{width:24px;height:24px;border-radius:50%;background:#0f766e;color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700}
+.topbar-user-btn .user-name-text{max-width:115px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.topbar-user-btn .user-role-badge{font-size:10px;color:#475569;background:#f1f5f9;border:1px solid #e2e8f0;padding:1px 6px;border-radius:6px;font-weight:600}
+.topbar-user-btn .menu-caret{font-size:10px;color:#94a3b8}
 
 /* Floating User Dropdown Menu */
 .topbar-user-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:240px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 10px 25px rgba(15,23,42,0.12);padding:8px 0;z-index:100;animation:dropdownFade .15s ease-out}
