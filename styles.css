@@ -226,7 +226,7 @@ body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>.button{margin-t
 /* =========================================================
    MODAL / DIALOG FITTING IN 1 SCREEN & STICKY ACTION BAR
    ========================================================= */
-.asset-dialog, .ticket-dialog, .access-dialog, .equipment-dialog, .om-dialog, .master-data-dialog {
+.asset-dialog:not(.smart-dialog), .ticket-dialog, .access-dialog, .equipment-dialog, .om-dialog, .master-data-dialog {
   border: 0 !important;
   border-radius: 14px !important;
   padding: 0 !important;
@@ -241,7 +241,7 @@ body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>.button{margin-t
   background: rgba(12, 30, 42, 0.55);
   backdrop-filter: blur(3px);
 }
-.asset-dialog > form, .asset-dialog > div, .asset-dialog > .ticket-dialog-inner, .equipment-dialog > form, .om-dialog > form, .master-data-dialog > form, .access-dialog > form {
+.asset-dialog:not(.smart-dialog) > form, .asset-dialog:not(.smart-dialog) > div, .asset-dialog > .ticket-dialog-inner, .equipment-dialog > form, .om-dialog > form, .master-data-dialog > form, .access-dialog > form {
   display: flex !important;
   flex-direction: column !important;
   height: 100% !important;
@@ -250,7 +250,7 @@ body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>.button{margin-t
   margin: 0 !important;
   overflow: hidden !important;
 }
-.asset-dialog .dialog-head, .equipment-dialog .dialog-head, .om-dialog .dialog-head, .master-data-dialog .dialog-head, .ticket-dialog .dialog-head {
+.asset-dialog:not(.smart-dialog) .dialog-head, .equipment-dialog .dialog-head, .om-dialog .dialog-head, .master-data-dialog .dialog-head, .ticket-dialog .dialog-head {
   flex: none !important;
   display: flex !important;
   align-items: center !important;
@@ -262,7 +262,7 @@ body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>.button{margin-t
   top: 0 !important;
   z-index: 20 !important;
 }
-.asset-dialog .dialog-head h2, .equipment-dialog .dialog-head h2, .om-dialog .dialog-head h2, .master-data-dialog .dialog-head h2, .ticket-dialog .dialog-head h2 {
+.asset-dialog:not(.smart-dialog) .dialog-head h2, .equipment-dialog .dialog-head h2, .om-dialog .dialog-head h2, .master-data-dialog .dialog-head h2, .ticket-dialog .dialog-head h2 {
   font-size: 18px !important;
   font-weight: 700 !important;
   color: #16384d !important;

@@ -383,6 +383,14 @@
               </div>
             </div>
 
+            <div class="explainer-card">
+              <div class="explainer-icon">📱</div>
+              <div>
+                <b>ทดลองสั่งการบนสมาร์ทโฟนเสมือน</b>
+                <p>คลิกปุ่มบนหน้าจอมือถือฝั่งซ้าย เช่น <b>"แจ้งซ่อมครุภัณฑ์นี้ (จำลอง)"</b> หรือ <b>"สแกนตรวจรับงาน / ยืนยันสภาพ"</b> เพื่อทดสอบการแจ้งเตือนและการทำงานแบบเรียลไทม์</p>
+              </div>
+            </div>
+
             <div class="explainer-cta-box">
               <button type="button" class="button primary" id="simOpenFullScan">เปิดหน้าสแกนจริง (scan.html) ↗</button>
               <button type="button" class="button outline" data-close-sim>ปิดหน้าต่างจำลอง</button>
