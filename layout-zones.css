@@ -1,15 +1,15 @@
 /* ==========================================================================
-   GOVASSET ENTERPRISE 5-ZONE LAYOUT ARCHITECTURE
-   Separation of:
-   1. SIDEBAR (Pinned Left Navigation)
-   2. HEADER (Topbar + Page Heading Bar)
-   3. SUMMARY CARDS (KPI Metrics Banner)
-   4. MAIN CONTENT (Scrollable Data / Table Area - ONLY scrollable zone)
-   5. FOOTER (Pinned Bottom Pagination & Status Bar)
-   Prevents entire page sweeping/scrolling ("ไม่เลื่อนทั้งหน้ายกแผง")
+   GOVASSET ENTERPRISE 5-ZONE LAYOUT ARCHITECTURE (ALL 18 VIEWS & MENUS)
+   Strict separation of:
+   1. ZONE 1: SIDEBAR (Pinned Left Navigation - 100vh)
+   2. ZONE 2: HEADER (Pinned Topbar + Sub-Header / Page Heading)
+   3. ZONE 3: SUMMARY CARDS (Pinned KPI Summary Metrics under Header)
+   4. ZONE 4: MAIN CONTENT (Scrollable Data / Table Area - ONLY scrollable zone)
+   5. ZONE 5: FOOTER (Pinned Bottom Pagination & System Status Bar)
+   GUARANTEE: Zero whole-page scrolling / sweeping ("ไม่เลื่อนทั้งหน้ายกแผง")
    ========================================================================== */
 
-/* 0. Root Viewport Locking: Prevents whole-page scrolling */
+/* 0. Root Viewport Locking: Eliminates body/document sweeping */
 html, body {
   height: 100vh !important;
   max-height: 100vh !important;
@@ -31,7 +31,7 @@ html, body {
 }
 
 /* ==========================================================================
-   ZONE 1: SIDEBAR (Fixed Left Menu)
+   ZONE 1: SIDEBAR (Fixed Left Menu - 100vh)
    ========================================================================== */
 .sidebar {
   width: 255px !important;
@@ -50,6 +50,15 @@ html, body {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Developer credit badge in sidebar & footer */
+.sidebar .team-credit,
+.brand-dev .team-credit,
+footer.footer .team-credit {
+  color: #f97316 !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
 }
 
 /* ==========================================================================
@@ -98,6 +107,7 @@ main#main {
   position: relative !important;
 }
 
+/* View Container: Every view is a strictly constrained flex column */
 .view {
   display: none !important;
   height: 100% !important;
@@ -114,6 +124,13 @@ main#main {
   min-height: 0 !important;
   overflow: hidden !important;
   gap: 8px !important;
+}
+
+/* Sub-page back navigation bar */
+.view > .subpage-nav {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  padding: 0 0 4px 0 !important;
 }
 
 /* Page Heading Bar (Sub-header) inside Active View */
@@ -146,13 +163,21 @@ main#main {
   color: var(--muted, #647687) !important;
 }
 
+/* Top System Notices: Pinned under Heading */
+.view > .notice {
+  flex: 0 0 auto !important;
+  margin: 0 0 4px 0 !important;
+}
+
 /* ==========================================================================
    ZONE 3: SUMMARY CARDS (KPI Summary - Pinned under Header)
    ========================================================================== */
 .asset-kpi-banner, 
 .stats-grid, 
 .repair-summary, 
-.work-totals {
+.work-totals,
+.work-scheduler,
+.numbering-rule {
   flex: 0 0 auto !important;
   margin: 0 0 8px 0 !important;
   z-index: 25 !important;
@@ -218,35 +243,31 @@ main#main {
   color: #64748b !important;
 }
 
+/* Toolbars & Sub-navs docked directly above main data content */
+.filter-toolbar, 
+.filter-row,
+.supply-toolbar, 
+.depreciation-search, 
+.work-filters, 
+.supply-tabs,
+.equipment-tabs,
+.code-search,
+.register-selection,
+.admin-account-bar,
+.governance-tabs {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  z-index: 20 !important;
+}
+
 /* ==========================================================================
    ZONE 4: MAIN CONTENT (Scrollable Data / Table Area - ONLY Vertical Scroll)
    ========================================================================== */
 
-/* Toolbars docked directly above data content */
-.filter-toolbar, 
-.supply-toolbar, 
-.depreciation-search, 
-.work-filters, 
-.supply-tabs {
-  flex: 0 0 auto !important;
-  margin: 0 !important;
-  background: #ffffff !important;
-  border-radius: 8px 8px 0 0 !important;
-  border: 1px solid var(--line, #dce5ea) !important;
-  border-bottom: 0 !important;
-  z-index: 20 !important;
-}
-
-.filter-primary-row {
-  padding: 8px 12px !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-  flex-wrap: wrap !important;
-}
-
-/* Table panel container */
-.listing-panel {
+/* Universal Scrollable Panel Table Rules */
+.listing-panel,
+.approval-panel,
+.depreciation-panel {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   display: flex !important;
@@ -260,8 +281,12 @@ main#main {
 }
 
 /* Scrollable Table Wrapper: THIS IS THE ONLY ZONE THAT SCROLLS */
+.table-wrap,
 .listing-panel .table-wrap,
 #view-assets .table-wrap,
+#view-repairs .table-wrap,
+#view-approvals .table-wrap,
+#view-depreciation .table-wrap,
 #view-equipment [data-equipment-panel="list"] .table-wrap,
 #view-operational-master .table-wrap,
 .panel > .table-wrap {
@@ -273,9 +298,10 @@ main#main {
   -webkit-overflow-scrolling: touch !important;
 }
 
-/* Sticky Table Column Headers */
+/* Sticky Table Column Headers Across ALL Views */
 .table-wrap table thead th,
-.smart-asset-table thead th {
+.smart-asset-table thead th,
+table thead th {
   position: sticky !important;
   top: 0 !important;
   z-index: 10 !important;
@@ -285,18 +311,214 @@ main#main {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
 }
 
-/* For non-table multi-panel views (e.g. Dashboard, Settings, Supply, Survey, Register) */
-#view-dashboard, 
-#view-settings, 
-#view-supply, 
-#view-survey, 
-#view-register, 
-#view-codes, 
-#view-numbering, 
-#view-depreciation,
-#view-work {
-  overflow-y: auto !important;
+/* --------------------------------------------------------------------------
+   VIEW-SPECIFIC SCROLL CONTENT ZONES
+   -------------------------------------------------------------------------- */
+
+/* 1. Dashboard View */
+#view-dashboard .dashboard-scroll-body {
+  flex: 1 1 auto !important;
   min-height: 0 !important;
+  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  padding-bottom: 16px !important;
+}
+
+/* 2. PM & Work Inventory View */
+#view-work .work-scroll-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  padding-bottom: 16px !important;
+}
+
+/* 3. Approvals View */
+#view-approvals .approvals-scroll-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  padding-bottom: 16px !important;
+}
+
+/* 4. Settings View */
+#view-settings .settings-scroll-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  padding-bottom: 16px !important;
+}
+
+/* 5. Supply Intake & Issue View */
+#view-supply .supply-layout {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) !important;
+  gap: 16px !important;
+  margin-bottom: 6px !important;
+}
+
+#view-supply .supply-list {
+  height: 100% !important;
+  max-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+#view-supply #supplyRows {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+
+#view-supply .supply-detail {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+}
+
+/* 6. Supply Settings View */
+#view-supply-settings #supplySettingsForm {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding-bottom: 16px !important;
+}
+
+/* 7. Sticker Designer View */
+#view-stickers .sticker-layout {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) !important;
+  gap: 16px !important;
+  margin-bottom: 6px !important;
+}
+
+#view-stickers .sticker-asset-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+#view-stickers #stickerAssetResults {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+
+#view-stickers .sticker-editor-panel {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+
+/* 8. Survey Working Sheet View */
+#view-survey .survey-layout {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding-bottom: 16px !important;
+}
+
+/* 9. 12-Column Asset Control Register */
+#view-register .register-scroll-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  padding-bottom: 16px !important;
+}
+
+/* 10. Numbering Rules View */
+#view-numbering .numbering-scroll-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding-bottom: 16px !important;
+}
+
+/* 11. Codes and Categories View */
+#view-codes .codes-scroll-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  padding-bottom: 16px !important;
+}
+
+/* 12. Equipment Catalog & Import View */
+#view-equipment [data-equipment-panel="list"] {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+#view-equipment [data-equipment-panel="list"] section.panel {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  margin-bottom: 6px !important;
+}
+
+#view-equipment [data-equipment-panel="rules"],
+#view-equipment [data-equipment-panel="import"] {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding-bottom: 16px !important;
+}
+
+/* 13. Operational Master Data View */
+#view-operational-master section.panel {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  margin-bottom: 6px !important;
+}
+
+/* 14. Governance & Administration View */
+#view-administration [data-admin-section] {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding-bottom: 16px !important;
+}
+
+/* 15. Access Administration View */
+#view-access-admin .access-users {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
   padding-bottom: 16px !important;
 }
 
@@ -308,7 +530,9 @@ main#main {
 .inventory-pager, 
 .equipment-pager, 
 .om-pager, 
-.fsn-pager {
+.fsn-pager,
+.sticker-result-pager,
+.panel-foot {
   flex: 0 0 auto !important;
   position: sticky !important;
   bottom: 0 !important;
