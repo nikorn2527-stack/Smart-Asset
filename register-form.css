@@ -4,4 +4,11 @@
 @media(max-width:700px){.register-editor-fields{grid-template-columns:1fr 1fr}.register-preview-scroll{padding:10px}.register-editor{padding:16px}}
 @media print{html,body{margin:0!important;padding:0!important;background:#fff!important}.official-register-page{margin:0!important;box-shadow:none!important;break-after:page;width:297mm!important;height:210mm!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.official-register-page .rf-table th,.official-register-page .rf-table td{border:1px solid #000!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.official-register-page:last-child{break-after:auto}.register-form-actions{display:none!important}.register-print{margin:0!important;padding:0!important;background:#fff!important}}
 /* Keep the source form's two-line headings and single-line dates/numbers. */
-.official-register-page .rf-table th{font-size:10pt}.official-register-page .rf-table th:nth-child(8){font-size:9.5pt;white-space:nowrap}.rf-table td:not(:nth-child(3)):not(:nth-child(12)) .rf-cell-value,.rf-cell-total{white-space:nowrap}
+.official-register-page .rf-table th{font-size:8.5pt!important;line-height:1.25!important;padding:.6mm .4mm!important;white-space:normal!important;word-break:break-word!important}
+.official-register-page .rf-table th:nth-child(8){font-size:8pt!important;line-height:1.15!important;padding:.4mm .2mm!important;white-space:normal!important}
+.official-register-page .rf-table td{height:23mm;vertical-align:top;padding:.6mm .8mm;font-size:10pt}
+.official-register-page .rf-table td:nth-child(4),.official-register-page .rf-table td:nth-child(7){text-align:center}
+.rf-table tr.rf-summary-row td{height:8.5mm!important;vertical-align:middle!important;padding:.4mm .8mm!important;font-weight:400}
+.rf-table tr.rf-summary-row td.rf-sum-date{text-align:center!important}
+.rf-table tr.rf-summary-row td.rf-sum-money{text-align:right!important}
+.rf-table td:not(:nth-child(3)):not(:nth-child(12)) .rf-cell-value{white-space:nowrap}
