@@ -185,7 +185,7 @@ function renderAssets() {
         <td>${badge(item.status)}</td>
         <td style="text-align:center;">
           <div class="table-action-group">
-            <button class="btn-dossier" type="button" data-smart-id="${item.id}" title="เปิดแฟ้มและใบคุมครุภัณฑ์ 12 คอลัมน์">📋 แฟ้ม / ใบคุม</button>
+            <button class="btn-dossier" type="button" data-smart-id="${item.id}" title="เปิดแฟ้มและใบคุมทรัพย์สิน">📋 แฟ้ม / ใบคุม</button>
             <button class="btn-quick-repair" type="button" data-quick-repair="${item.id}" title="แจ้งซ่อมชิ้นนี้">⚒️ แจ้งซ่อม</button>
             ${currentRole===ROLE_OFFICER && can('edit') ? `<button class="btn-more-action" type="button" data-workspace-edit="${item.id}" title="แก้ไขข้อมูล">✏️</button>` : ''}
           </div>

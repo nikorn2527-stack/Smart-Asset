@@ -91,7 +91,7 @@
       dialog.innerHTML = `<div class="smart-dialog-head"><div><span class="eyebrow">ASSET WORKSPACE</span><h2>${esc(a.name)}</h2><span class="code-text">เลขประจำครุภัณฑ์ ${esc(a.code)}</span><p class="field-hint">รหัสจำแนก FSN: ${esc(a.fsnCode||'ยังไม่ได้ระบุแยก · คงเลขเดิมตามทะเบียน')}</p></div><button class="dialog-close" data-close-smart aria-label="ปิดรายละเอียด">×</button></div>
         <div class="smart-tabs" role="tablist">
           <button role="tab" aria-selected="true" data-smart-tab="info">ข้อมูลครุภัณฑ์</button>
-          <button role="tab" aria-selected="false" data-smart-tab="ledger">📋 ใบคุม 12 คอลัมน์</button>
+          <button role="tab" aria-selected="false" data-smart-tab="ledger">📋 ใบคุมทรัพย์สิน</button>
           <button role="tab" aria-selected="false" data-smart-tab="repairs">ประวัติซ่อม (${data.tickets.length})</button>
           <button role="tab" aria-selected="false" data-smart-tab="history">ประวัติทะเบียน</button>
         </div>
@@ -101,8 +101,8 @@
           <section data-smart-panel="ledger" hidden>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
               <div>
-                <h3 style="margin:0;font-size:16px;color:var(--smart-ink)">ทะเบียนคุมทรัพย์สิน (ตามระเบียบกระทรวงการคลังฯ)</h3>
-                <small style="color:#64798b">เอกสารมาตรฐาน 12 คอลัมน์สำหรับตรวจสอบและควบคุมสินทรัพย์</small>
+                <h3 style="margin:0;font-size:16px;color:var(--smart-ink)">ทะเบียนและประวัติคุมทรัพย์สิน</h3>
+                <small style="color:#64798b">เอกสารมาตรฐานสำหรับตรวจสอบและควบคุมสินทรัพย์</small>
               </div>
               <div style="display:flex;gap:8px">
                 <button type="button" class="button outline mini-action" id="openFullRegisterPage">หน้าใบคุม A4 เต็ม</button>
@@ -336,11 +336,11 @@
 
                 <div class="phone-qr-showcase">
                   <div class="phone-mini-qr">
-                    <img src="assets/govasset-mark-optimized.png" alt="QR Code" style="width:48px;height:48px;object-fit:contain;">
+                    <img src="assets/govasset-mark-optimized.png" alt="QR Code" style="width:36px;height:36px;object-fit:contain;">
                   </div>
                   <div>
                     <small style="color:#087e82;font-weight:700">QR ประจำครุภัณฑ์เพียงหนึ่งเดียว</small>
-                    <p style="margin:2px 0 0;font-size:11px;color:#64748b">สแกนดูประวัติเดิม หรือแจ้งซ่อมได้ทันที ไม่ต้องค้นหารหัส</p>
+                    <p style="margin:1px 0 0;font-size:9.5px;color:#64748b;line-height:1.25">สแกนดูประวัติเดิม หรือแจ้งซ่อมได้ทันที ไม่ต้องค้นหารหัส</p>
                   </div>
                 </div>
 
@@ -357,7 +357,7 @@
 
               <div class="phone-footer-credit">
                 <b>POWER BY PNG TEAM</b>
-                <small>ระบบทะเบียนครุภัณฑ์และบริหารงานซ่อมภาครัฐ</small>
+                <small>ระบบทะเบียนครุภัณฑ์และบริหารงานซ่อม</small>
               </div>
             </div>
           </div>
@@ -366,7 +366,7 @@
             <div class="explainer-card">
               <div class="explainer-icon">💡</div>
               <div>
-                <b>เป้าหมายการเชื่อมโยงงานพัสดุ</b>
+                <b>เป้าหมายการเชื่อมโยงข้อมูลครุภัณฑ์</b>
                 <p>เจ้าหน้าที่ผู้ใช้งานหรือทีมแพทย์พยาบาล เพียงยกสมาร์ทโฟนสแกน QR ที่ตัวเครื่อง จะเห็นประวัติการตรวจรับและแจ้งซ่อมทันทีโดยไม่ต้องจำรหัสครุภัณฑ์ 11 หลัก</p>
               </div>
             </div>
@@ -425,7 +425,7 @@
     <div class="smart-hero-main">
       <div class="hero-eyebrow-row">
         <span class="eyebrow"><span class="hero-live-beacon"></span> CONNECTED ASSET MANAGEMENT</span>
-        <span class="hero-core-badge">นวัตกรรม Smart QR ภาครัฐ</span>
+        <span class="hero-core-badge">ระบบ Smart QR ครุภัณฑ์</span>
       </div>
       <h2 class="hero-title">ดูแลทุกครุภัณฑ์ <span class="hero-title-accent">เชื่อมทุกงานซ่อม</span></h2>
       <div class="hero-target-box">

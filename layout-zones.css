@@ -695,8 +695,8 @@ table thead th {
 
 /* Smart QR Phone Simulation Modal */
 .qr-simulator-modal {
-  width: min(780px, 94vw) !important;
-  max-width: 780px !important;
+  width: min(840px, 94vw) !important;
+  max-width: 840px !important;
   border-radius: 18px !important;
   padding: 0 !important;
   border: 0 !important;
@@ -704,16 +704,34 @@ table thead th {
   box-shadow: 0 25px 60px rgba(12, 38, 53, 0.3) !important;
 }
 
+.qr-simulator-modal .smart-dialog-head {
+  padding: 18px 24px 14px !important;
+  border-bottom: 1px solid #e2e9f0 !important;
+  background: #ffffff !important;
+}
+
+.qr-simulator-modal .smart-dialog-head h2 {
+  font-size: 19px !important;
+  margin: 3px 0 !important;
+  color: #0f172a !important;
+}
+
+.qr-simulator-modal .smart-dialog-head .field-hint {
+  font-size: 11.5px !important;
+  margin: 0 !important;
+  color: #64748b !important;
+}
+
 .sim-modal-body {
-  padding: 16px 22px 22px !important;
+  padding: 14px 22px 18px !important;
   background: #f8fafc !important;
 }
 
 .sim-selector-bar {
   display: flex !important;
   align-items: center !important;
-  gap: 10px !important;
-  margin-bottom: 14px !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
   flex-wrap: wrap !important;
 }
 
@@ -733,7 +751,7 @@ table thead th {
   background: #ffffff !important;
   border: 1px solid #cbd5e1 !important;
   border-radius: 20px !important;
-  padding: 4px 10px !important;
+  padding: 3px 10px !important;
   font-size: 11px !important;
   color: #334155 !important;
   cursor: pointer !important;
@@ -750,12 +768,12 @@ table thead th {
 
 .sim-phone-wrapper {
   display: grid !important;
-  grid-template-columns: 310px 1fr !important;
+  grid-template-columns: 295px 1fr !important;
   gap: 20px !important;
-  align-items: start !important;
+  align-items: stretch !important;
 }
 
-@media(max-width: 680px) {
+@media(max-width: 720px) {
   .sim-phone-wrapper {
     grid-template-columns: 1fr !important;
   }
@@ -764,10 +782,13 @@ table thead th {
 .sim-phone-frame {
   background: #0f172a !important;
   border: 4px solid #334155 !important;
-  border-radius: 28px !important;
-  padding: 10px 8px 14px !important;
+  border-radius: 26px !important;
+  padding: 8px 7px 10px !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18) !important;
   color: #1e293b !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
 }
 
 .phone-notch {
@@ -775,20 +796,20 @@ table thead th {
   justify-content: center !important;
   align-items: center !important;
   gap: 8px !important;
-  height: 12px !important;
-  margin-bottom: 4px !important;
+  height: 10px !important;
+  margin-bottom: 3px !important;
 }
 
 .camera-lens {
-  width: 6px !important;
-  height: 6px !important;
+  width: 5px !important;
+  height: 5px !important;
   border-radius: 50% !important;
   background: #1e293b !important;
   border: 1px solid #475569 !important;
 }
 
 .speaker-grill {
-  width: 32px !important;
+  width: 28px !important;
   height: 3px !important;
   border-radius: 3px !important;
   background: #334155 !important;
@@ -797,62 +818,64 @@ table thead th {
 .phone-status-bar {
   display: flex !important;
   justify-content: space-between !important;
-  font-size: 9px !important;
-  color: #cbd5e1 !important;
-  padding: 0 6px 6px !important;
+  font-size: 8.5px !important;
+  color: #94a3b8 !important;
+  padding: 0 6px 4px !important;
 }
 
 .phone-screen-content {
   background: #ffffff !important;
-  border-radius: 20px !important;
-  padding: 12px !important;
-  max-height: 400px !important;
-  overflow-y: auto !important;
+  border-radius: 18px !important;
+  padding: 10px 10px 8px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
 }
 
 .phone-scan-header {
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
-  padding-bottom: 8px !important;
+  gap: 6px !important;
+  padding-bottom: 6px !important;
   border-bottom: 1px solid #f1f5f9 !important;
 }
 
 .phone-brand-mark {
-  width: 26px !important;
-  height: 26px !important;
+  width: 24px !important;
+  height: 24px !important;
   background: #e0f7f4 !important;
   color: #087e82 !important;
   border-radius: 6px !important;
   display: grid !important;
   place-items: center !important;
-  font-size: 13px !important;
+  font-size: 11px !important;
 }
 
 .phone-scan-header strong {
   display: block !important;
-  font-size: 11px !important;
+  font-size: 10.5px !important;
   color: #0f172a !important;
 }
 
 .phone-scan-header small {
   display: block !important;
-  font-size: 9px !important;
+  font-size: 8.5px !important;
   color: #64748b !important;
 }
 
 .phone-scan-verified {
   margin-left: auto !important;
-  font-size: 8.5px !important;
+  font-size: 8px !important;
   color: #059669 !important;
   background: #d1fae5 !important;
-  padding: 2px 6px !important;
+  padding: 2px 5px !important;
   border-radius: 10px !important;
   font-weight: 700 !important;
 }
 
 .phone-asset-card {
-  padding: 8px 0 !important;
+  padding: 4px 0 2px !important;
 }
 
 .phone-card-top {
@@ -862,16 +885,16 @@ table thead th {
 }
 
 .phone-kicker {
-  font-size: 8.5px !important;
+  font-size: 8px !important;
   font-weight: 700 !important;
   color: #087e82 !important;
   letter-spacing: 0.05em !important;
 }
 
 .phone-status-badge {
-  font-size: 9px !important;
+  font-size: 8.5px !important;
   font-weight: 600 !important;
-  padding: 2px 6px !important;
+  padding: 1px 6px !important;
   border-radius: 10px !important;
 }
 
@@ -879,38 +902,40 @@ table thead th {
 .phone-status-badge.amber { background: #fef3c7 !important; color: #b45309 !important; }
 
 .phone-asset-name {
-  font-size: 13px !important;
-  line-height: 1.3 !important;
+  font-size: 11.5px !important;
+  line-height: 1.25 !important;
   color: #0f172a !important;
-  margin: 4px 0 2px !important;
+  margin: 3px 0 2px !important;
+  font-weight: 700 !important;
 }
 
 .phone-code-pill {
   display: inline-block !important;
   font-family: monospace !important;
-  font-size: 10px !important;
+  font-size: 9.5px !important;
   font-weight: 700 !important;
   color: #1e3a8a !important;
   background: #eff6ff !important;
-  padding: 2px 6px !important;
+  padding: 1px 6px !important;
   border-radius: 4px !important;
-  margin-bottom: 8px !important;
+  margin-bottom: 5px !important;
 }
 
 .phone-detail-list {
   background: #f8fafc !important;
-  border-radius: 8px !important;
-  padding: 8px 10px !important;
+  border-radius: 7px !important;
+  padding: 5px 8px !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 5px !important;
-  margin-bottom: 10px !important;
+  gap: 3px !important;
+  margin-bottom: 5px !important;
 }
 
 .phone-detail-row {
   display: flex !important;
   justify-content: space-between !important;
-  font-size: 10.5px !important;
+  font-size: 9.5px !important;
+  line-height: 1.25 !important;
 }
 
 .phone-detail-row span { color: #64748b !important; }
@@ -919,38 +944,57 @@ table thead th {
 .phone-qr-showcase {
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
-  padding: 6px 8px !important;
+  gap: 7px !important;
+  padding: 4px 6px !important;
   border: 1px dashed #cbd5e1 !important;
-  border-radius: 8px !important;
-  margin-bottom: 10px !important;
+  border-radius: 7px !important;
+  margin-bottom: 5px !important;
 }
 
 .phone-mini-qr {
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
   border-radius: 6px !important;
-  padding: 3px !important;
+  padding: 2px !important;
   flex: none !important;
+}
+
+.phone-mini-qr img {
+  width: 36px !important;
+  height: 36px !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
+.phone-qr-showcase small {
+  font-size: 9.5px !important;
+  line-height: 1.2 !important;
+}
+
+.phone-qr-showcase p {
+  font-size: 8.5px !important;
+  line-height: 1.25 !important;
+  margin: 1px 0 0 !important;
+  color: #64748b !important;
 }
 
 .phone-actions-container {
   display: flex !important;
   flex-direction: column !important;
-  gap: 6px !important;
+  gap: 4px !important;
 }
 
 .phone-btn {
   width: 100% !important;
-  padding: 7px 10px !important;
-  font-size: 11px !important;
+  padding: 5px 8px !important;
+  font-size: 10px !important;
   font-weight: 600 !important;
   border-radius: 6px !important;
   cursor: pointer !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 6px !important;
+  gap: 5px !important;
   transition: all 0.15s ease !important;
 }
 
@@ -971,10 +1015,10 @@ table thead th {
 .phone-btn-verify:hover { background: #f1f5f9 !important; }
 
 .sim-feedback-msg {
-  font-size: 10.5px !important;
-  padding: 6px 8px !important;
-  border-radius: 6px !important;
-  margin: 6px 0 0 !important;
+  font-size: 9.5px !important;
+  padding: 4px 6px !important;
+  border-radius: 5px !important;
+  margin: 4px 0 0 !important;
   display: none !important;
 }
 
@@ -983,19 +1027,21 @@ table thead th {
 
 .phone-footer-credit {
   border-top: 1px solid #f1f5f9 !important;
-  margin-top: 8px !important;
-  padding-top: 6px !important;
+  margin-top: 4px !important;
+  padding-top: 4px !important;
   text-align: center !important;
 }
 
-.phone-footer-credit b { display: block !important; font-size: 9px !important; color: #f97316 !important; }
-.phone-footer-credit small { display: block !important; font-size: 8px !important; color: #94a3b8 !important; }
+.phone-footer-credit b { display: block !important; font-size: 8.5px !important; color: #f97316 !important; }
+.phone-footer-credit small { display: block !important; font-size: 7.5px !important; color: #94a3b8 !important; }
 
 /* Explainer right side */
 .sim-side-explainer {
   display: flex !important;
   flex-direction: column !important;
-  gap: 12px !important;
+  justify-content: space-between !important;
+  height: 100% !important;
+  gap: 10px !important;
 }
 
 .explainer-card {
@@ -1011,8 +1057,8 @@ table thead th {
 
 .explainer-icon {
   font-size: 16px !important;
-  width: 26px !important;
-  height: 26px !important;
+  width: 28px !important;
+  height: 28px !important;
   border-radius: 6px !important;
   background: #f0fdfa !important;
   color: #087e82 !important;
@@ -1053,12 +1099,14 @@ table thead th {
 .explainer-cta-box {
   display: flex !important;
   gap: 8px !important;
-  margin-top: 4px !important;
+  margin-top: auto !important;
+  padding-top: 4px !important;
 }
 
 .explainer-cta-box .button {
-  padding: 8px 14px !important;
-  font-size: 11px !important;
+  padding: 9px 14px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
 }
 
 #view-dashboard .stats-grid {
