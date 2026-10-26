@@ -310,3 +310,354 @@ body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>.button{margin-t
     grid-template-columns: 1fr !important;
   }
 }
+
+
+/* ==========================================================================
+   GOVASSET ENTERPRISE 5-ZONE LAYOUT ARCHITECTURE
+   Separation of:
+   1. SIDEBAR (Pinned Left Navigation)
+   2. HEADER (Topbar + Page Heading Bar)
+   3. SUMMARY CARDS (KPI Metrics Banner)
+   4. MAIN CONTENT (Scrollable Data / Table Area - ONLY scrollable zone)
+   5. FOOTER (Pinned Bottom Pagination & Status Bar)
+   Prevents entire page sweeping/scrolling ("ไม่เลื่อนทั้งหน้ายกแผง")
+   ========================================================================== */
+
+/* 0. Root Viewport Locking: Prevents whole-page scrolling */
+html, body {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: var(--canvas, #f3f6f8) !important;
+  box-sizing: border-box !important;
+}
+
+.app-shell {
+  display: flex !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+/* ==========================================================================
+   ZONE 1: SIDEBAR (Fixed Left Menu)
+   ========================================================================== */
+.sidebar {
+  width: 255px !important;
+  min-width: 255px !important;
+  max-width: 255px !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  position: relative !important;
+  flex: 0 0 255px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: var(--navy, #123d56) !important;
+  color: #eaf2f5 !important;
+  padding: 18px 14px 12px !important;
+  z-index: 100 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ==========================================================================
+   MAIN COLUMN CONTAINER
+   ========================================================================== */
+.main-column {
+  margin-left: 0 !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: var(--canvas, #f3f6f8) !important;
+  position: relative !important;
+}
+
+/* ==========================================================================
+   ZONE 2: HEADER (Pinned Topbar + Sub-Header / Page Heading)
+   ========================================================================== */
+header.topbar {
+  flex: 0 0 56px !important;
+  height: 56px !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid var(--line, #dce5ea) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0 24px !important;
+  z-index: 60 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Main Workspace Viewport */
+main#main {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: calc(100vh - 56px - 38px) !important;
+  overflow: hidden !important;
+  padding: 12px 24px 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  position: relative !important;
+}
+
+.view {
+  display: none !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.view.active {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  gap: 8px !important;
+}
+
+/* Page Heading Bar (Sub-header) inside Active View */
+.view > .page-heading {
+  flex: 0 0 auto !important;
+  position: static !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px 16px !important;
+  margin: 0 !important;
+  padding: 2px 0 6px 0 !important;
+  background: transparent !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+  z-index: 30 !important;
+}
+
+.view > .page-heading h1 {
+  font-size: 22px !important;
+  line-height: 1.3 !important;
+  margin: 0 !important;
+  color: #16384d !important;
+  font-weight: 700 !important;
+}
+
+.view > .page-heading p {
+  margin: 2px 0 0 !important;
+  font-size: 12px !important;
+  color: var(--muted, #647687) !important;
+}
+
+/* ==========================================================================
+   ZONE 3: SUMMARY CARDS (KPI Summary - Pinned under Header)
+   ========================================================================== */
+.asset-kpi-banner, 
+.stats-grid, 
+.repair-summary, 
+.work-totals {
+  flex: 0 0 auto !important;
+  margin: 0 0 8px 0 !important;
+  z-index: 25 !important;
+}
+
+/* Register KPI Cards Compact Styling */
+.asset-kpi-banner {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.asset-kpi-card {
+  background: #ffffff !important;
+  border: 1px solid var(--line, #dce5ea) !important;
+  border-radius: 9px !important;
+  padding: 10px 14px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+  transition: transform 0.15s, box-shadow 0.15s !important;
+}
+
+.asset-kpi-card:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+.asset-kpi-card .kpi-icon {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 8px !important;
+  display: grid !important;
+  place-items: center !important;
+  font-size: 17px !important;
+  flex: none !important;
+}
+
+.asset-kpi-card b {
+  display: block !important;
+  font-family: 'Prompt', 'Sarabun', sans-serif !important;
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  line-height: 1.2 !important;
+  margin: 1px 0 !important;
+}
+
+.asset-kpi-card small {
+  display: block !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #475569 !important;
+}
+
+.asset-kpi-card .kpi-sub {
+  display: block !important;
+  font-size: 10px !important;
+  color: #64748b !important;
+}
+
+/* ==========================================================================
+   ZONE 4: MAIN CONTENT (Scrollable Data / Table Area - ONLY Vertical Scroll)
+   ========================================================================== */
+
+/* Toolbars docked directly above data content */
+.filter-toolbar, 
+.supply-toolbar, 
+.depreciation-search, 
+.work-filters, 
+.supply-tabs {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  background: #ffffff !important;
+  border-radius: 8px 8px 0 0 !important;
+  border: 1px solid var(--line, #dce5ea) !important;
+  border-bottom: 0 !important;
+  z-index: 20 !important;
+}
+
+.filter-primary-row {
+  padding: 8px 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+/* Table panel container */
+.listing-panel {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: #ffffff !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--line, #dce5ea) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+  margin-bottom: 6px !important;
+}
+
+/* Scrollable Table Wrapper: THIS IS THE ONLY ZONE THAT SCROLLS */
+.listing-panel .table-wrap,
+#view-assets .table-wrap,
+#view-equipment [data-equipment-panel="list"] .table-wrap,
+#view-operational-master .table-wrap,
+.panel > .table-wrap {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* Sticky Table Column Headers */
+.table-wrap table thead th,
+.smart-asset-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  background: #f8fafc !important;
+  border-top: 0 !important;
+  border-bottom: 1px solid var(--line, #dce5ea) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* For non-table multi-panel views (e.g. Dashboard, Settings, Supply, Survey, Register) */
+#view-dashboard, 
+#view-settings, 
+#view-supply, 
+#view-survey, 
+#view-register, 
+#view-codes, 
+#view-numbering, 
+#view-depreciation,
+#view-work {
+  overflow-y: auto !important;
+  min-height: 0 !important;
+  padding-bottom: 16px !important;
+}
+
+/* ==========================================================================
+   ZONE 5: FOOTER (Pinned Bottom Pagination & Status Bar)
+   ========================================================================== */
+
+/* Pagination Toolbar: Pinned to bottom of table panel */
+.inventory-pager, 
+.equipment-pager, 
+.om-pager, 
+.fsn-pager {
+  flex: 0 0 auto !important;
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 25 !important;
+  background: #ffffff !important;
+  border-top: 1px solid var(--line, #dce5ea) !important;
+  padding: 8px 16px !important;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.03) !important;
+}
+
+/* System Footer: Pinned at the very bottom of main column */
+footer.footer {
+  flex: 0 0 38px !important;
+  height: 38px !important;
+  background: #ffffff !important;
+  border-top: 1px solid var(--line, #dce5ea) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0 24px !important;
+  z-index: 50 !important;
+  font-size: 11px !important;
+  color: var(--muted, #647687) !important;
+  box-sizing: border-box !important;
+}
+
+/* Mobile Responsive Adjustments */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 60px !important;
+    min-width: 60px !important;
+    max-width: 60px !important;
+    padding: 14px 6px !important;
+  }
+  .asset-kpi-banner {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}

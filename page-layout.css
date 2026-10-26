@@ -7,18 +7,16 @@
   .view.active { animation: none; }
   .view > .page-heading,
   .view > .page-heading:has(.page-actions) {
-    position: sticky;
-    top: var(--page-topbar-height);
-    z-index: 3;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: row;
     align-items: center;
     flex-wrap: wrap;
     gap: 8px 16px;
-    margin: 0 0 12px;
-    padding: 12px 0;
-    background: #f3f6fa;
-    border-bottom: 1px solid #dce5ec;
+    margin: 0 0 8px;
+    padding: 4px 0;
+    background: transparent;
+    border-bottom: 0;
   }
   .page-heading > div:first-child { min-width: 0; flex: 1 1 230px; }
   .page-heading h1 { margin: 0; font-size: 23px; line-height: 1.4; }
