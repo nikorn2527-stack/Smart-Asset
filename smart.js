@@ -493,7 +493,12 @@
     </div>
   `;
 
-  $('#view-dashboard .notice').after(hero);
+  const heroTarget = $('#view-dashboard .notice') || $('#view-dashboard .page-heading');
+  if (heroTarget) {
+    heroTarget.after(hero);
+  } else {
+    $('#view-dashboard')?.prepend(hero);
+  }
 
   $('#smartGoAssets').onclick = () => app.switchView('assets');
   $('#smartGoRepairs').onclick = () => app.switchView('repairs');

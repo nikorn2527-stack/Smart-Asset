@@ -380,15 +380,15 @@ table thead th {
   display: flex !important;
   justify-content: space-between !important;
   align-items: stretch !important;
-  gap: 20px !important;
-  padding: 14px 22px !important;
-  margin: 4px 0 10px !important;
+  gap: 16px !important;
+  padding: 8px 18px !important;
+  margin: 0 0 6px !important;
   background: linear-gradient(135deg, #e3f4f0 0%, #f0f7fb 100%) !important;
   border: 1px solid #cce8e3 !important;
-  border-radius: 14px !important;
+  border-radius: 11px !important;
   color: var(--smart-ink, #16354a) !important;
   flex: 0 0 auto !important;
-  box-shadow: 0 2px 8px rgba(8, 126, 130, 0.05) !important;
+  box-shadow: 0 2px 6px rgba(8, 126, 130, 0.05) !important;
   position: relative !important;
 }
 
@@ -397,7 +397,7 @@ table thead th {
   min-width: 0 !important;
   display: flex !important;
   flex-direction: column !important;
-  justify-content: space-between !important;
+  justify-content: center !important;
 }
 
 #view-dashboard .hero-eyebrow-row {
@@ -435,9 +435,9 @@ table thead th {
 }
 
 #view-dashboard .hero-title {
-  font-size: 19px !important;
-  line-height: 1.25 !important;
-  margin: 2px 0 4px !important;
+  font-size: 16px !important;
+  line-height: 1.2 !important;
+  margin: 1px 0 2px !important;
   letter-spacing: -0.03em !important;
   color: #123d56 !important;
   font-weight: 700 !important;
@@ -448,17 +448,17 @@ table thead th {
 }
 
 #view-dashboard .hero-target-box {
-  background: rgba(255, 255, 255, 0.85) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
   border-left: 3px solid #087e82 !important;
-  padding: 6px 12px !important;
-  border-radius: 0 8px 8px 0 !important;
-  margin: 3px 0 8px 0 !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  padding: 4px 10px !important;
+  border-radius: 0 6px 6px 0 !important;
+  margin: 2px 0 4px 0 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
 }
 
 #view-dashboard .hero-quote-text {
-  font-size: 12.5px !important;
-  line-height: 1.45 !important;
+  font-size: 11.5px !important;
+  line-height: 1.35 !important;
   color: #274758 !important;
   margin: 0 !important;
 }
@@ -467,7 +467,7 @@ table thead th {
   color: #087e82 !important;
   font-weight: 700 !important;
   background: #e6f6f3 !important;
-  padding: 1px 6px !important;
+  padding: 0 5px !important;
   border-radius: 4px !important;
   border: 1px solid #b8e0db !important;
   display: inline-block !important;
@@ -476,14 +476,15 @@ table thead th {
 #view-dashboard .hero-buttons-row {
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
+  gap: 6px !important;
   flex-wrap: wrap !important;
+  margin-top: 2px !important;
 }
 
 #view-dashboard .hero-buttons-row .button {
-  padding: 6px 13px !important;
-  font-size: 11px !important;
-  border-radius: 6px !important;
+  padding: 4px 11px !important;
+  font-size: 10.5px !important;
+  border-radius: 5px !important;
 }
 
 #view-dashboard .hero-sim-btn {
@@ -513,20 +514,20 @@ table thead th {
 
 /* 3 Interactive Cards on the Right */
 #view-dashboard .smart-hero-interactive-flow {
-  min-width: 310px !important;
-  max-width: 360px !important;
+  min-width: 280px !important;
+  max-width: 320px !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: center !important;
-  gap: 4px !important;
+  gap: 3px !important;
   flex: none !important;
 }
 
 #view-dashboard .hero-flow-card {
   background: rgba(255, 255, 255, 0.9) !important;
   border: 1px solid #d4e7e4 !important;
-  border-radius: 9px !important;
-  padding: 6px 10px !important;
+  border-radius: 7px !important;
+  padding: 4px 8px !important;
   cursor: pointer !important;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
   display: flex !important;
@@ -1063,15 +1064,15 @@ table thead th {
 #view-dashboard .stats-grid {
   display: grid !important;
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  gap: 10px !important;
-  margin: 0 0 10px 0 !important;
+  gap: 8px !important;
+  margin: 0 0 6px 0 !important;
   flex: 0 0 auto !important;
 }
 
 #view-dashboard .stat-card {
-  padding: 8px 12px !important;
-  min-height: 72px !important;
-  border-radius: 9px !important;
+  padding: 6px 10px !important;
+  min-height: 52px !important;
+  border-radius: 8px !important;
   border: 1px solid #e1e9ed !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
   display: flex !important;
@@ -1080,7 +1081,7 @@ table thead th {
 }
 
 #view-dashboard .stat-top {
-  font-size: 11px !important;
+  font-size: 10px !important;
   color: #556976 !important;
   display: flex !important;
   align-items: center !important;
@@ -1088,70 +1089,80 @@ table thead th {
 }
 
 #view-dashboard .stat-icon {
-  width: 24px !important;
-  height: 24px !important;
-  font-size: 13px !important;
-  border-radius: 6px !important;
+  width: 20px !important;
+  height: 20px !important;
+  font-size: 11px !important;
+  border-radius: 5px !important;
 }
 
 #view-dashboard .stat-number {
-  font-size: 21px !important;
+  font-size: 17px !important;
   line-height: 1.15 !important;
   font-weight: 700 !important;
   color: #14354a !important;
-  margin: 1px 0 !important;
+  margin: 0 !important;
 }
 
 #view-dashboard .stat-foot {
-  font-size: 10px !important;
+  font-size: 9px !important;
   color: #7a8e9b !important;
 }
 
 #view-dashboard .dashboard-scroll-body {
   flex: 1 1 auto !important;
   min-height: 0 !important;
-  overflow-y: auto !important;
+  overflow-y: hidden !important;
   overflow-x: hidden !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 14px !important;
-  padding-bottom: 24px !important;
-  scrollbar-width: thin !important;
-  scrollbar-color: #cbd5e1 transparent !important;
+  gap: 6px !important;
+  padding-bottom: 0 !important;
 }
 
-#view-dashboard .dashboard-scroll-body::-webkit-scrollbar {
-  width: 6px !important;
-}
-
-#view-dashboard .dashboard-scroll-body::-webkit-scrollbar-thumb {
-  background: #cbd5e1 !important;
-  border-radius: 4px !important;
+@media (max-height: 640px) {
+  #view-dashboard .dashboard-scroll-body {
+    overflow-y: auto !important;
+  }
 }
 
 #view-dashboard .content-grid {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
   display: grid !important;
-  grid-template-columns: minmax(0, 1.45fr) minmax(330px, 1fr) !important;
-  gap: 14px !important;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 1fr) !important;
+  gap: 10px !important;
   align-items: stretch !important;
 }
 
 #view-dashboard .recent-panel {
+  height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
   background: #ffffff !important;
   border: 1px solid var(--line, #dce5ea) !important;
-  border-radius: 12px !important;
+  border-radius: 10px !important;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
   overflow: hidden !important;
+  min-height: 0 !important;
 }
 
 #view-dashboard .recent-panel .panel-heading {
-  padding: 12px 18px !important;
+  padding: 8px 14px !important;
   border-bottom: 1px solid #edf2f5 !important;
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
+  flex: 0 0 auto !important;
+}
+
+#view-dashboard .recent-panel .panel-heading h2 {
+  font-size: 12.5px !important;
+  margin: 0 !important;
+}
+
+#view-dashboard .recent-panel .panel-heading p {
+  font-size: 10px !important;
+  margin: 1px 0 0 !important;
 }
 
 #view-dashboard .panel-icon-title {
@@ -1164,10 +1175,8 @@ table thead th {
 #view-dashboard .recent-panel .table-wrap {
   flex: 1 1 auto !important;
   min-height: 0 !important;
-  height: auto !important;
-  max-height: none !important;
   overflow-x: auto !important;
-  overflow-y: visible !important;
+  overflow-y: auto !important;
 }
 
 #view-dashboard .recent-panel table {
@@ -1178,15 +1187,15 @@ table thead th {
 #view-dashboard .recent-panel th {
   background: #f8fafc !important;
   color: #475569 !important;
-  font-size: 11px !important;
+  font-size: 10.5px !important;
   font-weight: 600 !important;
-  padding: 9px 14px !important;
+  padding: 5px 10px !important;
   border-bottom: 1px solid #e2e8f0 !important;
 }
 
 #view-dashboard .recent-panel td {
-  padding: 8px 14px !important;
-  font-size: 12px !important;
+  padding: 5px 10px !important;
+  font-size: 11px !important;
   border-bottom: 1px solid #f1f5f9 !important;
   vertical-align: middle !important;
 }
@@ -1196,33 +1205,46 @@ table thead th {
 }
 
 #view-dashboard .recent-panel .panel-foot {
-  padding: 8px 16px !important;
+  padding: 5px 12px !important;
   border-top: 1px solid #eef2f5 !important;
   background: #fafcfd !important;
-  font-size: 11px !important;
+  font-size: 10px !important;
   color: #64748b !important;
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
+  flex: 0 0 auto !important;
 }
 
 #view-dashboard .workflow-panel {
+  height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
   background: #ffffff !important;
   border: 1px solid var(--line, #dce5ea) !important;
-  border-radius: 12px !important;
+  border-radius: 10px !important;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
-  overflow: visible !important;
-  height: auto !important;
+  overflow: hidden !important;
+  min-height: 0 !important;
 }
 
 #view-dashboard .workflow-panel .panel-heading {
-  padding: 12px 18px !important;
+  padding: 8px 14px !important;
   border-bottom: 1px solid #edf2f5 !important;
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
+  flex: 0 0 auto !important;
+}
+
+#view-dashboard .workflow-panel .panel-heading h2 {
+  font-size: 12.5px !important;
+  margin: 0 !important;
+}
+
+#view-dashboard .workflow-panel .panel-heading p {
+  font-size: 10px !important;
+  margin: 1px 0 0 !important;
 }
 
 #view-dashboard .workflow-badge-tag {
@@ -1236,19 +1258,22 @@ table thead th {
 }
 
 #view-dashboard .workflow-pillars-container {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 7px !important;
-  padding: 12px 16px !important;
+  justify-content: space-between !important;
+  gap: 4px !important;
+  padding: 6px 12px !important;
   margin: 0 !important;
 }
 
 #view-dashboard .workflow-pillar-card {
   display: flex !important;
   align-items: center !important;
-  gap: 11px !important;
-  padding: 8px 12px !important;
-  border-radius: 8px !important;
+  gap: 8px !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
   border: 1px solid #e9edf0 !important;
   background: #ffffff !important;
   transition: all 0.15s ease !important;
@@ -1269,10 +1294,10 @@ table thead th {
 #view-dashboard .pillar-step-badge {
   font-family: 'Prompt', 'Sarabun', sans-serif !important;
   font-weight: 700 !important;
-  font-size: 12px !important;
-  width: 26px !important;
-  height: 26px !important;
-  border-radius: 6px !important;
+  font-size: 11px !important;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 4px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -1292,20 +1317,20 @@ table thead th {
 #view-dashboard .pillar-title-row {
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
+  gap: 6px !important;
 }
 
 #view-dashboard .pillar-title-row b {
-  font-size: 12px !important;
+  font-size: 11px !important;
   font-weight: 600 !important;
   color: #16354a !important;
-  line-height: 1.3 !important;
+  line-height: 1.25 !important;
 }
 
 #view-dashboard .pillar-status-chip {
-  font-size: 9px !important;
+  font-size: 8.5px !important;
   font-weight: 600 !important;
-  padding: 1px 6px !important;
+  padding: 1px 5px !important;
   border-radius: 4px !important;
   background: #f1f5f9 !important;
   color: #475569 !important;
@@ -1318,9 +1343,9 @@ table thead th {
 
 #view-dashboard .pillar-info small {
   display: block !important;
-  font-size: 11px !important;
+  font-size: 9.5px !important;
   color: #64748b !important;
-  line-height: 1.3 !important;
+  line-height: 1.2 !important;
   margin-top: 1px !important;
   white-space: nowrap !important;
   overflow: hidden !important;
@@ -1329,13 +1354,13 @@ table thead th {
 
 #view-dashboard .pillar-action-btn {
   flex: none !important;
-  padding: 4px 8px !important;
-  font-size: 11px !important;
+  padding: 2px 6px !important;
+  font-size: 9.5px !important;
   font-weight: 600 !important;
   color: #087e82 !important;
   border: 1px solid #b2dbd6 !important;
   background: #ffffff !important;
-  border-radius: 5px !important;
+  border-radius: 4px !important;
   cursor: pointer !important;
   transition: all 0.15s !important;
 }
@@ -1346,62 +1371,41 @@ table thead th {
 }
 
 #view-dashboard .workflow-footer-cta {
-  padding: 0 16px 12px !important;
+  padding: 0 12px 6px !important;
   margin-top: auto !important;
+  flex: 0 0 auto !important;
 }
 
 #view-dashboard .workflow-footer-cta .button {
   width: 100% !important;
-  font-size: 11px !important;
-  padding: 7px 12px !important;
-  border-radius: 6px !important;
+  font-size: 10.5px !important;
+  padding: 5px 10px !important;
+  border-radius: 5px !important;
 }
 
 #view-dashboard .repair-overview {
-  background: #ffffff !important;
-  border: 1px solid var(--line, #dce5ea) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
-  overflow: hidden !important;
-  margin-top: 4px !important;
-}
-
-#view-dashboard .repair-overview .panel-heading {
-  padding: 12px 18px !important;
-  border-bottom: 1px solid #edf2f5 !important;
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;
-}
-
-#view-dashboard .repair-overview .panel-foot {
-  padding: 8px 16px !important;
-  border-top: 1px solid #eef2f5 !important;
-  background: #fafcfd !important;
-  font-size: 11px !important;
-  color: #64748b !important;
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;
+  display: none !important;
 }
 
 #view-dashboard .bottom-grid {
+  flex: 0 0 auto !important;
   display: grid !important;
-  grid-template-columns: 1.5fr 1fr !important;
-  gap: 14px !important;
-  margin-top: 4px !important;
+  grid-template-columns: 1.45fr 1fr !important;
+  gap: 10px !important;
+  margin-top: 0 !important;
 }
 
 #view-dashboard .guide-card,
 #view-dashboard .cycle-card {
   background: #ffffff !important;
   border: 1px solid var(--line, #dce5ea) !important;
-  border-radius: 10px !important;
-  padding: 12px 16px !important;
+  border-radius: 8px !important;
+  padding: 5px 12px !important;
   display: flex !important;
   align-items: center !important;
-  gap: 12px !important;
+  gap: 10px !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+  min-height: 38px !important;
 }
 
 #view-dashboard .guide-mark {
@@ -1409,30 +1413,46 @@ table thead th {
   color: #0369a1 !important;
   border: 1px solid #bae6fd !important;
   font-weight: 700 !important;
-  border-radius: 6px !important;
-  padding: 6px 8px !important;
-  font-size: 11px !important;
+  border-radius: 4px !important;
+  padding: 3px 6px !important;
+  font-size: 9.5px !important;
 }
 
 #view-dashboard .cycle-icon {
   background: #e0f7f4 !important;
   color: #087e82 !important;
-  border-radius: 6px !important;
-  width: 32px !important;
-  height: 32px !important;
+  border-radius: 5px !important;
+  width: 22px !important;
+  height: 22px !important;
   display: grid !important;
   place-items: center !important;
-  font-size: 16px !important;
+  font-size: 11px !important;
+}
+
+#view-dashboard .guide-card b,
+#view-dashboard .cycle-card b {
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  color: #16354a !important;
+}
+
+#view-dashboard .guide-card p,
+#view-dashboard .cycle-card p {
+  font-size: 9.5px !important;
+  line-height: 1.2 !important;
+  color: #64748b !important;
+  margin: 1px 0 0 !important;
 }
 
 #view-dashboard .cycle-tag {
   margin-left: auto !important;
   color: #065f46 !important;
   background: #d1fae5 !important;
-  padding: 3px 8px !important;
-  border-radius: 8px !important;
-  font-size: 10px !important;
+  padding: 2px 6px !important;
+  border-radius: 6px !important;
+  font-size: 8.5px !important;
   font-weight: 600 !important;
+  border: 1px solid #a7f3d0 !important;
 }
 
 /* 2. PM & Work Inventory View */

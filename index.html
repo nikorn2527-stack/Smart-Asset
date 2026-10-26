@@ -76,7 +76,6 @@
             <div><div class="eyebrow">ระบบทะเบียนและบริหารพัสดุภาครัฐ <span class="live-dot"></span> ข้อมูลล่าสุด</div><h1>ภาพรวมงานครุภัณฑ์</h1><p>ติดตามรายการสำรวจและการกำหนดรหัสในหน่วยงานของคุณ</p></div>
             <button class="button primary" id="newAssetTop"><span>＋</span> เพิ่มรายการครุภัณฑ์</button>
           </div>
-          <div class="notice"><span class="notice-icon">i</span><div><b>ระบบบริหารจัดการทะเบียนครุภัณฑ์และสินทรัพย์ภาครัฐ</b><p>เชื่อมโยงข้อมูลทะเบียนคุม การจำแนกประเภท และสายการอนุมัติตามระเบียบพัสดุ</p></div><button class="close-notice" aria-label="ปิดประกาศ">×</button></div>
           <div class="stats-grid">
             <article class="stat-card"><div class="stat-top"><span>รายการครุภัณฑ์</span><span class="stat-icon blue">▤</span></div><div class="stat-number" id="totalCount">—</div><div class="stat-foot">รายการในทะเบียนทั้งหมด</div></article>
             <article class="stat-card"><div class="stat-top"><span>งานซ่อมที่ยังไม่ปิด</span><span class="stat-icon amber">◷</span></div><div class="stat-number" id="openRepairCount">—</div><div class="stat-foot">รับแจ้ง / ดำเนินการ / รอตรวจรับ</div></article>
@@ -175,32 +174,6 @@
                 </div>
               </section>
             </div>
-            <section class="panel repair-overview">
-              <div class="panel-heading">
-                <div>
-                  <h2><span class="panel-icon-title">⚒</span> งานแจ้งซ่อมล่าสุด</h2>
-                  <p>ติดตามความคืบหน้าตั้งแต่รับแจ้งจนถึงปิดงาน</p>
-                </div>
-                <button class="text-button" type="button" data-open-view="repairs">ดูงานซ่อมทั้งหมด <span>→</span></button>
-              </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>เลขที่แจ้ง</th>
-                      <th>รายการ / อาการ</th>
-                      <th>ความเร่งด่วน</th>
-                      <th>สถานะ</th>
-                    </tr>
-                  </thead>
-                  <tbody id="dashboardRepairRows"></tbody>
-                </table>
-              </div>
-              <div class="panel-foot">
-                <span>ระบบบริหารงานซ่อมบำรุงและสายการอนุมัติตามระเบียบพัสดุ</span>
-                <button class="text-button" type="button" data-open-view="repairs">เปิดระบบแจ้งซ่อม <span>→</span></button>
-              </div>
-            </section>
             <div class="bottom-grid">
               <section class="panel guide-card">
                 <div class="guide-mark">FSN</div>
