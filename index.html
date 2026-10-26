@@ -122,90 +122,29 @@
                     <tbody id="recentRows"></tbody>
                   </table>
                 </div>
-                <div class="panel-foot">
-                  <span>ฐานข้อมูลทะเบียนคุมสินทรัพย์</span>
-                  <button class="text-button" type="button" data-open-view="assets">เปิดทะเบียนครุภัณฑ์ <span>→</span></button>
-                </div>
               </section>
 
-              <section class="panel workflow-panel">
+              <section class="panel recent-repairs-panel">
                 <div class="panel-heading">
                   <div>
-                    <h2><span class="panel-icon-title">🔄</span> 4 ขั้นตอนหลักการจัดการครุภัณฑ์</h2>
-                    <p>ขั้นตอนการทำงานตั้งแต่รับเข้า ทะเบียน บำรุงรักษา จนถึงแจ้งซ่อม</p>
+                    <h2><span class="panel-icon-title">⚒️</span> รายการแจ้งซ่อมล่าสุด</h2>
+                    <p>Ticket แจ้งปัญหา งานซ่อมระหว่างดำเนินการ และรอตรวจรับ</p>
                   </div>
-                  <span class="workflow-badge-tag">4 ขั้นตอนหลัก</span>
+                  <button class="text-button" type="button" data-open-view="repairs">ดูงานซ่อมทั้งหมด <span>→</span></button>
                 </div>
-                <div class="workflow-pillars-container">
-                  <div class="workflow-pillar-card p1" data-open-view="supply" role="button" tabindex="0">
-                    <div class="pillar-step-badge">01</div>
-                    <div class="pillar-info">
-                      <div class="pillar-title-row">
-                        <b>1. รับเข้าและตรวจรับ</b>
-                        <span class="pillar-status-chip">ตั้งต้นพัสดุ</span>
-                      </div>
-                      <small>ตรวจรับพัสดุตาม PO/สัญญา และตั้งต้นขึ้นทะเบียน</small>
-                    </div>
-                    <button class="pillar-action-btn" type="button" data-open-view="supply">เปิด <span>→</span></button>
-                  </div>
-
-                  <div class="workflow-pillar-card p2" data-open-view="assets" role="button" tabindex="0">
-                    <div class="pillar-step-badge">02</div>
-                    <div class="pillar-info">
-                      <div class="pillar-title-row">
-                        <b>2. ทะเบียนและคุมทรัพย์สิน</b>
-                        <span class="pillar-status-chip highlight">ทะเบียนหลัก</span>
-                      </div>
-                      <small>เลข 4 ชุด, ใบคุม 12 ช่อง และฉลาก Smart QR</small>
-                    </div>
-                    <button class="pillar-action-btn" type="button" data-open-view="assets">เปิด <span>→</span></button>
-                  </div>
-
-                  <div class="workflow-pillar-card p3" data-open-view="work" role="button" tabindex="0">
-                    <div class="pillar-step-badge">03</div>
-                    <div class="pillar-info">
-                      <div class="pillar-title-row">
-                        <b>3. ตรวจนับและ PM</b>
-                        <span class="pillar-status-chip">สำรวจประจำปี</span>
-                      </div>
-                      <small>สำรวจประจำปี, สแกน Smart QR และตรวจสภาพ</small>
-                    </div>
-                    <button class="pillar-action-btn" type="button" data-open-view="work">เปิด <span>→</span></button>
-                  </div>
-
-                  <div class="workflow-pillar-card p4" data-open-view="repairs" role="button" tabindex="0">
-                    <div class="pillar-step-badge">04</div>
-                    <div class="pillar-info">
-                      <div class="pillar-title-row">
-                        <b>4. แจ้งซ่อมและบริการ</b>
-                        <span class="pillar-status-chip">บริการ & ซ่อม</span>
-                      </div>
-                      <small>ออก Ticket ผ่าน QR, คุมวงเงิน และประวัติซ่อม</small>
-                    </div>
-                    <button class="pillar-action-btn" type="button" data-open-view="repairs">เปิด <span>→</span></button>
-                  </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>เลข Ticket</th>
+                        <th>รายการครุภัณฑ์ / ปัญหา</th>
+                        <th>ความเร่งด่วน</th>
+                        <th>สถานะ</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashboardRepairRows"></tbody>
+                  </table>
                 </div>
-                <div class="workflow-footer-cta">
-                  <button class="button primary full" type="button" data-open-view="assets">เปิดทะเบียนและคุมทรัพย์สิน (ขั้นตอนที่ 2) <span>→</span></button>
-                </div>
-              </section>
-            </div>
-            <div class="bottom-grid">
-              <section class="panel guide-card">
-                <div class="guide-mark">FSN</div>
-                <div>
-                  <b>เข้าใจโครงสร้างรหัสครุภัณฑ์ (FSN)</b>
-                  <p>รหัส 11 หลักแบ่งเป็น กลุ่ม 4 หลัก · ชนิด 3 หลัก · รายละเอียด 4 หลัก</p>
-                </div>
-                <button class="text-button" type="button" data-open-view="codes">ดูบัญชีรหัส <span>→</span></button>
-              </section>
-              <section class="panel cycle-card">
-                <div class="cycle-icon">◷</div>
-                <div>
-                  <b>รอบสำรวจครุภัณฑ์ประจำปี</b>
-                  <p>ปีงบประมาณ 2569 · การสำรวจทรัพย์สินรอบที่ 1</p>
-                </div>
-                <span class="cycle-tag">กำลังดำเนินการ</span>
               </section>
             </div>
         
