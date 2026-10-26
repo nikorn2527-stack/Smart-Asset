@@ -14,25 +14,16 @@
   const paper=$('.register-paper'),scroll=document.createElement('div');scroll.className='register-preview-scroll';paper.before(scroll);scroll.append(paper);
   function updateScale(){
     if(!paper)return;
+    const scrollEl=$('.register-preview-scroll');
+    if(!scrollEl)return;
     if(currentZoom==='fit'){
-      const scrollEl=$('.register-preview-scroll');
-      if(!scrollEl)return;
       const targetW=1122.5, targetH=793.7;
-      const availW=Math.max(280, scrollEl.clientWidth - 28);
-      const view=$('#view-register');
-      const main=document.querySelector('main#main')||document.body;
-      const totalH=(view&&view.clientHeight>200)?view.clientHeight:(main.clientHeight||(window.innerHeight-80));
-      const navH=$('#view-register > .subpage-nav')?.offsetHeight||26;
-      const headH=$('#view-register > .page-heading')?.offsetHeight||32;
-      const selH=$('#view-register > .register-selection')?.offsetHeight||38;
-      const provH=$('#registerProvenanceSummary')?.offsetHeight||46;
-      const srcH=$('#view-register .register-source-details')?.offsetHeight||24;
-      const extraH=navH+headH+selH+provH+srcH+44;
-      const availH=Math.max(260, totalH - extraH);
+      const availW=Math.max(280, scrollEl.clientWidth - 24);
+      const availH=Math.max(240, scrollEl.clientHeight - 24);
       const scaleW=availW/targetW;
       const scaleH=availH/targetH;
       let fit=Math.min(scaleW, scaleH);
-      fit=Math.max(0.35, Math.min(fit, 0.75));
+      fit=Math.max(0.35, Math.min(fit, 0.90));
       fit=Math.round(fit*100)/100;
       paper.style.setProperty('--register-scale', fit);
       paper.style.zoom=fit;
