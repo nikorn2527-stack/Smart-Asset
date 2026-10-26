@@ -1944,14 +1944,104 @@ table thead th {
 }
 
 /* 9. 12-Column Asset Control Register */
+#view-register.active {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  gap: 6px !important;
+}
+
+#view-register > .subpage-nav {
+  flex: none !important;
+  margin: 0 !important;
+  padding: 0 0 2px 0 !important;
+}
+
+#view-register > .page-heading {
+  flex: none !important;
+  margin: 0 !important;
+  padding: 0 0 4px 0 !important;
+}
+
+#view-register > .notice {
+  flex: none !important;
+  padding: 6px 14px !important;
+  margin: 0 0 4px 0 !important;
+}
+
+#view-register > .notice p {
+  font-size: 11px !important;
+  margin-top: 2px !important;
+}
+
+#view-register > .register-selection {
+  flex: none !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 8px 16px !important;
+  margin: 0 0 6px 0 !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+}
+
+#view-register > .register-selection > strong {
+  font-size: 14px !important;
+  color: #0f172a !important;
+}
+
+#view-register .register-form-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin: 0 !important;
+}
+
 #view-register .register-scroll-body {
   flex: 1 1 auto !important;
   min-height: 0 !important;
-  overflow-y: auto !important;
+  overflow: visible !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 16px !important;
-  padding-bottom: 24px !important;
+  gap: 14px !important;
+  padding-bottom: 32px !important;
+}
+
+#view-register .register-preview-scroll {
+  flex: 1 1 auto !important;
+  min-height: 760px !important;
+  background: #cbd5e1 !important;
+  border: 1px solid #94a3b8 !important;
+  border-radius: 12px !important;
+  padding: 24px 16px !important;
+  margin: 4px 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+#view-register .official-register-page {
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22) !important;
+  border-radius: 2px !important;
+  margin: 0 auto 24px auto !important;
+  background: #ffffff !important;
+  flex: none !important;
+}
+
+#view-register .asset-provenance {
+  margin-top: 8px !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  padding: 14px 18px !important;
 }
 
 /* 10. Numbering Rules View */

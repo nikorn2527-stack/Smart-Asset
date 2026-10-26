@@ -884,14 +884,25 @@ table thead th {
 }
 
 /* 9. 12-Column Asset Control Register */
+#view-register.active {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  gap: 8px !important;
+}
+
 #view-register .register-scroll-body {
   flex: 1 1 auto !important;
   min-height: 0 !important;
-  overflow-y: auto !important;
+  overflow: visible !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 16px !important;
-  padding-bottom: 24px !important;
+  gap: 14px !important;
+  padding-bottom: 32px !important;
 }
 
 /* 10. Numbering Rules View */
