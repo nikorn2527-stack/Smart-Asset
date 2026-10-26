@@ -66,7 +66,9 @@
 
   const configuration=document.createElement('details');configuration.className='panel notification-settings';configuration.id='workflowSettings';
   configuration.innerHTML=`<summary>แจ้งเตือนและเกณฑ์ส่งอนุมัติ</summary><form id="workflowSettingsForm"><p>แจ้งเตือนในแอปตามบทบาท: ขึ้นทะเบียนครุภัณฑ์ → คัดกรองซ่อม → อนุมัติ → มอบหมาย → ตรวจยอดจริง → ตรวจรับ พร้อมงาน PM / ตรวจนับตามรอบ</p><fieldset id="workflowFields"><label>วงเงินส่งอนุมัติงานซ่อม (บาท)<input name="approvalThreshold" type="number" min="0" max="1000000000" step="0.01" required></label><small>ใช้เกณฑ์ที่หน่วยงานกำหนด ค่าเริ่มต้นไม่ใช่การรับรองวงเงินราชการ งานซื้ออะไหล่ จ้างภายนอก ทดแทน หรือเลือกขออนุมัติเองยังต้องส่งพิจารณา</small><label>เตือนงานใกล้ครบกำหนดล่วงหน้า (วัน)<input name="reminderDays" type="number" min="0" max="30" step="1" required></label><small>0 = เตือนเมื่อถึงกำหนด งานเกินกำหนดยังคงแสดงจนบันทึกผล</small></fieldset><p class="field-hint">แก้ไขได้ในบทบาทเจ้าหน้าที่พัสดุ งานที่บันทึกเกณฑ์ตอนคัดกรองไว้แล้วจะคงเกณฑ์เดิม แม้เปลี่ยนค่านี้ภายหลัง</p><div class="dialog-actions"><button class="button outline" type="button" id="reloadWorkflowSettings">โหลดค่าล่าสุด</button><button class="button primary" type="submit" id="saveWorkflowSettings">บันทึกเกณฑ์</button></div><p id="workflowSettingsStatus" role="status"></p></form>`;
-  $('#view-settings .settings-sections').after(configuration);
+  const wfTarget=$('#tabPaneWorkflow')||$('#view-settings .settings-sections');
+  if(wfTarget.id==='tabPaneWorkflow'){wfTarget.append(configuration);configuration.open=true;loadWorkflow();}
+  else{wfTarget.after(configuration);}
   function workflowPermissions(){const editable=!!workflow&&app.getRole()==='เจ้าหน้าที่พัสดุ'&&!workflowLoading&&!workflowSaving;$('#workflowFields').disabled=!editable;$('#saveWorkflowSettings').disabled=!editable;$('#reloadWorkflowSettings').disabled=workflowLoading||workflowSaving;}
   function renderWorkflow(){if(workflow){const form=$('#workflowSettingsForm');form.elements.approvalThreshold.value=workflow.approvalThreshold;form.elements.reminderDays.value=workflow.reminderDays;}workflowPermissions();}
   async function loadWorkflow(){

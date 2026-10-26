@@ -530,6 +530,69 @@
     }
   });
 
+  function switchSettingsTab(tabKey) {
+    const tabs = document.querySelectorAll('.settings-tab-btn');
+    const panes = {
+      master: $('#tabPaneMaster'),
+      branding: $('#tabPaneBranding'),
+      workflow: $('#tabPaneWorkflow'),
+      line: $('#tabPaneLine'),
+      access: $('#tabPaneAccess')
+    };
+
+    tabs.forEach(btn => {
+      const active = btn.dataset.settingsTab === tabKey;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', String(active));
+    });
+
+    Object.entries(panes).forEach(([key, pane]) => {
+      if (!pane) return;
+      const isCurrent = key === tabKey;
+      pane.classList.toggle('active', isCurrent);
+      pane.hidden = !isCurrent;
+    });
+
+    if (tabKey === 'workflow') {
+      const wf = $('#workflowSettings');
+      if (wf) {
+        wf.open = true;
+        $('#reloadWorkflowSettings')?.click();
+      }
+    } else if (tabKey === 'line') {
+      const line = $('#lineSettings');
+      if (line) {
+        line.open = true;
+        $('#reloadLineSettings')?.click();
+      }
+    } else if (tabKey === 'access') {
+      window.govAssetAccess?.loadUsers?.();
+    }
+  }
+  window.switchSettingsTab = switchSettingsTab;
+
+  function initSettingsTabs() {
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('.settings-tab-btn');
+      if (btn && btn.dataset.settingsTab) {
+        switchSettingsTab(btn.dataset.settingsTab);
+      }
+    });
+
+    document.addEventListener('govasset:view-changed', e => {
+      if (e.detail?.name === 'settings') {
+        const activeBtn = document.querySelector('.settings-tab-btn.active');
+        if (activeBtn?.dataset.settingsTab) {
+          switchSettingsTab(activeBtn.dataset.settingsTab);
+        }
+      } else if (e.detail?.name === 'access-admin') {
+        app.switchView('settings');
+        switchSettingsTab('access');
+      }
+    });
+  }
+  initSettingsTabs();
+
   app.api('/api/branding').then(applyBranding).catch(app.showError);
   app.openAsset = openAsset;
   app.openQrSimulator = openQrSimulator;

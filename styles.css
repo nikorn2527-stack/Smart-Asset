@@ -906,6 +906,64 @@ table thead th {
 }
 
 /* 4. Settings View */
+#view-settings {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+#view-settings .page-heading {
+  margin-bottom: 12px !important;
+  flex-shrink: 0 !important;
+}
+
+.settings-tabs-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 5px 6px !important;
+  background: #f1f5f9 !important;
+  border-radius: 10px !important;
+  border: 1px solid #e2e8f0 !important;
+  margin-bottom: 14px !important;
+  overflow-x: auto !important;
+  flex-shrink: 0 !important;
+}
+
+.settings-tab-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 8px 16px !important;
+  border: none !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #64748b !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.15s ease !important;
+}
+
+.settings-tab-btn:hover {
+  color: #0f172a !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+}
+
+.settings-tab-btn.active {
+  background: #ffffff !important;
+  color: #0f766e !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(15, 118, 110, 0.15) !important;
+  font-weight: 700 !important;
+}
+
+.settings-tab-btn .tab-icon {
+  font-size: 15px !important;
+}
+
 #view-settings .settings-scroll-body {
   flex: 1 1 auto !important;
   min-height: 0 !important;
@@ -913,7 +971,16 @@ table thead th {
   display: flex !important;
   flex-direction: column !important;
   gap: 14px !important;
-  padding: 4px 0 24px 0 !important;
+  padding: 2px 2px 24px 2px !important;
+}
+
+.settings-tab-pane {
+  display: block !important;
+  width: 100% !important;
+}
+
+.settings-tab-pane[hidden] {
+  display: none !important;
 }
 
 #view-settings .settings-sections {
@@ -959,6 +1026,25 @@ table thead th {
   font-weight: 700 !important;
   color: #16384d !important;
   margin: 18px 0 12px 0 !important;
+}
+
+/* Tab panes styling: clean open panels without details summary bar */
+#tabPaneBranding form,
+#tabPaneWorkflow details#workflowSettings,
+#tabPaneLine details#lineSettings,
+#tabPaneAccess .access-users {
+  max-width: 960px !important;
+  margin: 0 auto !important;
+  border: 1px solid var(--line, #dce5ea) !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  padding: 24px !important;
+}
+
+#tabPaneWorkflow details#workflowSettings > summary,
+#tabPaneLine details#lineSettings > summary {
+  display: none !important;
 }
 
 /* 5. Supply Intake & Issue View */
