@@ -205,12 +205,26 @@ main#main {
 .asset-kpi-banner, 
 .stats-grid, 
 .repair-summary, 
+.approval-summary, 
 .work-totals,
 .work-scheduler,
 .numbering-rule {
   flex: 0 0 auto !important;
   margin: 0 0 8px 0 !important;
   z-index: 25 !important;
+}
+
+.approval-summary {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.approval-summary .stat-card {
+  min-height: 96px !important;
+  padding: 11px 15px !important;
 }
 
 /* Register KPI Cards Compact Styling */

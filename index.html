@@ -295,7 +295,7 @@
           </section>
         </section>
 
-        <section class="view" id="view-stickers"><div class="subpage-nav"><button class="button outline" type="button" data-go-view="settings">← กลับตั้งค่า</button></div>
+        <section class="view" id="view-stickers">
           <div class="page-heading"><div><div class="eyebrow">LABEL DESIGNER <span class="live-dot"></span> QR CODE</div><h1>ออกแบบและพิมพ์สติกเกอร์ครุภัณฑ์</h1><p>ค้นหาทรัพย์สิน เลือกพิมพ์หลายรายการ และกำหนดขนาดฉลากเองเป็นมิลลิเมตร</p></div><span class="reference-tag">หน่วย mm · QR · พิมพ์หลายรายการ</span></div>
           <div class="notice"><span class="notice-icon">i</span><div><b>ระบบจัดพิมพ์สติกเกอร์และรหัส QR ประจำครุภัณฑ์</b><p>รองรับการจัดพิมพ์สติกเกอร์ตามขนาดมาตรฐานมิลลิเมตร พร้อมรหัส QR สำหรับติดประจำตัวครุภัณฑ์</p></div></div>
           <div class="sticker-layout">
@@ -314,6 +314,28 @@
         <section class="view" id="view-approvals">
           <div class="page-heading"><div><div class="eyebrow">APPROVAL WORKFLOW <span class="live-dot"></span></div><h1>คิวรออนุมัติ</h1><p>แยกการพิจารณาคำขอซ่อมกับรายการครุภัณฑ์ใหม่</p></div></div>
           <div class="notice"><span class="notice-icon">i</span><div><b>ข้อเสนอจุดควบคุมสำหรับต้นแบบ</b><p>1) ครุภัณฑ์ใหม่ก่อนลงทะเบียน 2) ซ่อมที่เกินวงเงินทดสอบหรือซื้ออะไหล่/จ้างภายนอก/ทดแทนก่อนเริ่มงาน 3) ยอดซ่อมจริงเกินยอดเสนอให้ผู้อนุมัติตรวจเพิ่ม 4) ผู้แจ้งตรวจรับก่อนปิด Ticket · ไม่ใช่ระเบียบ/วงเงินจริงของหน่วยงาน</p></div></div>
+          <div class="approval-summary">
+            <article class="stat-card">
+              <div class="stat-top"><span>Ticket รอพิจารณา</span><span class="stat-icon amber">◷</span></div>
+              <div class="stat-number" id="approvalKpiTickets">0</div>
+              <div class="stat-foot">คำขอซ่อมที่เข้าเกณฑ์อนุมัติ</div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top"><span>ครุภัณฑ์ใหม่รอขึ้นทะเบียน</span><span class="stat-icon blue">▤</span></div>
+              <div class="stat-number" id="approvalKpiAssets">0</div>
+              <div class="stat-foot">ตรวจสอบก่อนบันทึกทะเบียน</div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top"><span>เกณฑ์วงเงินอนุมัติ</span><span class="stat-icon teal">✓</span></div>
+              <div class="stat-number" id="approvalKpiThreshold">5,000</div>
+              <div class="stat-foot">บาท · ปรับได้ที่การตั้งค่า</div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top"><span>สถานะศูนย์อนุมัติ</span><span class="stat-icon violet">⚙</span></div>
+              <div class="stat-number" style="font-size:18px;margin-top:12px;">พร้อมทำงาน</div>
+              <div class="stat-foot">ระบบบันทึก Timeline ตรวจสอบได้</div>
+            </article>
+          </div>
           <div class="approvals-scroll-body">
 <section class="panel listing-panel approval-panel"><div class="panel-heading"><div><h2>Ticket ที่รออนุมัติ</h2><p>ผู้อนุมัติเลือกอนุมัติหรือไม่อนุมัติ พร้อมระบุเหตุผล</p></div><span class="sheet-count" id="approvalTicketCount">0 รายการ</span></div><div class="table-wrap"><table><thead><tr><th>Ticket</th><th>รายการ / เหตุผล</th><th>ยอดเสนอ / ยอดจริง</th><th>การดำเนินการ</th></tr></thead><tbody id="approvalTicketRows"></tbody></table></div></section>
           <section class="panel listing-panel approval-panel"><div class="panel-heading"><div><h2>ครุภัณฑ์ใหม่ที่รอลงทะเบียน</h2><p>ผู้อนุมัติตรวจรายการซ้ำและข้อมูลประกอบก่อนบันทึกเข้าทะเบียน</p></div><span class="sheet-count" id="approvalAssetCount">0 รายการ</span></div><div class="table-wrap"><table><thead><tr><th>รหัส FSN</th><th>รายการ / ที่ตั้ง</th><th>ผู้บันทึก</th><th>การดำเนินการ</th></tr></thead><tbody id="approvalAssetRows"></tbody></table></div></section>
