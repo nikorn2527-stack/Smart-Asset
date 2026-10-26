@@ -6,9 +6,9 @@
 /* Keep the source form's two-line headings and single-line dates/numbers. */
 .official-register-page .rf-table th{font-size:8.5pt!important;line-height:1.25!important;padding:.6mm .4mm!important;white-space:normal!important;word-break:break-word!important}
 .official-register-page .rf-table th:nth-child(8){font-size:8pt!important;line-height:1.15!important;padding:.4mm .2mm!important;white-space:normal!important}
-.official-register-page .rf-table td{height:23mm;vertical-align:top;padding:.6mm .8mm;font-size:10pt}
+.official-register-page .rf-table td{height:auto!important;min-height:9mm!important;vertical-align:middle!important;padding:1.8mm .8mm!important;font-size:10pt}
 .official-register-page .rf-table td:nth-child(4),.official-register-page .rf-table td:nth-child(7){text-align:center}
-.rf-table tr.rf-summary-row td{height:8.5mm!important;vertical-align:middle!important;padding:.4mm .8mm!important;font-weight:400}
+.rf-table tr.rf-summary-row td{height:8.5mm!important;vertical-align:middle!important;padding:.8mm .8mm!important;font-weight:700}
 .rf-table tr.rf-summary-row td.rf-sum-date{text-align:center!important}
 .rf-table tr.rf-summary-row td.rf-sum-money{text-align:right!important}
 .rf-table td:not(:nth-child(3)):not(:nth-child(12)) .rf-cell-value{white-space:nowrap}

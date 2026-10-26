@@ -251,30 +251,6 @@
         </section>
 
         <section class="view" id="view-stickers">
-          <div class="page-heading sticker-studio-header">
-            <div class="sticker-header-title">
-              <div class="eyebrow">LABEL DESIGNER STUDIO <span class="live-dot"></span> SMART QR</div>
-              <h1>ออกแบบและพิมพ์สติกเกอร์ครุภัณฑ์</h1>
-            </div>
-            <div class="sticker-top-toolbar">
-              <div class="toolbar-group">
-                <label>เทมเพลต<select id="stickerTemplateSelect" aria-label="เลือกเทมเพลตสติกเกอร์"></select></label>
-                <button type="button" class="button outline mini-btn" id="stickerNewTemplate">＋ แบบใหม่</button>
-                <label>ชื่อแบบ<input id="stickerTemplateName" type="text" maxlength="120" placeholder="ชื่อแบบสติกเกอร์"></label>
-              </div>
-              <div class="toolbar-group dimensions-group">
-                <label>กว้าง <input id="stickerCanvasWidth" type="number" min="5" max="500" step="0.1"> <span>มม.</span></label>
-                <span class="dimension-times">×</span>
-                <label>สูง <input id="stickerCanvasHeight" type="number" min="5" max="500" step="0.1"> <span>มม.</span></label>
-                <label class="sticker-overflow-label" title="แสดงเนื้อหาที่ล้นขอบฉลาก"><input id="stickerOverflowVisible" type="checkbox"> แสดงส่วนล้น</label>
-              </div>
-              <div class="toolbar-group actions-group">
-                <button type="button" class="button primary" id="stickerSaveTemplate">💾 บันทึกแบบ</button>
-                <button type="button" class="button outline" id="stickerSetActive">⭐ ตั้งเป็นแบบหลัก</button>
-              </div>
-            </div>
-          </div>
-
           <div class="sticker-layout">
             <aside class="panel sticker-asset-panel">
               <div class="panel-heading">
@@ -321,6 +297,32 @@
             <section class="panel sticker-editor-panel">
               <div class="sticker-editor-workarea">
                 <section class="sticker-preview-panel">
+                  <div class="sticker-studio-header">
+                    <div class="sticker-header-strip">
+                      <div class="sticker-header-title">
+                        <div class="eyebrow">LABEL DESIGNER STUDIO <span class="live-dot"></span> SMART QR</div>
+                        <h1>ออกแบบและพิมพ์สติกเกอร์ครุภัณฑ์</h1>
+                      </div>
+                      <div class="toolbar-group actions-group">
+                        <button type="button" class="button primary" id="stickerSaveTemplate">💾 บันทึกแบบ</button>
+                        <button type="button" class="button outline" id="stickerSetActive">⭐ ตั้งเป็นแบบหลัก</button>
+                      </div>
+                    </div>
+                    <div class="sticker-top-toolbar">
+                      <div class="toolbar-group">
+                        <label>เทมเพลต<select id="stickerTemplateSelect" aria-label="เลือกเทมเพลตสติกเกอร์"></select></label>
+                        <button type="button" class="button outline mini-btn" id="stickerNewTemplate">＋ แบบใหม่</button>
+                        <label>ชื่อแบบ<input id="stickerTemplateName" type="text" maxlength="120" placeholder="ชื่อแบบสติกเกอร์"></label>
+                      </div>
+                      <div class="toolbar-group dimensions-group">
+                        <label>กว้าง <input id="stickerCanvasWidth" type="number" min="5" max="500" step="0.1"> <span>มม.</span></label>
+                        <span class="dimension-times">×</span>
+                        <label>สูง <input id="stickerCanvasHeight" type="number" min="5" max="500" step="0.1"> <span>มม.</span></label>
+                        <label class="sticker-overflow-label" title="แสดงเนื้อหาที่ล้นขอบฉลาก"><input id="stickerOverflowVisible" type="checkbox"> แสดงส่วนล้น</label>
+                      </div>
+                    </div>
+                  </div>
+
                   <div class="sticker-subheading">
                     <div>
                       <b>ตัวอย่างฉลากจำลอง</b>

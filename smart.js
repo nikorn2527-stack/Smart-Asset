@@ -229,60 +229,325 @@
   simDialog.className = 'asset-dialog smart-dialog qr-simulator-modal';
   simDialog.setAttribute('aria-label', 'จำลองการใช้งาน Smart QR บนสมาร์ทโฟน');
   document.body.append(simDialog);
-  simDialog.addEventListener('click', e => { if (e.target === simDialog || e.target.closest('[data-close-sim]')) simDialog.close(); });
 
-  function openQrSimulator(sampleIndex = 0) {
-    const sampleAssets = [
-      {
-        name: 'เครื่องฟังหัวใจเด็กในครรภ์ (Fetal Doppler)',
-        code: '6515-027-1005-0012',
-        fsn: '6515-027-1005',
-        location: 'ศูนย์แพทย์โรงพยาบาลสุรินทร์ · แผนกสูติ-นรีเวชกรรม',
-        status: 'พร้อมใช้งาน',
-        custodian: 'พว. กัลยา วารีสุข',
-        model: 'Edan Sonotrax B · S/N: SN-884210',
-        lastChecked: '26 ตุลาคม 2569 · ผ่านเกณฑ์ PM',
-        openRepairs: 0
-      },
-      {
-        name: 'เครื่องตรวจคลื่นไฟฟ้าหัวใจ (EKG 12 Leads)',
-        code: '6515-001-0019-0004',
-        fsn: '6515-001-0019',
-        location: 'ศูนย์แพทย์โรงพยาบาลสุรินทร์ · ห้องฉุกเฉิน (ER)',
-        status: 'พร้อมใช้งาน',
-        custodian: 'นพ. สมเกียรติ พยาธิกุล',
-        model: 'GE MAC 2000 · S/N: GE-992144',
-        lastChecked: '25 ตุลาคม 2569 · ผ่านเกณฑ์ PM',
-        openRepairs: 0
-      },
-      {
-        name: 'เครื่องวัดความดันโลหิตแบบสอดแขนอัตโนมัติ',
-        code: '6515-014-0008-0021',
-        fsn: '6515-014-0008',
-        location: 'ศูนย์แพทย์โรงพยาบาลสุรินทร์ · แผนกผู้ป่วยนอก (OPD)',
-        status: 'รอตรวจสอบ',
-        custodian: 'พว. นงลักษณ์ รักษ์ธรรม',
-        model: 'Omron HBP-9030 · S/N: OM-552190',
-        lastChecked: '20 ตุลาคม 2569 · ครบกำหนดรอบตรวจสอบ',
-        openRepairs: 1
-      }
-    ];
-    const item = sampleAssets[sampleIndex] || sampleAssets[0];
+  let simSampleIndex = 0;
+  let simSlideIndex = 0;
+  let simAutoPlaying = true;
+  let simInterval = null;
+  let simProgressInterval = null;
+  let simProgress = 0;
+
+  const simSlides = [
+    {
+      id: 0,
+      step: 'ขั้นตอนที่ 1',
+      title: 'สแกนดูข้อมูลล่าสุดแบบเรียลไทม์',
+      badge: 'Live Real-time Sync',
+      icon: '🔍',
+      headline: 'สแกนครั้งเดียว ข้อมูลตรงกับทะเบียนกลางเสมอ',
+      description: 'เจ้าหน้าที่หรือทีมแพทย์พยาบาลเพียงยกสมาร์ทโฟนสแกน QR ประจำตัวเครื่อง จะเห็นข้อมูลคุณลักษณะ หมายเลขเครื่อง สถานที่ตั้ง และประวัติการบำรุงรักษา (PM) ล่าสุดทันที หากมีการแก้ไขในระบบ ข้อมูลหน้าสแกนจะอัปเดตอัตโนมัติโดยไม่ต้องพิมพ์ฉลากใหม่'
+    },
+    {
+      id: 1,
+      step: 'ขั้นตอนที่ 2',
+      title: 'แจ้งซ่อมและเปิด Ticket ส่งตรงถึงช่าง',
+      badge: 'Instant Dispatch',
+      icon: '⚡',
+      headline: 'แจ้งปัญหาได้ทันที ไม่ต้องค้นหารหัสครุภัณฑ์ 11 หลัก',
+      description: 'เมื่อพบปัญหาการใช้งาน สแกนแล้วระบุอาการชำรุดได้ทันที ระบบจะออกหมายเลขคำขอ (Ticket) อัตโนมัติ พร้อมส่งการแจ้งเตือนตรงถึงทีมช่างผู้รับผิดชอบ ทำให้ทีมช่างรับทราบปัญหาอย่างรวดเร็วและตรวจสอบประวัติการซ่อมเดิมได้ทันที'
+    },
+    {
+      id: 2,
+      step: 'ขั้นตอนที่ 3',
+      title: 'ตรวจรับงานและปิดงานซ่อมผ่านมือถือ',
+      badge: 'Digital Handover',
+      icon: '✅',
+      headline: 'ตรวจสอบผลงานซ่อมและกดยืนยันรับมอบงานทันที',
+      description: 'เมื่อช่างดำเนินการซ่อมเสร็จสิ้น ผู้ขอรับบริการสามารถตรวจเช็คความเรียบร้อยและกดยืนยันตรวจรับงานผ่านมือถือได้ทันที ระบบจะบันทึกประวัติการซ่อมบำรุงและค่าใช้จ่ายเข้าทะเบียนคุมสินทรัพย์ 12 คอลัมน์โดยอัตโนมัติ'
+    }
+  ];
+
+  function stopSimulatorAutoPlay() {
+    simAutoPlaying = false;
+    clearInterval(simInterval);
+    clearInterval(simProgressInterval);
+    simInterval = null;
+    simProgressInterval = null;
+    const btn = simDialog.querySelector('#simToggleAutoPlay');
+    if (btn) btn.innerHTML = '▶ เล่นสไลด์อัตโนมัติ';
+  }
+
+  function startSimulatorAutoPlay() {
+    stopSimulatorAutoPlay();
+    simAutoPlaying = true;
+    simProgress = 0;
+    const btn = simDialog.querySelector('#simToggleAutoPlay');
+    if (btn) btn.innerHTML = '⏸ หยุดอัตโนมัติ';
+    const stepDuration = 5500;
+    const tick = 50;
+    simProgressInterval = setInterval(() => {
+      simProgress += (tick / stepDuration) * 100;
+      if (simProgress >= 100) simProgress = 0;
+      const bar = simDialog.querySelector('#simProgressBar');
+      if (bar) bar.style.width = `${Math.min(100, simProgress)}%`;
+    }, tick);
+    simInterval = setInterval(() => {
+      setSimulatorSlide((simSlideIndex + 1) % 3, false);
+    }, stepDuration);
+  }
+
+  simDialog.addEventListener('click', e => {
+    if (e.target === simDialog || e.target.closest('[data-close-sim]')) {
+      stopSimulatorAutoPlay();
+      simDialog.close();
+    }
+  });
+  simDialog.addEventListener('close', () => {
+    stopSimulatorAutoPlay();
+  });
+
+  const sampleAssets = [
+    {
+      name: 'เครื่องฟังหัวใจเด็กในครรภ์ (Fetal Doppler)',
+      code: '6515-027-1005-0012',
+      fsn: '6515-027-1005',
+      location: 'ศูนย์แพทย์โรงพยาบาลสุรินทร์ · แผนกสูติ-นรีเวชกรรม',
+      status: 'พร้อมใช้งาน',
+      custodian: 'พว. กัลยา วารีสุข',
+      model: 'Edan Sonotrax B · S/N: SN-884210',
+      lastChecked: '26 ตุลาคม 2569 · ผ่านเกณฑ์ PM',
+      openRepairs: 0
+    },
+    {
+      name: 'เครื่องตรวจคลื่นไฟฟ้าหัวใจ (EKG 12 Leads)',
+      code: '6515-001-0019-0004',
+      fsn: '6515-001-0019',
+      location: 'ศูนย์แพทย์โรงพยาบาลสุรินทร์ · ห้องฉุกเฉิน (ER)',
+      status: 'พร้อมใช้งาน',
+      custodian: 'นพ. สมเกียรติ พยาธิกุล',
+      model: 'GE MAC 2000 · S/N: GE-992144',
+      lastChecked: '25 ตุลาคม 2569 · ผ่านเกณฑ์ PM',
+      openRepairs: 0
+    },
+    {
+      name: 'เครื่องวัดความดันโลหิตแบบสอดแขนอัตโนมัติ',
+      code: '6515-014-0008-0021',
+      fsn: '6515-014-0008',
+      location: 'ศูนย์แพทย์โรงพยาบาลสุรินทร์ · แผนกผู้ป่วยนอก (OPD)',
+      status: 'รอตรวจสอบ',
+      custodian: 'พว. นงลักษณ์ รักษ์ธรรม',
+      model: 'Omron HBP-9030 · S/N: OM-552190',
+      lastChecked: '20 ตุลาคม 2569 · ครบกำหนดรอบตรวจสอบ',
+      openRepairs: 1
+    }
+  ];
+
+  function renderPhoneScreen(item, slideIdx) {
+    if (slideIdx === 0) {
+      return `
+        <div class="phone-slide-view animate-fade-in">
+          <div class="phone-laser-scanner">
+            <div class="laser-beam"></div>
+            <div class="phone-mini-qr">
+              <img src="assets/govasset-mark-optimized.png" alt="Smart QR">
+            </div>
+            <div class="laser-status">
+              <span class="live-dot-pulse"></span>
+              <b>สแกนพบครุภัณฑ์ · ดึงข้อมูลเรียลไทม์</b>
+            </div>
+          </div>
+
+          <div class="phone-asset-card-elevated">
+            <div class="phone-card-top">
+              <span class="phone-kicker">ข้อมูลครุภัณฑ์</span>
+              <span class="phone-status-badge green">${esc(item.status)}</span>
+            </div>
+            <h3 class="phone-asset-name">${esc(item.name)}</h3>
+            <div class="phone-code-pill">${esc(item.code)}</div>
+
+            <div class="phone-detail-list">
+              <div class="phone-detail-row">
+                <span>📍 ที่ตั้ง:</span>
+                <b>${esc(item.location)}</b>
+              </div>
+              <div class="phone-detail-row">
+                <span>🏷️ รุ่น / SN:</span>
+                <b>${esc(item.model)}</b>
+              </div>
+              <div class="phone-detail-row">
+                <span>👤 ผู้รับผิดชอบ:</span>
+                <b>${esc(item.custodian)}</b>
+              </div>
+              <div class="phone-detail-row">
+                <span>🛡️ สถานะ PM:</span>
+                <b style="color:#059669">${esc(item.lastChecked)}</b>
+              </div>
+            </div>
+
+            <div class="phone-actions-container">
+              <button type="button" class="phone-btn phone-btn-repair" data-jump-slide="1">
+                <span>⚒</span> แจ้งซ่อมครุภัณฑ์นี้ (จำลอง) →
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (slideIdx === 1) {
+      return `
+        <div class="phone-slide-view animate-fade-in">
+          <div class="phone-screen-step-banner amber">
+            <span>⚡ ขั้นตอนที่ 2 · แจ้งซ่อมและเปิด Ticket</span>
+          </div>
+
+          <div class="phone-repair-mockup-card">
+            <div class="mockup-form-group">
+              <span class="mockup-label">ครุภัณฑ์ที่พบปัญหา</span>
+              <div class="mockup-input readonly">${esc(item.name.split(' (')[0])}</div>
+            </div>
+            <div class="mockup-form-group">
+              <span class="mockup-label">อาการชำรุดที่พบ</span>
+              <div class="mockup-input typed-text">เปิดเครื่องไม่ติด / มีสัญญาณเตือนเสียงดัง</div>
+            </div>
+            <div class="mockup-form-group">
+              <span class="mockup-label">ระดับความเร่งด่วน</span>
+              <div class="mockup-priority-badge">⚠️ เร่งด่วนปานกลาง (ส่งผลต่อบริการ)</div>
+            </div>
+
+            <div class="phone-dispatch-toast">
+              <div class="toast-header">
+                <span class="toast-bell">🔔</span>
+                <div>
+                  <strong>ออก Ticket #TK-2569-0089 สำเร็จ!</strong>
+                  <small>ส่งข้อความแจ้งเตือนถึงทีมช่างทันที</small>
+                </div>
+              </div>
+              <div class="toast-technician">
+                <span>ช่างผู้รับผิดชอบ:</span>
+                <b>นายสมบูรณ์ ช่างซ่อมดี (ช่างเทคนิค)</b>
+              </div>
+            </div>
+
+            <div class="phone-actions-container">
+              <button type="button" class="phone-btn phone-btn-verify" data-jump-slide="2">
+                <span>✓</span> ช่างซ่อมเสร็จสิ้น · ตรวจรับงาน →
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="phone-slide-view animate-fade-in">
+        <div class="phone-screen-step-banner green">
+          <span>✅ ขั้นตอนที่ 3 · ตรวจรับมอบงาน</span>
+        </div>
+
+        <div class="phone-verify-mockup-card">
+          <div class="verify-ticket-badge">
+            <span>Ticket #TK-2569-0089</span>
+            <span class="badge-done">ซ่อมเสร็จแล้ว</span>
+          </div>
+
+          <div class="verify-detail-box">
+            <div class="verify-row">
+              <span>🛠️ การแก้ไข:</span>
+              <b>เปลี่ยนชุดฟิวส์ภาคจ่ายไฟและทดสอบระบบ 100% เรียบร้อย</b>
+            </div>
+            <div class="verify-row">
+              <span>⏱️ แล้วเสร็จ:</span>
+              <b>27 ต.ค. 2569 · 10:15 น.</b>
+            </div>
+            <div class="verify-row">
+              <span>👨‍🔧 ช่างผู้ซ่อม:</span>
+              <b>นายสมบูรณ์ ช่างซ่อมดี</b>
+            </div>
+          </div>
+
+          <div class="phone-digital-stamp">
+            <div class="stamp-inner">
+              <span class="stamp-icon">✓</span>
+              <strong class="stamp-text">ตรวจรับมอบงานแล้ว</strong>
+              <small class="stamp-sign">ผู้ตรวจรับ: ${esc(item.custodian)}</small>
+            </div>
+          </div>
+
+          <div class="verify-sync-note">
+            <span class="sync-icon">📘</span>
+            <span>บันทึกประวัติการซ่อมบำรุงเข้าทะเบียนคุม 12 คอลัมน์อัตโนมัติ</span>
+          </div>
+
+          <div class="phone-actions-container">
+            <button type="button" class="phone-btn phone-btn-restart" data-jump-slide="0">
+              <span>↺</span> เริ่มต้นชมการสาธิตอีกครั้ง
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function setSimulatorSlide(slideIdx, userTriggered = false) {
+    if (userTriggered) stopSimulatorAutoPlay();
+    simSlideIndex = slideIdx;
+    simProgress = 0;
+
+    const item = sampleAssets[simSampleIndex] || sampleAssets[0];
+    const screenWrap = simDialog.querySelector('#phoneDynamicScreen');
+    if (screenWrap) screenWrap.innerHTML = renderPhoneScreen(item, simSlideIndex);
+
+    // Update active slide tabs
+    simDialog.querySelectorAll('[data-step-tab]').forEach((tab, i) => {
+      tab.classList.toggle('active', i === simSlideIndex);
+    });
+
+    // Update highlights
+    simDialog.querySelectorAll('.highlight-item').forEach((hl, i) => {
+      hl.classList.toggle('highlighted', i === simSlideIndex);
+    });
+
+    // Update slide explanation text
+    const activeSlide = simSlides[simSlideIndex];
+    const badgeEl = simDialog.querySelector('#activeSlideBadge');
+    const headlineEl = simDialog.querySelector('#activeSlideHeadline');
+    const descEl = simDialog.querySelector('#activeSlideDesc');
+    const indEl = simDialog.querySelector('#activeSlideIndicator');
+
+    if (badgeEl) badgeEl.textContent = activeSlide.badge;
+    if (headlineEl) headlineEl.textContent = activeSlide.headline;
+    if (descEl) descEl.textContent = activeSlide.description;
+    if (indEl) indEl.textContent = `ขั้นตอนที่ ${simSlideIndex + 1} จาก 3`;
+
+    // Re-bind jump slide buttons on phone screen
+    simDialog.querySelectorAll('[data-jump-slide]').forEach(btn => {
+      btn.onclick = () => setSimulatorSlide(Number(btn.dataset.jumpSlide), true);
+    });
+  }
+
+  function openQrSimulator(sampleIndex = 0, initialSlide = 0) {
+    simSampleIndex = sampleIndex;
+    simSlideIndex = initialSlide;
+    const item = sampleAssets[simSampleIndex] || sampleAssets[0];
+    const activeSlide = simSlides[simSlideIndex];
+
     simDialog.innerHTML = `
       <div class="smart-dialog-head">
         <div>
-          <span class="eyebrow"><span class="hero-live-beacon"></span> SMART QR SCAN SIMULATION</span>
-          <h2>จำลองการสแกน QR บนสมาร์ทโฟน</h2>
-          <p class="field-hint">สแกนดูข้อมูลล่าสุด แจ้งปัญหา และติดตามจนถึงตรวจรับงาน ด้วย QR ประจำครุภัณฑ์เพียงหนึ่งเดียว</p>
+          <span class="eyebrow"><span class="hero-live-beacon"></span> SMART ASSET QR SIMULATION</span>
+          <h2>จำลองการสแกน Smart QR บนสมาร์ทโฟน</h2>
+          <p class="field-hint">ระบบเชื่อมโยงข้อมูลครุภัณฑ์แบบเรียลไทม์ · สแกนตรวจสอบ แจ้งซ่อมตรงถึงช่าง และตรวจรับงานผ่านมือถือได้ในจุดเดียว</p>
         </div>
         <button class="dialog-close" data-close-sim aria-label="ปิดหน้าต่างจำลอง">×</button>
       </div>
+
       <div class="sim-modal-body">
         <div class="sim-selector-bar">
           <span class="sim-select-label">เลือกครุภัณฑ์ทดสอบ:</span>
           <div class="sim-asset-pills">
             ${sampleAssets.map((a, i) => `
-              <button type="button" class="sim-pill-btn ${i === sampleIndex ? 'active' : ''}" data-sim-pick="${i}">
+              <button type="button" class="sim-pill-btn ${i === simSampleIndex ? 'active' : ''}" data-sim-pick="${i}">
                 ${esc(a.name.split(' (')[0])}
               </button>
             `).join('')}
@@ -291,68 +556,28 @@
 
         <div class="sim-phone-wrapper">
           <div class="sim-phone-frame">
-            <div class="phone-notch"><span class="camera-lens"></span><span class="speaker-grill"></span></div>
-            <div class="phone-status-bar">
-              <span>09:41</span>
-              <span>ศูนย์แพทย์โรงพยาบาลสุรินทร์</span>
-              <span>5G 100%</span>
+            <div class="phone-dynamic-island">
+              <span class="island-camera"></span>
+              <span class="island-sensor"></span>
             </div>
+            <div class="phone-status-bar">
+              <span class="status-time">09:41</span>
+              <span class="status-carrier">ศูนย์แพทย์สุรินทร์</span>
+              <span class="status-battery">5G 100%</span>
+            </div>
+
             <div class="phone-screen-content">
               <div class="phone-scan-header">
                 <div class="phone-brand-mark">▦</div>
                 <div>
                   <strong>GovAsset Smart QR</strong>
-                  <small>ศูนย์แพทย์โรงพยาบาลสุรินทร์</small>
+                  <small>ระบบครุภัณฑ์และแจ้งซ่อมดิจิทัล</small>
                 </div>
-                <span class="phone-scan-verified">✓ ข้อมูลล่าสุด</span>
+                <span class="phone-scan-verified">● เชื่อมโยงเรียลไทม์</span>
               </div>
 
-              <div class="phone-asset-card">
-                <div class="phone-card-top">
-                  <span class="phone-kicker">ข้อมูลครุภัณฑ์</span>
-                  <span class="phone-status-badge ${item.status === 'พร้อมใช้งาน' ? 'green' : 'amber'}">${esc(item.status)}</span>
-                </div>
-                <h3 class="phone-asset-name">${esc(item.name)}</h3>
-                <div class="phone-code-pill">${esc(item.code)}</div>
-
-                <div class="phone-detail-list">
-                  <div class="phone-detail-row">
-                    <span>📍 ที่ตั้ง:</span>
-                    <b>${esc(item.location)}</b>
-                  </div>
-                  <div class="phone-detail-row">
-                    <span>🏷️ รุ่น / S/N:</span>
-                    <b>${esc(item.model)}</b>
-                  </div>
-                  <div class="phone-detail-row">
-                    <span>👤 ผู้รับผิดชอบ:</span>
-                    <b>${esc(item.custodian)}</b>
-                  </div>
-                  <div class="phone-detail-row">
-                    <span>↻ สถานะ PM:</span>
-                    <b style="color:#059669">${esc(item.lastChecked)}</b>
-                  </div>
-                </div>
-
-                <div class="phone-qr-showcase">
-                  <div class="phone-mini-qr">
-                    <img src="assets/govasset-mark-optimized.png" alt="QR Code" style="width:36px;height:36px;object-fit:contain;">
-                  </div>
-                  <div>
-                    <small style="color:#087e82;font-weight:700">QR ประจำครุภัณฑ์เพียงหนึ่งเดียว</small>
-                    <p style="margin:1px 0 0;font-size:9.5px;color:#64748b;line-height:1.25">สแกนดูประวัติเดิม หรือแจ้งซ่อมได้ทันที ไม่ต้องค้นหารหัส</p>
-                  </div>
-                </div>
-
-                <div class="phone-actions-container">
-                  <button type="button" class="phone-btn phone-btn-repair" id="simActionRepair">
-                    <span>⚒</span> แจ้งซ่อมครุภัณฑ์นี้ (จำลอง)
-                  </button>
-                  <button type="button" class="phone-btn phone-btn-verify" id="simActionVerify">
-                    <span>✓</span> สแกนตรวจรับงาน / ยืนยันสภาพ
-                  </button>
-                </div>
-                <p id="simFeedbackMsg" class="sim-feedback-msg" role="status"></p>
+              <div id="phoneDynamicScreen" class="phone-dynamic-screen-wrap">
+                ${renderPhoneScreen(item, simSlideIndex)}
               </div>
 
               <div class="phone-footer-credit">
@@ -360,34 +585,61 @@
                 <small>ระบบทะเบียนครุภัณฑ์และบริหารงานซ่อม</small>
               </div>
             </div>
+
+            <div class="phone-home-indicator"></div>
           </div>
 
           <div class="sim-side-explainer">
-            <div class="explainer-card">
-              <div class="explainer-icon">💡</div>
-              <div>
-                <b>เป้าหมายการเชื่อมโยงข้อมูลครุภัณฑ์</b>
-                <p>เจ้าหน้าที่ผู้ใช้งานหรือทีมแพทย์พยาบาล เพียงยกสมาร์ทโฟนสแกน QR ที่ตัวเครื่อง จะเห็นประวัติการตรวจรับและแจ้งซ่อมทันทีโดยไม่ต้องจำรหัสครุภัณฑ์ 11 หลัก</p>
+            <div class="sim-slides-controller">
+              <div class="sim-slides-header">
+                <div class="sim-slides-pills">
+                  ${simSlides.map((s, idx) => `
+                    <button type="button" class="sim-step-tab ${idx === simSlideIndex ? 'active' : ''}" data-step-tab="${idx}">
+                      <span class="step-icon">${s.icon}</span>
+                      <span class="step-text">${s.title}</span>
+                    </button>
+                  `).join('')}
+                </div>
+                <button type="button" class="sim-play-toggle-btn" id="simToggleAutoPlay">
+                  ⏸ หยุดอัตโนมัติ
+                </button>
+              </div>
+
+              <div class="sim-progress-track">
+                <div class="sim-progress-bar" id="simProgressBar"></div>
               </div>
             </div>
 
-            <div class="explainer-card">
-              <div class="explainer-icon">⚡</div>
-              <div>
-                <b>3 ลูกเล่นสำคัญของ Smart QR</b>
-                <ul>
-                  <li><b>1. อัปเดตข้อมูลอัตโนมัติ:</b> เปลี่ยนแปลงข้อมูลในระบบ ข้อมูลหน้าสแกนเปลี่ยนทันทีโดยไม่ต้องพิมพ์ฉลากใหม่</li>
-                  <li><b>2. ส่งเรื่องตรงถึงช่าง:</b> ผู้แจ้งกรอกอาการ ระบบส่งไลน์แจ้งเตือนและออก Ticket อัตโนมัติ</li>
-                  <li><b>3. ตรวจรับงานได้ทันที:</b> เมื่อช่างซ่อมเสร็จ ผู้แจ้งตรวจเช็คและกดรับงานผ่านหน้าสแกนได้ทันที</li>
-                </ul>
+            <div class="sim-active-slide-card">
+              <div class="active-slide-top">
+                <span id="activeSlideBadge" class="active-slide-badge">${activeSlide.badge}</span>
+                <span id="activeSlideIndicator" class="active-slide-indicator">ขั้นตอนที่ ${simSlideIndex + 1} จาก 3</span>
               </div>
-            </div>
-
-            <div class="explainer-card">
-              <div class="explainer-icon">📱</div>
-              <div>
-                <b>ทดลองสั่งการบนสมาร์ทโฟนเสมือน</b>
-                <p>คลิกปุ่มบนหน้าจอมือถือฝั่งซ้าย เช่น <b>"แจ้งซ่อมครุภัณฑ์นี้ (จำลอง)"</b> หรือ <b>"สแกนตรวจรับงาน / ยืนยันสภาพ"</b> เพื่อทดสอบการแจ้งเตือนและการทำงานแบบเรียลไทม์</p>
+              <h3 id="activeSlideHeadline" class="active-slide-headline">${activeSlide.headline}</h3>
+              <p id="activeSlideDesc" class="active-slide-desc">${activeSlide.description}</p>
+              
+              <div class="sim-feature-highlights">
+                <div class="highlight-item ${simSlideIndex === 0 ? 'highlighted' : ''}">
+                  <span class="hl-bullet">1</span>
+                  <div>
+                    <b>เชื่อมโยงข้อมูลแบบเรียลไทม์ (Live Sync)</b>
+                    <p>ข้อมูลในระบบเปลี่ยน ข้อมูลหน้าสแกนเปลี่ยนทันที ไม่ต้องพิมพ์สติกเกอร์ใหม่</p>
+                  </div>
+                </div>
+                <div class="highlight-item ${simSlideIndex === 1 ? 'highlighted' : ''}">
+                  <span class="hl-bullet">2</span>
+                  <div>
+                    <b>แจ้งซ่อมและเปิด Ticket ส่งตรงถึงช่าง</b>
+                    <p>ระบบแจ้งเตือนช่างทันที ไม่ต้องจดจำหรือค้นหารหัสครุภัณฑ์ 11 หลัก</p>
+                  </div>
+                </div>
+                <div class="highlight-item ${simSlideIndex === 2 ? 'highlighted' : ''}">
+                  <span class="hl-bullet">3</span>
+                  <div>
+                    <b>ตรวจรับงานและปิดจบงานผ่านมือถือ</b>
+                    <p>ตรวจเช็คผลซ่อมและกดยืนยันรับมอบงาน พร้อมบันทึกลงทะเบียนคุมทันที</p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -401,25 +653,32 @@
     `;
 
     simDialog.querySelectorAll('[data-sim-pick]').forEach(btn => {
-      btn.onclick = () => openQrSimulator(Number(btn.dataset.simPick));
+      btn.onclick = () => openQrSimulator(Number(btn.dataset.simPick), simSlideIndex);
     });
 
-    const feedback = simDialog.querySelector('#simFeedbackMsg');
-    simDialog.querySelector('#simActionRepair').onclick = () => {
-      feedback.className = 'sim-feedback-msg success show';
-      feedback.innerHTML = '⚡ <b>จำลองสำเร็จ:</b> ระบบรับคำขอแจ้งซ่อมของ ' + esc(item.name.split(' (')[0]) + ' แล้ว ส่ง Ticket ถึงช่างทันที!';
-      app.toast('จำลองการแจ้งซ่อมผ่าน Smart QR สำเร็จ');
-    };
-    simDialog.querySelector('#simActionVerify').onclick = () => {
-      feedback.className = 'sim-feedback-msg success show';
-      feedback.innerHTML = '✓ <b>ตรวจรับงานสำเร็จ:</b> ยืนยันสภาพพัสดุและตำแหน่งปัจจุบันเรียบร้อยแล้ว!';
-      app.toast('ยืนยันผลการตรวจรับผ่าน Smart QR สำเร็จ');
-    };
-    simDialog.querySelector('#simOpenFullScan').onclick = () => {
-      window.open('/scan.html', '_blank');
-    };
+    simDialog.querySelectorAll('[data-step-tab]').forEach(btn => {
+      btn.onclick = () => setSimulatorSlide(Number(btn.dataset.stepTab), true);
+    });
+
+    simDialog.querySelectorAll('[data-jump-slide]').forEach(btn => {
+      btn.onclick = () => setSimulatorSlide(Number(btn.dataset.jumpSlide), true);
+    });
+
+    const toggleBtn = simDialog.querySelector('#simToggleAutoPlay');
+    if (toggleBtn) {
+      toggleBtn.onclick = () => {
+        if (simAutoPlaying) stopSimulatorAutoPlay();
+        else startSimulatorAutoPlay();
+      };
+    }
+
+    const openFullBtn = simDialog.querySelector('#simOpenFullScan');
+    if (openFullBtn) {
+      openFullBtn.onclick = () => window.open('/scan.html', '_blank');
+    }
 
     simDialog.showModal();
+    startSimulatorAutoPlay();
   }
 
   const heading = $('#view-dashboard .page-heading p');

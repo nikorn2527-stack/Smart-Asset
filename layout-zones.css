@@ -957,51 +957,71 @@ table thead th {
   border-top: 1px solid #e2e8f0 !important;
 }
 
-/* Smart QR Phone Simulation Modal */
+/* Smart QR Phone Simulation Modal & Interactive Slideshow */
 .qr-simulator-modal {
-  width: min(860px, 94vw) !important;
-  max-width: 860px !important;
-  border-radius: 18px !important;
+  width: min(960px, 95vw) !important;
+  max-width: 960px !important;
+  border-radius: 20px !important;
   padding: 0 !important;
   border: 0 !important;
   overflow: hidden !important;
-  box-shadow: 0 25px 60px rgba(12, 38, 53, 0.3) !important;
+  box-shadow: 0 25px 70px rgba(12, 38, 53, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.8) !important;
+  background: #ffffff !important;
+  max-height: 94vh !important;
 }
 
 .qr-simulator-modal .smart-dialog-head {
-  padding: 18px 24px 14px !important;
-  border-bottom: 1px solid #e2e9f0 !important;
-  background: #ffffff !important;
+  padding: 16px 24px 14px !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.qr-simulator-modal .smart-dialog-head .eyebrow {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: #087e82 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
 }
 
 .qr-simulator-modal .smart-dialog-head h2 {
   font-size: 19px !important;
   margin: 3px 0 !important;
   color: #0f172a !important;
+  font-weight: 800 !important;
 }
 
 .qr-simulator-modal .smart-dialog-head .field-hint {
-  font-size: 11.5px !important;
+  font-size: 12px !important;
   margin: 0 !important;
   color: #64748b !important;
 }
 
 .sim-modal-body {
-  padding: 14px 22px 18px !important;
+  padding: 14px 24px 20px !important;
   background: #f8fafc !important;
+  overflow-y: auto !important;
+  max-height: calc(94vh - 80px) !important;
+  box-sizing: border-box !important;
 }
 
 .sim-selector-bar {
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
-  margin-bottom: 12px !important;
+  gap: 10px !important;
+  margin-bottom: 14px !important;
   flex-wrap: wrap !important;
 }
 
 .sim-select-label {
-  font-size: 11px !important;
-  font-weight: 600 !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
   color: #475569 !important;
 }
 
@@ -1015,11 +1035,12 @@ table thead th {
   background: #ffffff !important;
   border: 1px solid #cbd5e1 !important;
   border-radius: 20px !important;
-  padding: 3px 10px !important;
-  font-size: 11px !important;
+  padding: 4px 12px !important;
+  font-size: 11.5px !important;
   color: #334155 !important;
   cursor: pointer !important;
-  transition: all 0.15s ease !important;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
 }
 
 .sim-pill-btn.active,
@@ -1028,134 +1049,283 @@ table thead th {
   border-color: #087e82 !important;
   color: #087e82 !important;
   font-weight: 700 !important;
+  box-shadow: 0 2px 6px rgba(8, 126, 130, 0.15) !important;
 }
 
 .sim-phone-wrapper {
   display: grid !important;
-  grid-template-columns: 290px 1fr !important;
-  gap: 20px !important;
+  grid-template-columns: 296px 1fr !important;
+  gap: 24px !important;
   align-items: stretch !important;
 }
 
-@media(max-width: 720px) {
+@media(max-width: 780px) {
   .sim-phone-wrapper {
     grid-template-columns: 1fr !important;
   }
 }
 
+/* Realistic Smartphone Frame (19.5:9 / 1:2 ratio, 296px x 592px) */
 .sim-phone-frame {
-  width: 290px !important;
-  height: 520px !important;
-  min-height: 520px !important;
-  max-height: 520px !important;
+  width: 296px !important;
+  height: 592px !important;
+  min-height: 592px !important;
+  max-height: 592px !important;
   flex: none !important;
+  position: relative !important;
   background: #0f172a !important;
-  border: 4px solid #334155 !important;
-  border-radius: 26px !important;
-  padding: 8px 7px 10px !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18) !important;
+  border: 8px solid #1e293b !important;
+  border-radius: 44px !important;
+  padding: 6px 7px 8px !important;
+  box-shadow: 
+    0 25px 50px -12px rgba(15, 23, 42, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+    0 0 0 1.5px #334155 !important;
   color: #1e293b !important;
   display: flex !important;
   flex-direction: column !important;
   box-sizing: border-box !important;
+  justify-self: center !important;
 }
 
-.phone-notch {
+/* Physical Side Buttons on Smartphone chassis */
+.sim-phone-frame::before {
+  content: '' !important;
+  position: absolute !important;
+  left: -11px !important;
+  top: 96px !important;
+  width: 3px !important;
+  height: 44px !important;
+  background: #334155 !important;
+  border-radius: 3px 0 0 3px !important;
+  box-shadow: 0 54px 0 #334155 !important; /* Volume Up & Down buttons */
+}
+
+.sim-phone-frame::after {
+  content: '' !important;
+  position: absolute !important;
+  right: -11px !important;
+  top: 114px !important;
+  width: 3px !important;
+  height: 56px !important;
+  background: #334155 !important;
+  border-radius: 0 3px 3px 0 !important; /* Power lock button */
+}
+
+/* Dynamic Island */
+.phone-dynamic-island {
+  width: 84px !important;
+  height: 20px !important;
+  background: #000000 !important;
+  border-radius: 14px !important;
+  margin: 3px auto 1px !important;
   display: flex !important;
-  justify-content: center !important;
   align-items: center !important;
-  gap: 8px !important;
-  height: 10px !important;
-  margin-bottom: 3px !important;
+  justify-content: space-between !important;
+  padding: 0 9px !important;
+  position: relative !important;
+  z-index: 20 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) !important;
   flex: none !important;
 }
 
-.camera-lens {
+.island-camera {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  background: #0d1527 !important;
+  border: 1.5px solid #1e293b !important;
+  box-shadow: 0 0 2px rgba(56, 189, 248, 0.4) inset !important;
+}
+
+.island-sensor {
   width: 5px !important;
   height: 5px !important;
   border-radius: 50% !important;
-  background: #1e293b !important;
-  border: 1px solid #475569 !important;
+  background: #111827 !important;
 }
 
-.speaker-grill {
-  width: 28px !important;
-  height: 3px !important;
-  border-radius: 3px !important;
-  background: #334155 !important;
-}
-
+/* Smartphone Status Bar */
 .phone-status-bar {
   display: flex !important;
   justify-content: space-between !important;
+  align-items: center !important;
   font-size: 8.5px !important;
+  font-weight: 600 !important;
   color: #94a3b8 !important;
-  padding: 0 6px 4px !important;
+  padding: 0 8px 3px !important;
   flex: none !important;
+  letter-spacing: 0.02em !important;
 }
 
+.status-time {
+  font-weight: 700 !important;
+  color: #cbd5e1 !important;
+}
+
+/* Phone Screen Content */
 .phone-screen-content {
   background: #ffffff !important;
-  border-radius: 18px !important;
-  padding: 10px 10px 8px !important;
+  border-radius: 24px !important;
+  padding: 8px 9px 6px !important;
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
-  justify-content: space-between !important;
   flex: 1 1 auto !important;
-  height: calc(520px - 44px) !important;
-  max-height: calc(520px - 44px) !important;
+  height: calc(592px - 58px) !important;
+  max-height: calc(592px - 58px) !important;
   box-sizing: border-box !important;
   position: relative !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06) inset !important;
 }
 
 .phone-scan-header {
   display: flex !important;
   align-items: center !important;
   gap: 6px !important;
-  padding-bottom: 6px !important;
+  padding-bottom: 5px !important;
   border-bottom: 1px solid #f1f5f9 !important;
   flex: none !important;
 }
 
 .phone-brand-mark {
-  width: 24px !important;
-  height: 24px !important;
-  background: #e0f7f4 !important;
+  width: 22px !important;
+  height: 22px !important;
+  background: linear-gradient(135deg, #e0f7f4, #c7f0ea) !important;
   color: #087e82 !important;
   border-radius: 6px !important;
   display: grid !important;
   place-items: center !important;
   font-size: 11px !important;
+  font-weight: 700 !important;
+  flex: none !important;
 }
 
 .phone-scan-header strong {
   display: block !important;
-  font-size: 10.5px !important;
+  font-size: 10px !important;
   color: #0f172a !important;
+  line-height: 1.2 !important;
 }
 
 .phone-scan-header small {
   display: block !important;
-  font-size: 8.5px !important;
+  font-size: 8px !important;
   color: #64748b !important;
+  line-height: 1.2 !important;
 }
 
 .phone-scan-verified {
   margin-left: auto !important;
-  font-size: 8px !important;
+  font-size: 7.5px !important;
   color: #059669 !important;
   background: #d1fae5 !important;
   padding: 2px 5px !important;
   border-radius: 10px !important;
   font-weight: 700 !important;
+  white-space: nowrap !important;
 }
 
-.phone-asset-card {
-  padding: 2px 0 !important;
+.phone-dynamic-screen-wrap {
+  flex: 1 1 auto !important;
   display: flex !important;
   flex-direction: column !important;
-  justify-content: space-between !important;
+  overflow-y: auto !important;
+  padding-top: 4px !important;
+}
+
+/* Home Indicator */
+.phone-home-indicator {
+  width: 96px !important;
+  height: 4px !important;
+  background: #cbd5e1 !important;
+  border-radius: 4px !important;
+  margin: 6px auto 1px !important;
+  opacity: 0.65 !important;
+  flex: none !important;
+}
+
+/* Slide 1: Laser QR Scanner Demonstration */
+.phone-laser-scanner {
+  position: relative !important;
+  background: linear-gradient(180deg, #f0fdfa 0%, #ecfeff 100%) !important;
+  border: 1px dashed #087e82 !important;
+  border-radius: 10px !important;
+  padding: 6px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  margin-bottom: 6px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 6px rgba(8, 126, 130, 0.08) !important;
+}
+
+.laser-beam {
+  position: absolute !important;
+  left: 6px !important;
+  right: 6px !important;
+  height: 2px !important;
+  background: #06b6d4 !important;
+  box-shadow: 0 0 8px #06b6d4, 0 0 16px #22d3ee !important;
+  animation: qr-laser-sweep 2.2s ease-in-out infinite alternate !important;
+  z-index: 5 !important;
+}
+
+@keyframes qr-laser-sweep {
+  0% { top: 8px; opacity: 0.9; }
+  100% { top: 62px; opacity: 0.9; }
+}
+
+.phone-mini-qr {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  padding: 3px !important;
+  flex: none !important;
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+.phone-mini-qr img {
+  width: 44px !important;
+  height: 44px !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
+.laser-status {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  margin-top: 4px !important;
+  font-size: 8px !important;
+  color: #0e7490 !important;
+}
+
+.live-dot-pulse {
+  width: 6px !important;
+  height: 6px !important;
+  background: #10b981 !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25) !important;
+  animation: dot-pulse 1.4s ease-in-out infinite !important;
+}
+
+@keyframes dot-pulse {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.phone-asset-card-elevated {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  padding: 6px 8px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
   flex: 1 1 auto !important;
 }
 
@@ -1163,7 +1333,6 @@ table thead th {
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
-  flex: none !important;
 }
 
 .phone-kicker {
@@ -1174,8 +1343,8 @@ table thead th {
 }
 
 .phone-status-badge {
-  font-size: 8.5px !important;
-  font-weight: 600 !important;
+  font-size: 8px !important;
+  font-weight: 700 !important;
   padding: 1px 6px !important;
   border-radius: 10px !important;
 }
@@ -1184,47 +1353,42 @@ table thead th {
 .phone-status-badge.amber { background: #fef3c7 !important; color: #b45309 !important; }
 
 .phone-asset-name {
-  font-size: 11.5px !important;
-  line-height: 1.25 !important;
+  font-size: 11px !important;
+  line-height: 1.3 !important;
   color: #0f172a !important;
-  margin: 2px 0 !important;
+  margin: 1px 0 !important;
   font-weight: 700 !important;
-  height: 29px !important;
   display: -webkit-box !important;
   -webkit-line-clamp: 2 !important;
   -webkit-box-orient: vertical !important;
   overflow: hidden !important;
-  flex: none !important;
 }
 
 .phone-code-pill {
   display: inline-block !important;
   font-family: monospace !important;
-  font-size: 9.5px !important;
+  font-size: 9px !important;
   font-weight: 700 !important;
   color: #1e3a8a !important;
   background: #eff6ff !important;
   padding: 1px 6px !important;
   border-radius: 4px !important;
-  margin-bottom: 3px !important;
-  flex: none !important;
+  width: fit-content !important;
 }
 
 .phone-detail-list {
   background: #f8fafc !important;
-  border-radius: 7px !important;
-  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  padding: 4px 6px !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 2.5px !important;
-  margin-bottom: 3px !important;
-  flex: none !important;
 }
 
 .phone-detail-row {
   display: flex !important;
   justify-content: space-between !important;
-  font-size: 9px !important;
+  font-size: 8.5px !important;
   line-height: 1.25 !important;
 }
 
@@ -1235,59 +1399,243 @@ table thead th {
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  max-width: 140px !important;
+  max-width: 130px !important;
 }
 
-.phone-qr-showcase {
+/* Slide Banners */
+.phone-screen-step-banner {
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+  margin-bottom: 6px !important;
+  text-align: center !important;
+}
+
+.phone-screen-step-banner.amber {
+  background: #fef3c7 !important;
+  color: #92400e !important;
+  border: 1px solid #fde68a !important;
+}
+
+.phone-screen-step-banner.green {
+  background: #dcfce7 !important;
+  color: #166534 !important;
+  border: 1px solid #bbf7d0 !important;
+}
+
+/* Slide 2: Repair Form & Instant Dispatch Toast */
+.phone-repair-mockup-card,
+.phone-verify-mockup-card {
   display: flex !important;
-  align-items: center !important;
-  gap: 7px !important;
-  padding: 3px 6px !important;
-  border: 1px dashed #cbd5e1 !important;
-  border-radius: 7px !important;
-  margin-bottom: 3px !important;
-  flex: none !important;
+  flex-direction: column !important;
+  gap: 5px !important;
+  flex: 1 1 auto !important;
 }
 
-.phone-mini-qr {
+.mockup-form-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1.5px !important;
+}
+
+.mockup-label {
+  font-size: 8px !important;
+  font-weight: 700 !important;
+  color: #475569 !important;
+}
+
+.mockup-input {
+  font-size: 8.5px !important;
+  padding: 4px 6px !important;
+  border-radius: 5px !important;
+  border: 1px solid #cbd5e1 !important;
   background: #ffffff !important;
+  color: #1e293b !important;
+}
+
+.mockup-input.readonly {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  font-weight: 600 !important;
+}
+
+.mockup-input.typed-text {
+  border-color: #f59e0b !important;
+  background: #fffbeb !important;
+  color: #92400e !important;
+  font-weight: 600 !important;
+}
+
+.mockup-priority-badge {
+  font-size: 8px !important;
+  font-weight: 600 !important;
+  padding: 3px 6px !important;
+  background: #fff1f2 !important;
+  color: #e11d48 !important;
+  border: 1px solid #fecdd3 !important;
+  border-radius: 4px !important;
+}
+
+.phone-dispatch-toast {
+  background: linear-gradient(135deg, #ecfdf5 0%, #e0f2fe 100%) !important;
+  border: 1.5px solid #10b981 !important;
+  border-radius: 8px !important;
+  padding: 6px 8px !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.18) !important;
+  animation: toast-slide-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  margin-top: 2px !important;
+}
+
+@keyframes toast-slide-down {
+  0% { transform: translateY(-12px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.toast-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 5px !important;
+}
+
+.toast-bell {
+  font-size: 13px !important;
+}
+
+.toast-header strong {
+  display: block !important;
+  font-size: 9px !important;
+  color: #065f46 !important;
+}
+
+.toast-header small {
+  display: block !important;
+  font-size: 7.5px !important;
+  color: #047857 !important;
+}
+
+.toast-technician {
+  font-size: 8px !important;
+  margin-top: 4px !important;
+  padding-top: 3px !important;
+  border-top: 1px dashed #a7f3d0 !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  color: #1e293b !important;
+}
+
+/* Slide 3: Handover & Digital Stamp */
+.verify-ticket-badge {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  background: #f1f5f9 !important;
+  padding: 3px 6px !important;
+  border-radius: 5px !important;
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+  color: #334155 !important;
+}
+
+.badge-done {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+  padding: 1px 5px !important;
+  border-radius: 4px !important;
+  font-size: 8px !important;
+}
+
+.verify-detail-box {
+  background: #f8fafc !important;
   border: 1px solid #e2e8f0 !important;
   border-radius: 6px !important;
-  padding: 2px !important;
-  flex: none !important;
+  padding: 4px 6px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
 }
 
-.phone-mini-qr img {
-  width: 32px !important;
-  height: 32px !important;
-  object-fit: contain !important;
-  display: block !important;
-}
-
-.phone-qr-showcase small {
-  font-size: 9px !important;
-  line-height: 1.2 !important;
-}
-
-.phone-qr-showcase p {
+.verify-row {
   font-size: 8px !important;
   line-height: 1.25 !important;
-  margin: 1px 0 0 !important;
-  color: #64748b !important;
 }
 
+.verify-row span { color: #64748b !important; }
+.verify-row b { color: #0f172a !important; }
+
+/* Digital Stamp Pop Animation */
+.phone-digital-stamp {
+  display: flex !important;
+  justify-content: center !important;
+  margin: 6px 0 !important;
+}
+
+.stamp-inner {
+  border: 2px dashed #059669 !important;
+  background: rgba(209, 250, 229, 0.6) !important;
+  color: #047857 !important;
+  padding: 4px 12px !important;
+  border-radius: 8px !important;
+  text-align: center !important;
+  transform: rotate(-5deg) !important;
+  animation: stamp-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  box-shadow: 0 4px 10px rgba(5, 150, 105, 0.15) !important;
+}
+
+@keyframes stamp-pop {
+  0% { transform: scale(0.3) rotate(-20deg); opacity: 0; }
+  70% { transform: scale(1.1) rotate(-3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-5deg); opacity: 1; }
+}
+
+.stamp-inner .stamp-icon {
+  font-size: 13px !important;
+  display: block !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+}
+
+.stamp-inner .stamp-text {
+  display: block !important;
+  font-size: 9.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em !important;
+}
+
+.stamp-inner .stamp-sign {
+  display: block !important;
+  font-size: 7.5px !important;
+  color: #065f46 !important;
+}
+
+.verify-sync-note {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  font-size: 8px !important;
+  color: #1e40af !important;
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 5px !important;
+  padding: 3px 6px !important;
+}
+
+.sync-icon { font-size: 10px !important; }
+
+/* Phone Buttons */
 .phone-actions-container {
   display: flex !important;
   flex-direction: column !important;
   gap: 3px !important;
-  flex: none !important;
+  margin-top: auto !important;
+  padding-top: 5px !important;
 }
 
 .phone-btn {
   width: 100% !important;
-  padding: 4px 8px !important;
-  font-size: 9.5px !important;
-  font-weight: 600 !important;
+  padding: 5px 8px !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
   border-radius: 6px !important;
   cursor: pointer !important;
   display: flex !important;
@@ -1295,116 +1643,248 @@ table thead th {
   justify-content: center !important;
   gap: 5px !important;
   transition: all 0.15s ease !important;
+  border: none !important;
 }
 
 .phone-btn-repair {
   background: #087e82 !important;
   color: #ffffff !important;
-  border: 1px solid #087e82 !important;
 }
 
 .phone-btn-repair:hover { background: #066265 !important; }
 
 .phone-btn-verify {
+  background: #059669 !important;
+  color: #ffffff !important;
+}
+
+.phone-btn-verify:hover { background: #047857 !important; }
+
+.phone-btn-restart {
   background: #ffffff !important;
   color: #0f172a !important;
   border: 1px solid #cbd5e1 !important;
 }
 
-.phone-btn-verify:hover { background: #f1f5f9 !important; }
-
-.sim-feedback-msg {
-  font-size: 9px !important;
-  padding: 3px 6px !important;
-  border-radius: 5px !important;
-  margin: 2px 0 0 !important;
-  display: none !important;
-  line-height: 1.25 !important;
-}
-
-.sim-feedback-msg.show { display: block !important; }
-.sim-feedback-msg.success { background: #ecfdf5 !important; color: #065f46 !important; border: 1px solid #a7f3d0 !important; }
+.phone-btn-restart:hover { background: #f1f5f9 !important; }
 
 .phone-footer-credit {
   border-top: 1px solid #f1f5f9 !important;
-  margin-top: 3px !important;
+  margin-top: 4px !important;
   padding-top: 3px !important;
   text-align: center !important;
   flex: none !important;
 }
 
-.phone-footer-credit b { display: block !important; font-size: 8.5px !important; color: #f97316 !important; }
-.phone-footer-credit small { display: block !important; font-size: 7.5px !important; color: #94a3b8 !important; }
+.phone-footer-credit b { display: block !important; font-size: 8px !important; color: #f97316 !important; }
+.phone-footer-credit small { display: block !important; font-size: 7px !important; color: #94a3b8 !important; }
 
-/* Explainer right side */
+/* Right-side Explainer & Interactive Slideshow Controller */
 .sim-side-explainer {
   display: flex !important;
   flex-direction: column !important;
-  justify-content: space-between !important;
-  height: 520px !important;
-  min-height: 520px !important;
-  max-height: 520px !important;
-  gap: 8px !important;
+  height: 592px !important;
+  min-height: 592px !important;
+  max-height: 592px !important;
+  gap: 12px !important;
   box-sizing: border-box !important;
 }
 
-.explainer-card {
+.sim-slides-controller {
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
-  border-radius: 10px !important;
-  padding: 9px 12px !important;
-  display: flex !important;
-  align-items: flex-start !important;
-  gap: 10px !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
-  transition: all 0.15s ease !important;
-  flex: 1 1 auto !important;
-}
-
-.explainer-card:hover {
-  border-color: #cbd5e1 !important;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04) !important;
-}
-
-.explainer-icon {
-  font-size: 16px !important;
-  width: 32px !important;
-  height: 32px !important;
-  border-radius: 8px !important;
-  background: #f0fdfa !important;
-  color: #087e82 !important;
-  display: grid !important;
-  place-items: center !important;
+  border-radius: 12px !important;
+  padding: 8px 10px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
   flex: none !important;
 }
 
-.explainer-card b {
+.sim-slides-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  margin-bottom: 8px !important;
+}
+
+.sim-slides-pills {
+  display: flex !important;
+  gap: 6px !important;
+  flex-wrap: wrap !important;
+  flex: 1 1 auto !important;
+}
+
+.sim-step-tab {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  padding: 5px 10px !important;
+  font-size: 11.5px !important;
+  color: #475569 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.sim-step-tab:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.sim-step-tab.active {
+  background: linear-gradient(135deg, #087e82 0%, #066265 100%) !important;
+  color: #ffffff !important;
+  border-color: #087e82 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 6px rgba(8, 126, 130, 0.25) !important;
+}
+
+.sim-step-tab.active .step-icon {
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2)) !important;
+}
+
+.sim-play-toggle-btn {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  padding: 5px 10px !important;
+  font-size: 11px !important;
+  color: #334155 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.15s ease !important;
+}
+
+.sim-play-toggle-btn:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.sim-progress-track {
+  width: 100% !important;
+  height: 4px !important;
+  background: #f1f5f9 !important;
+  border-radius: 4px !important;
+  overflow: hidden !important;
+}
+
+.sim-progress-bar {
+  width: 0%;
+  height: 100% !important;
+  background: linear-gradient(90deg, #087e82, #22d3ee) !important;
+  transition: width 0.05s linear !important;
+}
+
+/* Active Slide Card */
+.sim-active-slide-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  padding: 16px 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03) !important;
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+}
+
+.active-slide-top {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+
+.active-slide-badge {
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  color: #087e82 !important;
+  background: #e0f7f4 !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  letter-spacing: 0.03em !important;
+}
+
+.active-slide-indicator {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #94a3b8 !important;
+}
+
+.active-slide-headline {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  margin: 0 !important;
+  line-height: 1.35 !important;
+}
+
+.active-slide-desc {
+  font-size: 12.5px !important;
+  color: #475569 !important;
+  line-height: 1.55 !important;
+  margin: 0 !important;
+}
+
+/* 3 Feature Highlights */
+.sim-feature-highlights {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 7px !important;
+  margin-top: 4px !important;
+}
+
+.highlight-item {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+  padding: 8px 10px !important;
+  border-radius: 8px !important;
+  background: #f8fafc !important;
+  border: 1px solid #edf2f7 !important;
+  transition: all 0.2s ease !important;
+}
+
+.highlight-item.highlighted {
+  background: #f0fdfa !important;
+  border-color: #99f6e4 !important;
+  border-left: 3px solid #087e82 !important;
+  box-shadow: 0 2px 6px rgba(8, 126, 130, 0.08) !important;
+}
+
+.hl-bullet {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 50% !important;
+  background: #e2e8f0 !important;
+  color: #475569 !important;
+  display: grid !important;
+  place-items: center !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  flex: none !important;
+}
+
+.highlight-item.highlighted .hl-bullet {
+  background: #087e82 !important;
+  color: #ffffff !important;
+}
+
+.highlight-item b {
   display: block !important;
-  font-size: 12px !important;
+  font-size: 11.5px !important;
   font-weight: 700 !important;
   color: #0f172a !important;
   margin-bottom: 2px !important;
 }
 
-.explainer-card p {
+.highlight-item p {
   font-size: 11px !important;
-  color: #475569 !important;
-  line-height: 1.4 !important;
+  color: #64748b !important;
   margin: 0 !important;
-}
-
-.explainer-card ul {
-  list-style: none !important;
-  padding: 0 !important;
-  margin: 3px 0 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 3px !important;
-}
-
-.explainer-card li {
-  font-size: 10.5px !important;
-  color: #475569 !important;
   line-height: 1.35 !important;
 }
 
@@ -1415,6 +1895,7 @@ table thead th {
   margin-top: auto !important;
   padding-top: 8px !important;
   border-top: 1px solid #e2e8f0 !important;
+  flex: none !important;
 }
 
 .explainer-cta-box .button {
@@ -2306,7 +2787,7 @@ table thead th {
   padding-bottom: 24px !important;
 }
 
-/* 7. Sticker Designer View - Single Screen Studio (Zero Page-Scroll) */
+/* 7. Sticker Designer View - Single Screen Studio (Zero Page-Scroll, Full-Height Flush Sidebars) */
 #view-stickers.active {
   display: flex !important;
   flex-direction: column !important;
@@ -2314,12 +2795,8 @@ table thead th {
   max-height: 100% !important;
   min-height: 0 !important;
   overflow: hidden !important;
-  gap: 6px !important;
-}
-
-#view-stickers .sticker-studio-header {
-  flex: none !important;
-  margin: 0 !important;
+  gap: 0 !important;
+  padding: 8px 12px 10px !important;
 }
 
 #view-stickers .sticker-layout {
@@ -2328,9 +2805,10 @@ table thead th {
   height: 100% !important;
   overflow: hidden !important;
   display: grid !important;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) !important;
+  grid-template-columns: minmax(280px, 310px) minmax(0, 1fr) !important;
   gap: 12px !important;
   margin-bottom: 0 !important;
+  align-items: stretch !important;
 }
 
 #view-stickers .sticker-asset-panel {
@@ -2339,6 +2817,8 @@ table thead th {
   height: 100% !important;
   min-height: 0 !important;
   overflow: hidden !important;
+  margin: 0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
 }
 
 #view-stickers #stickerAssetResults {
@@ -2353,15 +2833,21 @@ table thead th {
   height: 100% !important;
   min-height: 0 !important;
   overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 #view-stickers .sticker-editor-workarea {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) minmax(310px, 350px) !important;
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 345px) !important;
   flex: 1 1 0 !important;
   min-height: 0 !important;
   height: 100% !important;
   overflow: hidden !important;
+  gap: 12px !important;
 }
 
 #view-stickers .sticker-preview-panel {
@@ -2371,12 +2857,91 @@ table thead th {
   min-height: 0 !important;
   overflow: hidden !important;
   padding: 10px 14px !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+#view-stickers .sticker-studio-header {
+  flex: none !important;
+  margin: 0 0 8px 0 !important;
+  padding: 6px 12px 8px !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+#view-stickers .sticker-header-strip {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+}
+
+#view-stickers .sticker-header-title h1 {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+#view-stickers .sticker-header-title .eyebrow {
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  color: #087e82 !important;
+  letter-spacing: 0.06em !important;
+  margin-bottom: 2px !important;
+}
+
+#view-stickers .sticker-top-toolbar {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  padding-top: 4px !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+#view-stickers .toolbar-group {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+#view-stickers .toolbar-group label {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  color: #475569 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+#view-stickers .toolbar-group input,
+#view-stickers .toolbar-group select {
+  font-size: 11px !important;
+  padding: 3px 6px !important;
+  border-radius: 4px !important;
+}
+
+#view-stickers .actions-group {
+  margin-left: auto !important;
+}
+
+#view-stickers .actions-group .button {
+  padding: 4px 10px !important;
+  font-size: 11px !important;
 }
 
 #view-stickers .sticker-preview-wrap {
   flex: 1 1 0 !important;
   min-height: 0 !important;
-  margin: 8px 0 !important;
+  margin: 6px 0 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -2390,6 +2955,10 @@ table thead th {
   min-height: 0 !important;
   overflow-y: auto !important;
   padding: 10px 12px !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
 }
 
 /* 8. Survey Working Sheet View */

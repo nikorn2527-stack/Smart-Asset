@@ -56,10 +56,28 @@
   };
   const plain=v=>v==null?'':String(v);
   function defaultForm(data){
-    const a=data.asset||{},r=data.register||{},acq=(data.acquisitions||[]).at(-1)||{},d=(data.depreciationSnapshots||[]).at(-1)||{};
-    const f={organization:r.organization_name||a.organization||window.govAssetBranding?.organization||'',department:r.department_name||a.department||a.responsibleUnit||'',type:r.asset_type||a.assetType||a.group||'',code:a.code||r.asset_code_printed||'',description:a.name||r.description||'',model:r.model||acq.model||a.model||'',location:a.location||r.location||'',vendor:r.vendor_name||acq.vendor_name||a.vendor||'',address:r.vendor_address||acq.vendor_address||'',phone:r.vendor_phone||acq.vendor_phone||'',gfmis:r.gfmis_no||acq.gfmis_no||a.gfmisNo||'',po:r.po_no||acq.po_no||a.poNo||'',serial:a.serialNumber||r.serial_number||acq.serial_number||'',warranty:r.warranty_end||a.warrantyEnd||'',fiscalYear:r.fiscal_year_th||acq.fiscal_year_th||a.fiscalYear||'',fund:r.fund_type||acq.fund_type||a.fundType||'',method:r.acquisition_method||acq.acquisition_method||a.acquisitionMethod||''};
+    const a=data.asset||{},r=data.register||{},d=(data.depreciationSnapshots||[]).at(-1)||{};
+    const f={organization:r.organization_name||a.organization||window.govAssetBranding?.organization||'',department:r.department_name||a.department||a.responsibleUnit||'',type:r.asset_type||a.assetType||a.group||'',code:a.code||r.asset_code_printed||'',description:a.name||r.description||'',model:r.model||a.model||'',location:a.location||r.location||'',vendor:r.vendor_name||a.vendor||'',address:r.vendor_address||'',phone:r.vendor_phone||'',gfmis:r.gfmis_no||a.gfmisNo||'',po:r.po_no||a.poNo||'',serial:a.serialNumber||r.serial_number||'',warranty:r.warranty_end||a.warrantyEnd||'',fiscalYear:r.fiscal_year_th||a.fiscalYear||'',fund:r.fund_type||a.fundType||'',method:r.acquisition_method||a.acquisitionMethod||''};
     Object.keys(f).forEach(k=>f[k]=plain(f[k]));
-    return {fields:f,rows:[{date:dateText(acq.acquired_on||a.acquiredOn),document:plain(acq.document_no||r.po_no||r.gfmis_no),description:f.description,quantity:plain(acq.quantity||1),unitPrice:plain(acq.unit_price??acq.total_price??a.purchasePrice),total:plain(acq.total_price??acq.unit_price??a.purchasePrice),life:plain(d.useful_life_years??a.usefulLifeYears),monthly:plain(d.monthly_depreciation??a.monthlyDepreciation),annual:plain(d.annual_depreciation??a.annualDepreciation),accumulated:plain(d.accumulated_depreciation??a.accumulatedDepreciation),net:plain(d.net_book_value??a.netBookValue),note:plain(r.notes||acq.notes||d.notes)}]};
+    const acqs=(data.acquisitions&&data.acquisitions.length>0)?data.acquisitions:[{}];
+    const rows=acqs.map((acq,i)=>{
+      const desc=acq.model?`${f.description} (${acq.model})`:f.description;
+      return {
+        date:dateText(acq.acquired_on||a.acquiredOn),
+        document:plain(acq.document_no||acq.po_no||f.po||f.gfmis),
+        description:desc,
+        quantity:plain(acq.quantity||1),
+        unitPrice:plain(acq.unit_price??acq.total_price??a.purchasePrice),
+        total:plain(acq.total_price??acq.unit_price??a.purchasePrice),
+        life:plain(d.useful_life_years??a.usefulLifeYears),
+        monthly:plain(d.monthly_depreciation??a.monthlyDepreciation),
+        annual:plain(d.annual_depreciation??a.annualDepreciation),
+        accumulated:plain(d.accumulated_depreciation??a.accumulatedDepreciation),
+        net:plain(d.net_book_value??a.netBookValue),
+        note:plain(r.notes||acq.notes||d.notes)
+      };
+    });
+    return {fields:f,rows:rows.length?rows:[{date:'',document:'',description:f.description,quantity:'1',unitPrice:'',total:'',life:'',monthly:'',annual:'',accumulated:'',net:'',note:''}]};
   }
   function field(key,cls=''){return `<div class="rf-field ${cls}" data-field="${key}"><span>${esc(fields.find(f=>f[0]===key)[1])}</span><b>${esc(state.form.fields[key])}</b></div>`;}
   function summaryValue(key){return state.form.summary?.[key] ?? [...state.form.rows].reverse().find(r=>r[key]!=='')?.[key] ?? '';}
@@ -70,11 +88,10 @@
     const rows=state.form.rows, pages=[];
     const colgroupHtml = colWidths.map(w=>`<col style="width:${w}%">`).join('');
     const theadHtml = `<thead><tr>${['วัน เดือน ปี','ที่เอกสาร','รายการ','จำนวน<br>หน่วย','ราคาต่อ<br>หน่วย','มูลค่ารวม','อายุ<br>ใช้งาน','อัตราค่าเสื่อมราคา<br>/ ประจำเดือน','ค่าเสื่อมราคา<br>ประจำปี','ค่าเสื่อมราคา<br>สะสม','มูลค่าสุทธิ','หมายเหตุ'].map(s=>`<th>${s}</th>`).join('')}</tr></thead>`;
-    for(let offset=0;offset<rows.length;offset+=3){
-      const chunk=rows.slice(offset,offset+3),last=offset+chunk.length===rows.length;
-      const paddedChunk=[...chunk];
-      while(paddedChunk.length<3){ paddedChunk.push({}); }
-      const rowsHtml=paddedChunk.map(r=>`<tr>${columns.map(([key])=>{const val=r[key]!=null&&r[key]!==''?display(key,r[key]):'';return `<td><div class="rf-cell-value">${val?esc(val):'&nbsp;'}</div></td>`;}).join('')}</tr>`).join('');
+    const pageSize = 8;
+    for(let offset=0;offset<rows.length;offset+=pageSize){
+      const chunk=rows.slice(offset,offset+pageSize),last=offset+chunk.length===rows.length;
+      const rowsHtml=chunk.map(r=>`<tr>${columns.map(([key])=>{const val=r[key]!=null&&r[key]!==''?display(key,r[key]):'';return `<td><div class="rf-cell-value">${val?esc(val):'&nbsp;'}</div></td>`;}).join('')}</tr>`).join('');
       const summaryHtml=last?`<tr class="rf-summary-row"><td class="rf-sum-date"><div class="rf-cell-value rf-sum-val">${esc(state.form.fields.fiscalYear||'')}</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td class="rf-sum-money"><div class="rf-cell-value rf-sum-val">${esc(total('annual'))}</div></td><td class="rf-sum-money"><div class="rf-cell-value rf-sum-val">${esc(total('accumulated'))}</div></td><td class="rf-sum-money"><div class="rf-cell-value rf-sum-val">${esc(total('net'))}</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td></tr>`:`<tr class="rf-summary-row">${columns.map(()=>'<td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td>').join('')}</tr>`;
       pages.push(`<section class="official-register-page" aria-label="ทะเบียนคุมทรัพย์สิน หน้า ${pages.length+1}"><div class="register-title rf-title">ทะเบียนคุมทรัพย์สิน</div><div class="rf-org">${field('organization')}${field('department')}</div><div class="rf-fields"><div class="rf-line rf-line-1">${field('type')}${field('code')}</div><div class="rf-line rf-line-2">${field('description')}${field('model')}</div><div class="rf-line rf-line-3">${field('location')}${field('vendor')}</div><div class="rf-line rf-line-4">${field('address')}${field('phone')}</div><div class="rf-line rf-line-5">${field('gfmis')}${field('po')}${field('serial')}${field('warranty')}</div><div class="rf-line rf-line-6">${field('fiscalYear')}${field('fund')}${field('method')}</div></div><table class="register-table rf-table"><colgroup>${colgroupHtml}</colgroup>${theadHtml}<tbody>${rowsHtml}${summaryHtml}</tbody></table></section>`);
     }
