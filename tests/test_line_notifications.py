@@ -180,6 +180,31 @@ class LineNotifications(unittest.TestCase):
         line.dispatch(self.connect,lambda *args:sent.append(args))
         self.assertEqual(len(sent),1)
 
+    def test_label_only_edit_keeps_queue_but_route_change_discards_it(self):
+        self.enable();self.ticket()
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE');line.collect(db)
+        cfg=self.call('GET','/api/line/settings')
+        saved=self.call('PUT','/api/line/settings',{**cfg,'recipients':[{**r,'label':'ป้ายใหม่'} for r in cfg['recipients']],'actor':OFFICER})
+        self.assertEqual(saved['revision'],cfg['revision']+1)
+        sent=[]
+        line.dispatch(self.connect,lambda *args:sent.append(args))
+        self.assertEqual(len(sent),1,'renaming a recipient must not drop queued messages')
+        self.assertEqual(self.call('GET','/api/line/settings')['recipients'][0]['label'],'ป้ายใหม่')
+
+    def test_changing_a_route_discards_queue_and_audit_records_actor(self):
+        self.enable();self.ticket()
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE');line.collect(db)
+        cfg=self.call('GET','/api/line/settings')
+        self.call('PUT','/api/line/settings',{**cfg,'recipients':[r for r in cfg['recipients'] if r['role']==OFFICER],'actor':OFFICER})
+        sent=[]
+        line.dispatch(self.connect,lambda *args:sent.append(args))
+        self.assertEqual(sent,[])
+        with self.connect() as db:
+            self.assertGreater(db.execute("SELECT COUNT(*) FROM line_outbox WHERE status='skipped'").fetchone()[0],0)
+            self.assertEqual(db.execute('SELECT actor FROM line_settings_events ORDER BY id DESC LIMIT 1').fetchone()[0],OFFICER)
+
 
 from test_smart_workflow import HTTPFixture
 from urllib.request import Request, urlopen

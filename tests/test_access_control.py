@@ -66,6 +66,22 @@ class AccessControl(HTTPFixture):
         c.call('/api/branding',{'actor':OFFICER},method='PUT',expected=403)
         c.call('/api/equipment/catalog',{'actor':OFFICER},expected=403)
         c.call('/api/supply/documents',{'kind':'receipt'},csrf=False,expected=403)
+    def test_admin_saves_central_settings_with_any_simulated_role_and_audit_names_the_user(self):
+        self.admin.call('/api/auth/scope',{'accountId':None,'branchId':None,'actor':'ผู้แจ้ง'})
+        wf=self.admin.call('/api/workflow/settings')
+        saved=self.admin.call('/api/workflow/settings',{'approvalThreshold':wf['approvalThreshold'],'reminderDays':wf['reminderDays'],'revision':wf['revision']},method='PUT')
+        self.assertEqual(saved['updatedBy'],'test.admin')
+        br=self.admin.call('/api/branding')
+        self.admin.call('/api/branding',{'appName':br['appName'],'organization':br['organization'],'revision':br['revision']},method='PUT')
+        self.admin.call('/api/line/settings')
+        with sqlite3.connect(self.db) as db:
+            self.assertEqual(db.execute('SELECT actor FROM workflow_settings_events ORDER BY id DESC LIMIT 1').fetchone()[0],'test.admin')
+            self.assertEqual(db.execute('SELECT actor FROM app_branding_events ORDER BY id DESC LIMIT 1').fetchone()[0],'test.admin')
+    def test_organization_manager_cannot_change_central_settings(self):
+        c,s=self.user(manage=True)
+        c.call('/api/workflow/settings',{'approvalThreshold':1,'reminderDays':1,'revision':1},method='PUT',expected=403)
+        c.call('/api/branding',{'appName':'x','organization':'y','revision':1},method='PUT',expected=403)
+        c.call('/api/line/settings',expected=403)
     def test_read_all_is_independent_from_edit_permissions(self):
         c,s=self.user(globalRole='auditor')
         self.assertTrue(s['canViewAll']);self.assertFalse(s['permissions']['edit']);self.assertFalse(s['permissions']['export'])

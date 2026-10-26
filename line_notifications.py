@@ -13,6 +13,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from uuid import uuid4
 
 from notifications import FEED, ROLES, OFFICER, NotificationError, parameters, stamp, TZ
+from settings_guard import settings_editor
 
 PUSH_URL = 'https://api.line.me/v2/bot/message/push'
 TARGET = re.compile(r'[UCR][0-9a-fA-F]{32}')
@@ -203,15 +204,16 @@ def dispatch(connect, transport=None, batch=5):
                 db.execute("UPDATE line_outbox SET status=?,available_at=?,last_error=? WHERE id=? AND lease_token=? AND status='sending'",('retry' if retry else 'failed',(datetime.now(TZ)+timedelta(seconds=delay)).isoformat(timespec='seconds'),str(error),job['id'],lease))
 
 
-def require_officer(value):
-    if value!=OFFICER:
-        raise NotificationError('การตั้งค่า LINE ใช้บทบาทเจ้าหน้าที่พัสดุในโหมดทดสอบ',403)
+def require_officer(db, value):
+    def deny(message):
+        raise NotificationError(message.replace('การตั้งค่าใช้บทบาท','การตั้งค่า LINE ใช้บทบาท',1),403)
+    return settings_editor(db, value, deny)
 
 
 def handle(db, method, path, query, body):
     if not path.startswith('/api/line/'):
         return None
-    require_officer((query.get('actor') or [''])[0] if method=='GET' else body.get('actor'))
+    editor=require_officer(db,(query.get('actor') or [''])[0] if method=='GET' else body.get('actor'))
     if path=='/api/line/settings' and method=='GET':
         cfg=config(db)
         cfg.update(tokenConfigured=bool(token()),secretConfigured=bool(secret()),worker=dict(WORKER),
@@ -238,14 +240,23 @@ def handle(db, method, path, query, body):
             raise NotificationError('มีผู้แก้ไข LINE แล้ว กรุณาโหลดค่าล่าสุด',409)
         if before['enabled']==enabled and before['baseUrl']==base and before['recipients']==normalized:
             return {'ok':True,'revision':before['revision']}
+        # Routing = who gets messages, where, and whether sending is on. Editing only a
+        # display label must not discard queued messages or swallow uncollected notices.
+        routing_changed=(before['enabled']!=enabled or before['baseUrl']!=base
+            or {(r['role'],r['targetId']) for r in before['recipients']}!={(r['role'],r['targetId']) for r in normalized})
         db.execute('UPDATE line_settings SET enabled=?,base_url=?,revision=revision+1,updated_at=? WHERE id=1',(int(enabled),base,stamp()))
         db.execute('DELETE FROM line_recipients')
         db.executemany('INSERT INTO line_recipients(recipient_role,target_id,label) VALUES(?,?,?)',[(r['role'],r['targetId'],r['label']) for r in normalized])
-        db.execute("UPDATE line_outbox SET status='skipped',last_error='เปลี่ยนการตั้งค่า LINE' WHERE status IN ('pending','retry')")
-        if enabled:
-            baseline(db)
+        new_revision=db.execute('SELECT revision FROM line_settings WHERE id=1').fetchone()[0]
+        if routing_changed:
+            db.execute("UPDATE line_outbox SET status='skipped',last_error='เปลี่ยนการตั้งค่า LINE' WHERE status IN ('pending','retry')")
+            if enabled:
+                baseline(db)
+        else:
+            # dispatch() only sends jobs whose config_revision matches, so carry the queue forward.
+            db.execute("UPDATE line_outbox SET config_revision=? WHERE status IN ('pending','retry')",(new_revision,))
         after=config(db)
-        db.execute('INSERT INTO line_settings_events(actor,before_json,after_json,created_at) VALUES(?,?,?,?)',(OFFICER,json.dumps(before,ensure_ascii=False),json.dumps(after,ensure_ascii=False),stamp()))
+        db.execute('INSERT INTO line_settings_events(actor,before_json,after_json,created_at) VALUES(?,?,?,?)',(editor,json.dumps(before,ensure_ascii=False),json.dumps(after,ensure_ascii=False),stamp()))
         return {'ok':True,'revision':after['revision']}
     if path=='/api/line/test' and method=='POST':
         cfg=config(db)

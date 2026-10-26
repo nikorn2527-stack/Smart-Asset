@@ -350,9 +350,17 @@ CREATE TABLE IF NOT EXISTS app_branding (
   app_name TEXT NOT NULL DEFAULT 'GovAsset',
   organization TEXT NOT NULL DEFAULT 'หน่วยงานตัวอย่าง',
   logo TEXT NOT NULL DEFAULT '',
-  public_base_url TEXT NOT NULL DEFAULT ''
+  public_base_url TEXT NOT NULL DEFAULT '',
+  revision INTEGER NOT NULL DEFAULT 1
 );
 INSERT OR IGNORE INTO app_branding(id) VALUES(1);
+CREATE TABLE IF NOT EXISTS app_branding_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor TEXT NOT NULL,
+  before_json TEXT NOT NULL,
+  after_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS asset_qr_links (
   asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
   token TEXT NOT NULL UNIQUE,

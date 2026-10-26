@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import math
 import re
+from settings_guard import settings_editor
 
 TZ = timezone(timedelta(hours=7))
 OFFICER, APPROVER, TECH, REQUESTER = 'เจ้าหน้าที่พัสดุ', 'ผู้อนุมัติ', 'ช่าง', 'ผู้แจ้ง'
@@ -184,8 +185,9 @@ def handle(db, method, path, query, body):
         if method == 'GET':
             return settings(db)
         if method == 'PUT':
-            if role(body.get('actor')) != OFFICER:
-                raise NotificationError('การตั้งค่าใช้บทบาทเจ้าหน้าที่พัสดุในโหมดทดสอบ',403)
+            def deny(message):
+                raise NotificationError(message, 403)
+            editor = settings_editor(db, role(body.get('actor')), deny)
             if isinstance(body.get('approvalThreshold'),bool):
                 raise NotificationError('วงเงินส่งอนุมัติต้องเป็นจำนวนเงิน')
             try:
@@ -200,9 +202,9 @@ def handle(db, method, path, query, body):
             if type(body.get('revision')) is not int or body['revision'] != before['revision']:
                 raise NotificationError('มีผู้แก้ไขการตั้งค่าแล้ว กรุณาโหลดค่าล่าสุดก่อนบันทึก',409)
             db.execute('UPDATE workflow_settings SET approval_threshold=?,reminder_days=?,revision=revision+1,updated_at=?,updated_by=? WHERE id=1',
-                       (round(threshold,2),days,stamp(),OFFICER))
+                       (round(threshold,2),days,stamp(),editor))
             after = settings(db)
             db.execute('INSERT INTO workflow_settings_events(actor,before_json,after_json,created_at) VALUES(?,?,?,?)',
-                       (OFFICER,json.dumps(before,ensure_ascii=False),json.dumps(after,ensure_ascii=False),stamp()))
+                       (editor,json.dumps(before,ensure_ascii=False),json.dumps(after,ensure_ascii=False),stamp()))
             return after
     return None

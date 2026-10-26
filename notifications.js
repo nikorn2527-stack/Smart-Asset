@@ -69,7 +69,7 @@
   const wfTarget=$('#tabPaneWorkflow')||$('#view-settings .settings-sections');
   if(wfTarget.id==='tabPaneWorkflow'){wfTarget.append(configuration);configuration.open=true;loadWorkflow();}
   else{wfTarget.after(configuration);}
-  function workflowPermissions(){const editable=!!workflow&&app.getRole()==='เจ้าหน้าที่พัสดุ'&&!workflowLoading&&!workflowSaving;$('#workflowFields').disabled=!editable;$('#saveWorkflowSettings').disabled=!editable;$('#reloadWorkflowSettings').disabled=workflowLoading||workflowSaving;}
+  function workflowPermissions(){const editable=!!workflow&&app.canManageSettings()&&!workflowLoading&&!workflowSaving;$('#workflowFields').disabled=!editable;$('#saveWorkflowSettings').disabled=!editable;$('#reloadWorkflowSettings').disabled=workflowLoading||workflowSaving;}
   function renderWorkflow(){if(workflow){const form=$('#workflowSettingsForm');form.elements.approvalThreshold.value=workflow.approvalThreshold;form.elements.reminderDays.value=workflow.reminderDays;}workflowPermissions();}
   async function loadWorkflow(){
     const request=++workflowEpoch;workflowLoading=true;workflowPermissions();$('#workflowSettingsStatus').textContent='กำลังโหลดเกณฑ์ล่าสุด…';
@@ -80,7 +80,7 @@
   $('#reloadWorkflowSettings').onclick=loadWorkflow;
   configuration.addEventListener('toggle',()=>{if(configuration.open)loadWorkflow();});
   $('#workflowSettingsForm').onsubmit=async event=>{
-    event.preventDefault();if(!workflow||app.getRole()!=='เจ้าหน้าที่พัสดุ')return;const button=$('#saveWorkflowSettings');if(button.disabled)return;const fields=Object.fromEntries(new FormData(event.target));workflowSaving=true;workflowPermissions();
+    event.preventDefault();if(!workflow||!app.canManageSettings())return;const button=$('#saveWorkflowSettings');if(button.disabled)return;const fields=Object.fromEntries(new FormData(event.target));workflowSaving=true;workflowPermissions();
     try{workflow=await app.api('/api/workflow/settings',{method:'PUT',body:JSON.stringify({approvalThreshold:Number(fields.approvalThreshold),reminderDays:Number(fields.reminderDays),revision:workflow.revision,actor:app.getRole()})});renderWorkflow();await app.refreshData();$('#workflowSettingsStatus').textContent='บันทึกแล้ว เกณฑ์ใหม่ใช้กับการคัดกรองครั้งถัดไป';}
     catch(error){$('#workflowSettingsStatus').textContent=error.message;}
     finally{workflowSaving=false;workflowPermissions();}
