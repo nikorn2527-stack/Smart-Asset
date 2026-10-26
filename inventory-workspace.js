@@ -4,7 +4,6 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const option=(v,t)=>`<option value="${esc(v)}">${esc(t)}</option>`;
   let request=0;
-  $('#assetRows').closest('table').querySelectorAll('thead th')[5].textContent='มูลค่า / สถานะ';
   const allowed=()=>app.getRole()==='เจ้าหน้าที่พัสดุ'&&(!window.govAssetAccess?.session?.required||window.govAssetAccess.session.permissions.edit);
   function permission(){document.querySelectorAll('.inventory-editor-dialog [type=submit]').forEach(b=>b.disabled=!allowed());}
   function field(key,name,value,type='text'){return `<label>${name}<input data-edit-field="${key}" type="${type}" ${type==='number'?'min="0" step="0.01"':''} ${['name','code'].includes(key)?'required':''} value="${esc(value??'')}"></label>`;}
