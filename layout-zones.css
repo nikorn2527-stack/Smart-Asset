@@ -127,9 +127,10 @@ header.topbar {
 main#main {
   flex: 1 1 auto !important;
   min-height: 0 !important;
-  height: calc(100vh - 56px - 38px) !important;
+  height: calc(100vh - 34px - 38px) !important;
+  max-height: calc(100vh - 34px - 38px) !important;
   overflow: hidden !important;
-  padding: 12px 24px 0 !important;
+  padding: 10px 24px 0 !important;
   margin: 0 !important;
   display: flex !important;
   flex-direction: column !important;
@@ -156,11 +157,9 @@ main#main {
   gap: 8px !important;
 }
 
-/* Sub-page back navigation bar */
+/* Sub-page back navigation bar: Hidden because topbar has the unified back button */
 .view > .subpage-nav {
-  flex: 0 0 auto !important;
-  margin: 0 !important;
-  padding: 0 0 4px 0 !important;
+  display: none !important;
 }
 
 /* Page Heading Bar (Sub-header) inside Active View */

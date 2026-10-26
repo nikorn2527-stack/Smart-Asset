@@ -602,8 +602,13 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError("ไม่รองรับคำสั่งนี้", 405)
         url = qr_url(db, asset_id, self.qr_origin())
         from asset_api import _qr_data_uri
+        qr_image = ""
+        try:
+            qr_image = _qr_data_uri(url)
+        except Exception:
+            qr_image = ""
         tickets = [ticket_dict(t) for t in db.execute("SELECT * FROM tickets WHERE asset_id=? ORDER BY id DESC", (asset_id,))]
-        return {"asset": item, "version": version, "qrUrl": url, "qrImage": _qr_data_uri(url), "tickets": tickets,
+        return {"asset": item, "version": version, "qrUrl": url, "qrImage": qr_image, "tickets": tickets,
                 "events": [dict(e) for e in db.execute("SELECT action,actor,created_at AS createdAt FROM asset_events WHERE asset_id=? ORDER BY id DESC LIMIT 50", (asset_id,))]}
 
     def create_ticket(self, db: sqlite3.Connection, body: dict):

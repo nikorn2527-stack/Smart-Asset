@@ -201,6 +201,28 @@
   }
 
   document.addEventListener('click', event => {
+    const tabBtn = event.target.closest('.codes-tab-btn');
+    if (tabBtn) {
+      const tabKey = tabBtn.dataset.codesTab;
+      document.querySelectorAll('.codes-tab-btn').forEach(btn => {
+        const act = btn.dataset.codesTab === tabKey;
+        btn.classList.toggle('active', act);
+        btn.setAttribute('aria-selected', String(act));
+      });
+      const paneCategories = $('#codesPaneCategories');
+      const paneFsn = $('#codesPaneFsn');
+      if (paneCategories) {
+        const act = tabKey === 'categories';
+        paneCategories.classList.toggle('active', act);
+        paneCategories.hidden = !act;
+      }
+      if (paneFsn) {
+        const act = tabKey === 'fsn';
+        paneFsn.classList.toggle('active', act);
+        paneFsn.hidden = !act;
+      }
+      return;
+    }
     const button = event.target.closest('[data-master-action]');
     if (!button) return;
     const id = button.dataset.id;

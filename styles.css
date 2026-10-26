@@ -95,15 +95,15 @@ body{font-size:16px}.brand strong{font-size:16px}.brand span{font-size:12px}.wor
 .role-picker span{font-size:11.5px;color:#64748b;font-weight:600}
 .role-picker select{height:100%;border:none;background:transparent;padding:0 2px;font-size:12px;font-weight:700;color:#1e293b;cursor:pointer;outline:none}
 
-/* Tabs Architecture for Approvals and Work */
-.approval-tabs-bar,.work-tabs-bar{display:flex!important;align-items:center!important;gap:6px!important;padding:5px 6px!important;background:#f1f5f9!important;border-radius:10px!important;border:1px solid #e2e8f0!important;margin-bottom:14px!important;overflow-x:auto!important;flex-shrink:0!important}
-.approval-tab-btn,.work-tab-btn{display:inline-flex!important;align-items:center!important;gap:8px!important;padding:8px 16px!important;border:none!important;border-radius:8px!important;background:transparent!important;color:#64748b!important;font-size:13px!important;font-weight:600!important;cursor:pointer!important;white-space:nowrap!important;transition:all .15s ease!important}
-.approval-tab-btn:hover,.work-tab-btn:hover{color:#0f172a!important;background:rgba(255,255,255,0.7)!important}
-.approval-tab-btn.active,.work-tab-btn.active{background:#ffffff!important;color:#0f766e!important;box-shadow:0 1px 4px rgba(0,0,0,0.08),0 0 0 1px rgba(15,118,110,0.15)!important;font-weight:700!important}
+/* Tabs Architecture for Approvals, Work, and Codes */
+.approval-tabs-bar,.work-tabs-bar,.codes-tabs-bar{display:flex!important;align-items:center!important;gap:6px!important;padding:5px 6px!important;background:#f1f5f9!important;border-radius:10px!important;border:1px solid #e2e8f0!important;margin-bottom:14px!important;overflow-x:auto!important;flex-shrink:0!important}
+.approval-tab-btn,.work-tab-btn,.codes-tab-btn{display:inline-flex!important;align-items:center!important;gap:8px!important;padding:8px 16px!important;border:none!important;border-radius:8px!important;background:transparent!important;color:#64748b!important;font-size:13px!important;font-weight:600!important;cursor:pointer!important;white-space:nowrap!important;transition:all .15s ease!important}
+.approval-tab-btn:hover,.work-tab-btn:hover,.codes-tab-btn:hover{color:#0f172a!important;background:rgba(255,255,255,0.7)!important}
+.approval-tab-btn.active,.work-tab-btn.active,.codes-tab-btn.active{background:#ffffff!important;color:#0f766e!important;box-shadow:0 1px 4px rgba(0,0,0,0.08),0 0 0 1px rgba(15,118,110,0.15)!important;font-weight:700!important}
 .tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#e2e8f0;color:#475569;font-size:10.5px;font-weight:700;line-height:1}
-.approval-tab-btn.active .tab-badge,.work-tab-btn.active .tab-badge{background:#ccfbf1;color:#0f766e}
-.approval-tab-pane,.work-tab-pane{display:block}
-.approval-tab-pane[hidden],.work-tab-pane[hidden]{display:none!important}
+.approval-tab-btn.active .tab-badge,.work-tab-btn.active .tab-badge,.codes-tab-btn.active .tab-badge{background:#ccfbf1;color:#0f766e}
+.approval-tab-pane,.work-tab-pane,.codes-tab-pane{display:block}
+.approval-tab-pane[hidden],.work-tab-pane[hidden],.codes-tab-pane[hidden]{display:none!important}
 .approval-panel .table-wrap,.supply-approval-card .supply-approval-list{max-height:calc(100vh - 360px);min-height:240px;overflow-y:auto}
 
 /* Universal Back Button (Clear, Recognizable, Prominent Teal) */
