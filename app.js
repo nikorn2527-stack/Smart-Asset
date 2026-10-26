@@ -342,15 +342,15 @@ function switchView(name, isBack=false) {
   $('#crumbCurrent').textContent=parents[name]?`${titles[activeMenu]} / ${title}`:title;
   document.title=`${title} — ${window.govAssetBranding?.appName || 'GovAsset'}`;
 
-  // Update prominent global back button in topbar
+  // Update prominent global back button in topbar: ONLY for subpages
   const backBtn = $('#globalBackBtn');
   if (backBtn) {
-    if (name !== 'dashboard') {
-      const prevView = viewHistory[viewHistory.length - 1] || parents[name] || 'dashboard';
-      const prevTitle = titles[prevView] || 'หน้าเดิม';
+    if (parents[name]) {
+      const parentView = parents[name];
+      const parentTitle = titles[parentView] || 'หน้าเดิม';
       backBtn.hidden = false;
       const textEl = backBtn.querySelector('.back-text');
-      if (textEl) textEl.textContent = `ย้อนกลับ (${prevTitle})`;
+      if (textEl) textEl.textContent = `ย้อนกลับ (${parentTitle})`;
     } else {
       backBtn.hidden = true;
     }

@@ -313,17 +313,18 @@ body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>.button{margin-t
 
 
 /* ==========================================================================
-   GOVASSET ENTERPRISE 5-ZONE LAYOUT ARCHITECTURE (ALL 18 VIEWS & MENUS)
+   GOVASSET ENTERPRISE 5-ZONE LAYOUT ARCHITECTURE (REFINED & VALIDATED)
    Strict separation of:
    1. ZONE 1: SIDEBAR (Pinned Left Navigation - 100vh)
    2. ZONE 2: HEADER (Pinned Topbar + Sub-Header / Page Heading)
    3. ZONE 3: SUMMARY CARDS (Pinned KPI Summary Metrics under Header)
-   4. ZONE 4: MAIN CONTENT (Scrollable Data / Table Area - ONLY scrollable zone)
+   4. ZONE 4: MAIN CONTENT (Scrollable Data Area - ONLY scrollable zone)
    5. ZONE 5: FOOTER (Pinned Bottom Pagination & System Status Bar)
    GUARANTEE: Zero whole-page scrolling / sweeping ("ไม่เลื่อนทั้งหน้ายกแผง")
+   NO text clipping, NO overlapping panels, NO unexpected height collapse.
    ========================================================================== */
 
-/* 0. Root Viewport Locking: Eliminates body/document sweeping */
+/* 0. Root Viewport Locking: Prevents body/document sweeping */
 html, body {
   height: 100vh !important;
   max-height: 100vh !important;
@@ -407,6 +408,35 @@ header.topbar {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
 }
 
+/* Prominent Subpage Back Button in Topbar */
+.btn-topbar-back {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  background: #087e82 !important;
+  color: #ffffff !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: background 0.15s, transform 0.15s !important;
+  box-shadow: 0 2px 5px rgba(8, 126, 130, 0.25) !important;
+  margin-right: 12px !important;
+}
+
+.btn-topbar-back:hover {
+  background: #066265 !important;
+  transform: translateX(-1px) !important;
+}
+
+.btn-topbar-back .back-arrow {
+  font-size: 15px !important;
+  line-height: 1 !important;
+  font-weight: bold !important;
+}
+
 /* Main Workspace Viewport */
 main#main {
   flex: 1 1 auto !important;
@@ -421,7 +451,7 @@ main#main {
   position: relative !important;
 }
 
-/* View Container: Every view is a strictly constrained flex column */
+/* View Container: Strictly constrained flex column */
 .view {
   display: none !important;
   height: 100% !important;
@@ -557,6 +587,13 @@ main#main {
   color: #64748b !important;
 }
 
+/* Work Scheduler Info Bar */
+.work-scheduler {
+  font-size: 12px !important;
+  color: #0d706a !important;
+  padding: 2px 4px !important;
+}
+
 /* Toolbars & Sub-navs docked directly above main data content */
 .filter-toolbar, 
 .filter-row,
@@ -574,13 +611,39 @@ main#main {
   z-index: 20 !important;
 }
 
+.work-filters {
+  padding: 10px 14px !important;
+  display: flex !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+  align-items: flex-end !important;
+  margin-bottom: 8px !important;
+  background: #ffffff !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--line, #dce5ea) !important;
+}
+
+.work-filters label {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  font-size: 12px !important;
+}
+
+.work-filters select,
+.work-filters input {
+  padding: 6px 10px !important;
+  border: 1px solid #d5e0e8 !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+}
+
 /* ==========================================================================
    ZONE 4: MAIN CONTENT (Scrollable Data / Table Area - ONLY Vertical Scroll)
    ========================================================================== */
 
-/* Universal Scrollable Panel Table Rules */
+/* Universal Scrollable Panel Table Rules for Single-Table Views */
 .listing-panel,
-.approval-panel,
 .depreciation-panel {
   flex: 1 1 auto !important;
   min-height: 0 !important;
@@ -594,16 +657,13 @@ main#main {
   margin-bottom: 6px !important;
 }
 
-/* Scrollable Table Wrapper: THIS IS THE ONLY ZONE THAT SCROLLS */
-.table-wrap,
-.listing-panel .table-wrap,
+/* Scrollable Table Wrapper for full-height panels */
+.listing-panel > .table-wrap,
+.depreciation-panel > .table-wrap,
 #view-assets .table-wrap,
 #view-repairs .table-wrap,
-#view-approvals .table-wrap,
-#view-depreciation .table-wrap,
 #view-equipment [data-equipment-panel="list"] .table-wrap,
-#view-operational-master .table-wrap,
-.panel > .table-wrap {
+#view-operational-master .table-wrap {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   height: 100% !important;
@@ -626,7 +686,7 @@ table thead th {
 }
 
 /* --------------------------------------------------------------------------
-   VIEW-SPECIFIC SCROLL CONTENT ZONES
+   VIEW-SPECIFIC SCROLL CONTENT ZONES (Multi-panel natural flow)
    -------------------------------------------------------------------------- */
 
 /* 1. Dashboard View */
@@ -636,8 +696,19 @@ table thead th {
   overflow-y: auto !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 12px !important;
-  padding-bottom: 16px !important;
+  gap: 14px !important;
+  padding-bottom: 24px !important;
+}
+
+#view-dashboard .content-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.6fr) minmax(295px, 1fr) !important;
+  gap: 16px !important;
+}
+
+#view-dashboard .table-wrap {
+  max-height: 340px !important;
+  overflow-y: auto !important;
 }
 
 /* 2. PM & Work Inventory View */
@@ -647,8 +718,30 @@ table thead th {
   overflow-y: auto !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 12px !important;
-  padding-bottom: 16px !important;
+  gap: 16px !important;
+  padding-bottom: 24px !important;
+}
+
+#view-work .work-section {
+  display: block !important;
+  height: auto !important;
+  background: #ffffff !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--line, #dce5ea) !important;
+  padding: 16px 20px !important;
+  margin: 0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+}
+
+#view-work .work-section .table-wrap {
+  width: 100% !important;
+  height: auto !important;
+  max-height: 320px !important;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  margin: 12px 0 0 0 !important;
+  border: 1px solid var(--line, #dce5ea) !important;
+  border-radius: 6px !important;
 }
 
 /* 3. Approvals View */
@@ -658,8 +751,18 @@ table thead th {
   overflow-y: auto !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 12px !important;
-  padding-bottom: 16px !important;
+  gap: 14px !important;
+  padding-bottom: 24px !important;
+}
+
+#view-approvals .panel {
+  height: auto !important;
+  flex: none !important;
+}
+
+#view-approvals .table-wrap {
+  max-height: 320px !important;
+  overflow-y: auto !important;
 }
 
 /* 4. Settings View */
@@ -669,8 +772,29 @@ table thead th {
   overflow-y: auto !important;
   display: flex !important;
   flex-direction: column !important;
+  gap: 16px !important;
+  padding: 4px 0 24px 0 !important;
+}
+
+#view-settings .settings-sections {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
   gap: 14px !important;
-  padding-bottom: 16px !important;
+}
+
+#view-settings .settings-link.panel {
+  padding: 16px 18px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--line, #dce5ea) !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+  text-align: left !important;
+  transition: transform 0.15s, box-shadow 0.15s !important;
+}
+
+#view-settings .settings-link.panel:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.07) !important;
 }
 
 /* 5. Supply Intake & Issue View */
@@ -710,7 +834,7 @@ table thead th {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
-  padding-bottom: 16px !important;
+  padding-bottom: 24px !important;
 }
 
 /* 7. Sticker Designer View */
@@ -750,7 +874,7 @@ table thead th {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
-  padding-bottom: 16px !important;
+  padding-bottom: 24px !important;
 }
 
 /* 9. 12-Column Asset Control Register */
@@ -760,8 +884,8 @@ table thead th {
   overflow-y: auto !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 14px !important;
-  padding-bottom: 16px !important;
+  gap: 16px !important;
+  padding-bottom: 24px !important;
 }
 
 /* 10. Numbering Rules View */
@@ -769,7 +893,7 @@ table thead th {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
-  padding-bottom: 16px !important;
+  padding-bottom: 24px !important;
 }
 
 /* 11. Codes and Categories View */
@@ -779,8 +903,8 @@ table thead th {
   overflow-y: auto !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 12px !important;
-  padding-bottom: 16px !important;
+  gap: 14px !important;
+  padding-bottom: 24px !important;
 }
 
 /* 12. Equipment Catalog & Import View */
@@ -807,7 +931,7 @@ table thead th {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
-  padding-bottom: 16px !important;
+  padding-bottom: 24px !important;
 }
 
 /* 13. Operational Master Data View */
@@ -825,7 +949,7 @@ table thead th {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
-  padding-bottom: 16px !important;
+  padding-bottom: 24px !important;
 }
 
 /* 15. Access Administration View */
@@ -833,7 +957,7 @@ table thead th {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
-  padding-bottom: 16px !important;
+  padding-bottom: 24px !important;
 }
 
 /* ==========================================================================
