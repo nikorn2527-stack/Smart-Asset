@@ -239,8 +239,16 @@ function renderCatalog() { const search=($('#codeSearch')?.value||'').trim().toL
   } else {const filtered=codeCatalog.filter(group=>`${group.code} ${group.title} ${group.desc} ${group.items.map(item=>item.name).join(' ')}`.toLowerCase().includes(search));cards.innerHTML=filtered.length?filtered.map(group=>`<article class="panel code-card"><div class="code-card-top"><h3>${esc(group.title)}</h3><span class="fsn-tag">${esc(group.code)}</span></div><p>${esc(group.desc)}</p><div class="sample-list">${group.items.map(item=>`<div class="sample-row"><span>${esc(item.name)}</span><code>${esc(item.code)}</code></div>`).join('')}</div></article>`).join(''):'<div class="panel code-card">ไม่พบหมวดตัวอย่างตามคู่มือที่ค้นหา</div>';}
 }
 async function loadFsn(offset=0){fsnOffset=Math.max(0,offset);try{const q=$('#codeSearch')?.value||'';const params=new URLSearchParams({q,limit:String(fsnLimit),offset:String(fsnOffset)});const result=await api(`/api/catalog/fsn?${params}`);fsnRows=result.items;fsnTotal=result.total;renderCatalog();}catch(error){showError(error);}}
-function switchView(name) {
+let currentView='dashboard';
+const viewHistory=[];
+
+function switchView(name, isBack=false) {
   if (!document.getElementById(`view-${name}`)) return;
+  if (!isBack && currentView && currentView !== name) {
+    viewHistory.push(currentView);
+  }
+  currentView = name;
+
   const parents={equipment:'settings','access-admin':'settings','operational-master':'settings','supply-settings':'settings',administration:'settings',register:'assets',survey:'assets',codes:'settings',numbering:'settings',depreciation:'settings',stickers:'settings'};
   const activeMenu=parents[name]||name;
   $$('.view').forEach(section=>section.classList.toggle('active',section.id===`view-${name}`));
@@ -253,8 +261,34 @@ function switchView(name) {
   const title=titles[name]||'ภาพรวม';
   $('#crumbCurrent').textContent=parents[name]?`${titles[activeMenu]} / ${title}`:title;
   document.title=`${title} — ${window.govAssetBranding?.appName || 'GovAsset'}`;
+
+  // Update prominent global back button in topbar
+  const backBtn = $('#globalBackBtn');
+  if (backBtn) {
+    if (name !== 'dashboard') {
+      const prevView = viewHistory[viewHistory.length - 1] || parents[name] || 'dashboard';
+      const prevTitle = titles[prevView] || 'หน้าเดิม';
+      backBtn.hidden = false;
+      const textEl = backBtn.querySelector('.back-text');
+      if (textEl) textEl.textContent = `ย้อนกลับ (${prevTitle})`;
+    } else {
+      backBtn.hidden = true;
+    }
+  }
+
   document.dispatchEvent(new CustomEvent('govasset:view-changed',{detail:{name}}));
   window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function goBack() {
+  if (viewHistory.length > 0) {
+    const prev = viewHistory.pop();
+    switchView(prev, true);
+  } else {
+    const parents={equipment:'settings','access-admin':'settings','operational-master':'settings','supply-settings':'settings',administration:'settings',register:'assets',survey:'assets',codes:'settings',numbering:'settings',depreciation:'settings',stickers:'settings'};
+    const parent = parents[currentView] || 'dashboard';
+    switchView(parent, true);
+  }
 }
 
 function actionMarkup(ticket) {
@@ -360,7 +394,7 @@ $$('[data-open-view]').forEach(button=>button.addEventListener('click',()=>switc
 $('#assetSearch')?.addEventListener('input',()=>{++inventoryRequest;clearTimeout(inventorySearchTimer);inventorySearchTimer=setTimeout(()=>loadInventory(0),220);}); $('#statusFilter')?.addEventListener('change',()=>loadInventory(0)); $('#categoryFilter')?.addEventListener('change',()=>loadInventory(0)); $('#clearAssetFilter')?.addEventListener('click',()=>{const s=$('#assetSearch'),c=$('#categoryFilter'),st=$('#statusFilter');if(s)s.value='';if(c)c.value='';if(st)st.value='all';loadInventory(0);}); $('#codeSearch')?.addEventListener('input',()=>{renderCatalog();clearTimeout(fsnSearchTimer);fsnSearchTimer=setTimeout(()=>loadFsn(0),220);});
 $('#repairSearch')?.addEventListener('input',renderRepairs); $('#repairStatusFilter')?.addEventListener('change',renderRepairs); $('#depreciationSearch')?.addEventListener('input',renderDepreciation);
 $('#actorRole').value=currentRole; $('#actorRole').addEventListener('change',event=>switchRole(event.target.value));
-$('#fontDecrease').addEventListener('click',()=>applyFontScale(fontScale-.05)); $('#fontIncrease').addEventListener('click',()=>applyFontScale(fontScale+.05)); applyFontScale(fontScale);
+$('#globalBackBtn')?.addEventListener('click', goBack); $('#fontDecrease').addEventListener('click',()=>applyFontScale(fontScale-.05)); $('#fontIncrease').addEventListener('click',()=>applyFontScale(fontScale+.05)); applyFontScale(fontScale);
 $('#newRepairButton')?.addEventListener('click',openRepairDialog);
 $('#closeRepairDialog').addEventListener('click',()=>$('#repairDialog').close()); $('#cancelRepairDialog').addEventListener('click',()=>$('#repairDialog').close());
 $('#repairDialog').addEventListener('click',event=>{if(event.target===$('#repairDialog'))$('#repairDialog').close();});
@@ -399,5 +433,5 @@ $('#helpBtn').addEventListener('click',()=>$('#manualDialog').showModal()); $('#
 $('.close-notice')?.addEventListener('click',event=>event.currentTarget.closest('.notice').remove());
 $('#ticketDialog').addEventListener('click',event=>{if(event.target===$('#ticketDialog'))$('#ticketDialog').close();});
 applyFontScale(fontScale);
-window.govAssetApp={api,toast,showError,refreshData,switchView,fmtDate,openTicket,openRepairDialog,getRole:()=>currentRole,loadFsn,openAssetDialog};
+window.govAssetApp={api,toast,showError,refreshData,switchView,goBack,fmtDate,openTicket,openRepairDialog,getRole:()=>currentRole,loadFsn,openAssetDialog};
 refreshData();

@@ -55,7 +55,12 @@
 
     <div class="main-column">
       <header class="topbar">
-        <div class="crumb"><span>หน่วยงานตัวอย่าง</span><span class="crumb-sep">/</span><b id="crumbCurrent">ภาพรวม</b></div>
+        <div class="topbar-left">
+          <button class="btn-topbar-back" id="globalBackBtn" type="button" title="ย้อนกลับไปหน้าก่อนหน้า" aria-label="ย้อนกลับ" hidden>
+            <span class="back-arrow">‹</span> <span class="back-text">ย้อนกลับ</span>
+          </button>
+          <div class="crumb"><span>หน่วยงานตัวอย่าง</span><span class="crumb-sep">/</span><b id="crumbCurrent">ภาพรวม</b></div>
+        </div>
         <div class="top-actions">
           <span class="environment" id="dbIndicator"><i></i> SQLite · กำลังเชื่อมต่อ</span>
           <div class="font-controls" role="group" aria-label="ปรับขนาดตัวอักษร"><button class="icon-button" id="fontDecrease" aria-label="ลดขนาดตัวอักษร">A−</button><span id="fontScaleLabel" aria-live="polite">120%</span><button class="icon-button" id="fontIncrease" aria-label="เพิ่มขนาดตัวอักษร">A+</button></div>

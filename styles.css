@@ -78,10 +78,30 @@ body{font-size:16px}.brand strong{font-size:16px}.brand span{font-size:12px}.wor
 @media print{.app-shell,.main-column,main,#view-register.active{min-height:0!important;height:auto!important}.skip-link{display:none!important;visibility:hidden!important}}
 @media(max-width:720px){html,body{overflow-x:hidden}}
 
-/* Header controls must wrap when the user increases the text size. */
-.topbar{height:auto;min-height:60px;flex-wrap:wrap;gap:8px;padding-top:10px;padding-bottom:10px}
-.top-actions{min-width:0;max-width:100%;flex-wrap:wrap;justify-content:flex-end}
-.crumb{min-width:0;max-width:100%;flex-wrap:wrap}
+/* Fixed single-row Topbar Architecture */
+.topbar{height:60px;min-height:60px;max-height:60px;display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:16px;padding:0 24px;background:rgba(255,255,255,0.98);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:45;box-sizing:border-box}
+.topbar-left{display:flex;align-items:center;gap:12px;min-width:0;flex:1 1 auto}
+.crumb{min-width:0;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-actions{display:flex;align-items:center;gap:10px;flex:0 0 auto;flex-wrap:nowrap}
+
+/* Universal Back Button (Clear, Recognizable, Prominent Teal) */
+.btn-topbar-back{display:inline-flex;align-items:center;gap:6px;background:#0f766e;color:#ffffff;border:1px solid #0d655e;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 4px rgba(15,118,110,0.25);transition:all 0.15s ease-in-out;white-space:nowrap;flex:none}
+.btn-topbar-back:hover{background:#0d655e;box-shadow:0 3px 8px rgba(15,118,110,0.35);transform:translateY(-1px)}
+.btn-topbar-back .back-arrow{font-size:18px;line-height:1;font-weight:900}
+.btn-topbar-back[hidden]{display:none!important}
+
+/* Subpage Back Button Across Views */
+.btn-subpage-back{display:inline-flex;align-items:center;gap:6px;background:#ffffff;color:#0f766e;border:1.5px solid #0f766e;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s ease-in-out;white-space:nowrap}
+.btn-subpage-back:hover{background:#0f766e;color:#ffffff;box-shadow:0 2px 6px rgba(15,118,110,0.25)}
+.btn-subpage-back .back-arrow{font-size:16px;line-height:1;font-weight:900}
+
+/* Table Header and Sticky Column Architecture */
+.smart-asset-table-wrap{width:100%;max-width:100%;overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 280px);position:relative;border:1px solid #e2e8f0;border-radius:8px;box-shadow:var(--shadow)}
+.smart-asset-table thead th{position:sticky;top:0;z-index:10;background:#f8fafc;border-bottom:2px solid #cbd5e1}
+.smart-asset-table th:last-child{position:sticky;right:0;z-index:11;background:#f8fafc;box-shadow:-2px 0 5px rgba(0,0,0,0.05)}
+.smart-asset-table td:last-child{position:sticky;right:0;z-index:9;background:#ffffff;box-shadow:-2px 0 5px rgba(0,0,0,0.05)}
+.smart-asset-table tbody tr:hover td:last-child{background:#fbfcfc}
+
 
 /* Keep each row's caption, control and help aligned without fixed label heights. */
 @supports(grid-template-rows:subgrid){
