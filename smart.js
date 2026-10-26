@@ -227,7 +227,7 @@
   };
   const simDialog = document.createElement('dialog');
   simDialog.className = 'asset-dialog smart-dialog qr-simulator-modal';
-  simDialog.setAttribute('aria-label', 'จำลองการใช้งาน Smart QR บนสมาร์ทโฟน');
+  simDialog.setAttribute('aria-label', 'การใช้งาน Smart QR บนสมาร์ทโฟน');
   document.body.append(simDialog);
 
   let simSampleIndex = 0;
@@ -253,7 +253,7 @@
       title: 'แจ้งซ่อมและเปิด Ticket ส่งตรงถึงช่าง',
       badge: 'Instant Dispatch',
       icon: '⚡',
-      headline: 'แจ้งปัญหาได้ทันที ไม่ต้องค้นหารหัสครุภัณฑ์ 11 หลัก',
+      headline: 'แจ้งปัญหาได้ทันที ไม่ต้องจดจำหรือค้นหารหัสครุภัณฑ์',
       description: 'เมื่อพบปัญหาการใช้งาน สแกนแล้วระบุอาการชำรุดได้ทันที ระบบจะออกหมายเลขคำขอ (Ticket) อัตโนมัติ พร้อมส่งการแจ้งเตือนตรงถึงทีมช่างผู้รับผิดชอบ ทำให้ทีมช่างรับทราบปัญหาอย่างรวดเร็วและตรวจสอบประวัติการซ่อมเดิมได้ทันที'
     },
     {
@@ -386,7 +386,7 @@
 
             <div class="phone-actions-container">
               <button type="button" class="phone-btn phone-btn-repair" data-jump-slide="1">
-                <span>⚒</span> แจ้งซ่อมครุภัณฑ์นี้ (จำลอง) →
+                <span>⚒</span> แจ้งซ่อมครุภัณฑ์นี้ →
               </button>
             </div>
           </div>
@@ -535,11 +535,11 @@
     simDialog.innerHTML = `
       <div class="smart-dialog-head">
         <div>
-          <span class="eyebrow"><span class="hero-live-beacon"></span> SMART ASSET QR SIMULATION</span>
-          <h2>จำลองการสแกน Smart QR บนสมาร์ทโฟน</h2>
+          <span class="eyebrow"><span class="hero-live-beacon"></span> SMART ASSET QR • MOBILE WORKSPACE</span>
+          <h2>การสแกน Smart QR บนสมาร์ทโฟน</h2>
           <p class="field-hint">ระบบเชื่อมโยงข้อมูลครุภัณฑ์แบบเรียลไทม์ · สแกนตรวจสอบ แจ้งซ่อมตรงถึงช่าง และตรวจรับงานผ่านมือถือได้ในจุดเดียว</p>
         </div>
-        <button class="dialog-close" data-close-sim aria-label="ปิดหน้าต่างจำลอง">×</button>
+        <button class="dialog-close" data-close-sim aria-label="ปิดหน้าต่าง">×</button>
       </div>
 
       <div class="sim-modal-body">
@@ -630,7 +630,7 @@
                   <span class="hl-bullet">2</span>
                   <div>
                     <b>แจ้งซ่อมและเปิด Ticket ส่งตรงถึงช่าง</b>
-                    <p>ระบบแจ้งเตือนช่างทันที ไม่ต้องจดจำหรือค้นหารหัสครุภัณฑ์ 11 หลัก</p>
+                    <p>ระบบแจ้งเตือนช่างทันที ไม่ต้องจดจำหรือค้นหารหัสครุภัณฑ์</p>
                   </div>
                 </div>
                 <div class="highlight-item ${simSlideIndex === 2 ? 'highlighted' : ''}">
@@ -645,7 +645,7 @@
 
             <div class="explainer-cta-box">
               <button type="button" class="button primary" id="simOpenFullScan">เปิดหน้าสแกนจริง (scan.html) ↗</button>
-              <button type="button" class="button outline" data-close-sim>ปิดหน้าต่างจำลอง</button>
+              <button type="button" class="button outline" data-close-sim>ปิดหน้าต่าง</button>
             </div>
           </div>
         </div>
@@ -704,9 +704,9 @@
       <div class="hero-buttons-row">
         <button class="button primary" id="smartGoAssets" type="button">เปิดทะเบียน / ออก QR ↗</button>
         <button class="button outline" id="smartGoRepairs" type="button">ติดตามงานซ่อม</button>
-        <button class="button hero-sim-btn" id="smartDemoScan" type="button" title="คลิกเพื่อเปิดหน้าจำลองการสแกน QR">
+        <button class="button hero-sim-btn" id="smartDemoScan" type="button" title="คลิกเพื่อเปิดหน้าสแกน Smart QR">
           <span class="sim-scan-radar"></span>
-          <span>ทดลองสแกน QR จำลอง ⚡</span>
+          <span>ทดลองสแกน Smart QR ⚡</span>
         </button>
       </div>
     </div>
@@ -745,7 +745,7 @@
 
       <div class="hero-flow-connector"><span class="flow-dot"></span></div>
 
-      <div class="hero-flow-card step-card-3 active-showcase" id="heroStep3" role="button" tabindex="0" title="คลิกเพื่อทดลองสแกนและแจ้งซ่อมจำลอง">
+      <div class="hero-flow-card step-card-3 active-showcase" id="heroStep3" role="button" tabindex="0" title="คลิกเพื่อทดลองสแกนและแจ้งซ่อม">
         <div class="hero-flow-head">
           <span class="hero-step-num pulse-num">03</span>
           <span class="hero-flow-icon scan-pulse">📱</span>

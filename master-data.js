@@ -38,7 +38,7 @@
     const visible = categories.filter(item => (includeInactive || item.isActive) && `${item.name} ${item.source || ''} ${item.parentName || ''}`.toLocaleLowerCase('th-TH').includes(query));
     list.innerHTML = visible.length ? visible.map(item => `<article class="master-data-row ${item.isActive ? '' : 'is-inactive'}">
       <span class="category-mark" aria-hidden="true">▤</span>
-      <div class="master-data-main"><b>${esc(item.name)}</b><small>${item.parentName ? `หมวดแม่: ${esc(item.parentName)} · ` : ''}ต้นทาง: ${esc(item.source || 'หมวดที่เพิ่มเอง')} · ผูกครุภัณฑ์ ${Number(item.linkedAssets || 0).toLocaleString('th-TH')} · ผูกกฎค่าเสื่อม ${Number(item.linkedPolicies || 0).toLocaleString('th-TH')}</small>${item.notes ? `<small class="category-notes-preview">${esc(item.notes)}</small>` : ''}</div>
+      <div class="master-data-main"><b>${esc(item.name)}</b><small>${item.parentName ? `หมวดแม่: ${esc(item.parentName)} · ` : ''}การจำแนก: ${esc((/(\.xls|\.xlsx|\.pdf)/i.test(item.source||'') ? 'หมวดมาตรฐานตามบัญชีจำแนกประเภทพัสดุภาครัฐ' : item.source) || 'หมวดที่กำหนดเอง')} · ผูกครุภัณฑ์ ${Number(item.linkedAssets || 0).toLocaleString('th-TH')} · ผูกกฎค่าเสื่อม ${Number(item.linkedPolicies || 0).toLocaleString('th-TH')}</small>${item.notes ? `<small class="category-notes-preview">${esc(item.notes)}</small>` : ''}</div>
       <div class="master-data-actions"><span class="master-state ${item.isActive ? 'active' : ''}">${item.isActive ? 'ใช้งาน' : 'ปิดใช้งาน'}</span><button type="button" class="button outline mini-action" data-master-action="guide-category" data-id="${item.id}">คู่มือหมวด</button><button type="button" class="button outline mini-action" data-master-action="edit-category" data-id="${item.id}">แก้ไข</button>${item.isActive ? `<button type="button" class="button outline mini-action reject" data-master-action="delete-category" data-id="${item.id}">ลบ</button>` : `<button type="button" class="button outline mini-action" data-master-action="restore-category" data-id="${item.id}">กู้คืน</button>`}</div>
     </article>`).join('') : '<div class="category-empty">ไม่พบหมวดที่ตรงกับตัวกรอง · กด “เพิ่มหมวด” เพื่อสร้างรายการ</div>';
     const tag = $('.archive-category-panel .sheet-count');
@@ -87,7 +87,7 @@
     form.elements.parentCategoryId.value = item?.parentCategoryId || '';
     form.elements.isActive.value = item?.isActive === false ? 'false' : 'true';
     $('#categoryDialogTitle').textContent = item ? 'แก้ไขหมวดครุภัณฑ์' : 'เพิ่มหมวดครุภัณฑ์';
-    $('#categorySourceNote').textContent = item?.source ? `ข้อมูลต้นทาง: ${item.source} · แก้ไขชื่อ/หมายเหตุได้โดยคงที่มาต้นฉบับไว้` : 'หมวดที่เพิ่มเองจะบันทึกใน SQLite และแก้ไข/ปิดใช้งาน/กู้คืนได้';
+    $('#categorySourceNote').textContent = item ? `แนวทางหมวด: กำหนดคำจำกัดความ ขอบเขต และลักษณะอุปกรณ์ที่อยู่ในหมวดนี้เพื่อเป็นแนวทางปฏิบัติ` : 'หมวดที่เพิ่มเองจะบันทึกในระบบและแก้ไข/ปิดใช้งาน/กู้คืนได้';
     $('#categoryDialog').showModal();
   }
 
@@ -107,7 +107,7 @@
     form.elements.isActive.value = item?.isActive === false ? 'false' : 'true';
     [...form.elements.categoryIds.options].forEach(option => { option.selected = (item?.categoryIds || []).map(String).includes(option.value); });
     $('#policyDialogTitle').textContent = item ? 'แก้ไขหลักเกณฑ์ค่าเสื่อม' : 'เพิ่มหลักเกณฑ์ค่าเสื่อม';
-    $('#policySourceNote').textContent = item?.sourcePage ? `นำเข้าจากเอกสารต้นทาง หน้า ${item.sourcePage} · ปรับกฎได้โดยเก็บค่าต้นฉบับไว้ในแหล่งข้อมูล` : 'ตั้งอายุ อัตราร้อยละ วิธีคำนวณ และหมวดที่ใช้ได้เอง';
+    $('#policySourceNote').textContent = item?.scope ? `ขอบเขตหลักเกณฑ์: ${item.scope} · ปรับกฎได้ตามระเบียบของหน่วยงาน` : 'ตั้งอายุ อัตราร้อยละ วิธีคำนวณ และหมวดที่ใช้ได้เอง';
     updateCalculationPreview();
     $('#depreciationDialog').showModal();
   }

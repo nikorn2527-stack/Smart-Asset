@@ -266,7 +266,7 @@ main#main {
 
 .asset-kpi-card b {
   display: block !important;
-  font-family: 'Prompt', 'Sarabun', sans-serif !important;
+  font-family: 'Sarabun', 'Noto Sans Thai', sans-serif !important;
   font-size: 20px !important;
   font-weight: 700 !important;
   color: #0f172a !important;
@@ -573,7 +573,7 @@ table thead th {
 }
 
 #view-dashboard .hero-step-num {
-  font-family: 'Prompt', 'Sarabun', sans-serif !important;
+  font-family: 'Sarabun', 'Noto Sans Thai', sans-serif !important;
   font-size: 11px !important;
   font-weight: 700 !important;
   width: 22px !important;
@@ -744,7 +744,7 @@ table thead th {
 }
 
 .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-dialog-head h2 {
-  font-family: 'Prompt', 'Sarabun', sans-serif !important;
+  font-family: 'Sarabun', 'Noto Sans Thai', sans-serif !important;
   font-size: 21px !important;
   font-weight: 700 !important;
   color: #0f172a !important;
@@ -1065,12 +1065,12 @@ table thead th {
   }
 }
 
-/* Realistic Smartphone Frame (19.5:9 / 1:2 ratio, 296px x 592px) */
+/* Realistic Smartphone Frame (19.5:9 ratio, 304px x 624px) */
 .sim-phone-frame {
-  width: 296px !important;
-  height: 592px !important;
-  min-height: 592px !important;
-  max-height: 592px !important;
+  width: 304px !important;
+  height: 624px !important;
+  min-height: 624px !important;
+  max-height: 624px !important;
   flex: none !important;
   position: relative !important;
   background: #0f172a !important;
@@ -1172,8 +1172,8 @@ table thead th {
   display: flex !important;
   flex-direction: column !important;
   flex: 1 1 auto !important;
-  height: calc(592px - 58px) !important;
-  max-height: calc(592px - 58px) !important;
+  height: calc(624px - 58px) !important;
+  max-height: calc(624px - 58px) !important;
   box-sizing: border-box !important;
   position: relative !important;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06) inset !important;
@@ -2181,7 +2181,7 @@ table thead th {
 #view-dashboard .workflow-pillar-card.p4:hover { border-color: #c4b5fd !important; background: #f5f3ff !important; }
 
 #view-dashboard .pillar-step-badge {
-  font-family: 'Prompt', 'Sarabun', sans-serif !important;
+  font-family: 'Sarabun', 'Noto Sans Thai', sans-serif !important;
   font-weight: 700 !important;
   font-size: 11px !important;
   width: 20px !important;

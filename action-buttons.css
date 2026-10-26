@@ -8,5 +8,5 @@
 :is(.button,.scan-button)[data-action-tone]:hover:not(:disabled){color:var(--action-ink);border-color:var(--action-border);background:var(--action-bg);filter:brightness(.94);box-shadow:0 2px 5px #123d5622}
 :is(.button,.scan-button)[data-action-tone]:focus-visible{outline:3px solid #2769bd;outline-offset:3px}
 :is(.button,.scan-button)[data-action-tone]:disabled{background:repeating-linear-gradient(135deg,#eef1f4,#eef1f4 6px,#e4e9ee 6px,#e4e9ee 12px);border:1px dashed #98a3af;color:#637080;opacity:1;cursor:not-allowed;box-shadow:none;filter:none}
-:is(.button,.scan-button)[data-action-tone]:disabled:not([data-action-busy=true])::after{content:' · ไม่พร้อม';font-size:.85em}
+:is(.button,.scan-button):not(.om-add):not(.icon-button):not(.btn-icon):not(.pager-btn):not(.dialog-close)[data-action-tone]:disabled:not([data-action-busy=true])::after{content:' · ไม่พร้อม';font-size:.85em}
 :is(.button,.scan-button)[data-action-tone][data-action-busy=true]:disabled{cursor:wait}
