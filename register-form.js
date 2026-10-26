@@ -6,9 +6,51 @@
   const columns=[['date','วันเดือนปี'],['document','ที่เอกสาร'],['description','รายการ'],['quantity','จำนวนหน่วย'],['unitPrice','ราคาต่อหน่วย'],['total','มูลค่ารวม'],['life','อายุใช้งาน'],['monthly','อัตราค่าเสื่อมราคา/ประจำเดือน'],['annual','ค่าเสื่อมราคาประจำปี'],['accumulated','ค่าเสื่อมราคาสะสม'],['net','มูลค่าสุทธิ'],['note','หมายเหตุ']];
   const moneyKeys=['unitPrice','total','monthly','annual','accumulated','net'];
   let state=null, epoch=0;
+  let currentZoom='fit';
   const panel=$('#view-register .register-selection');
-  const actions=document.createElement('div');actions.className='register-form-actions';actions.innerHTML='<button type="button" class="button outline" id="editOfficialRegister">แก้ไขข้อมูลเอกสาร</button><span id="registerFormStatus" role="status">A4 แนวนอน · พิมพ์ขนาดจริง 100% และปิดหัว/ท้ายกระดาษของเบราว์เซอร์</span>';panel.append(actions);
+  const actions=document.createElement('div');actions.className='register-form-actions';
+  actions.innerHTML='<button type="button" class="button outline" id="editOfficialRegister">แก้ไขข้อมูลเอกสาร</button><div class="register-zoom-group" role="group" aria-label="ปรับขนาดย่อ/ขยายเอกสาร"><button type="button" class="register-zoom-btn active" data-zoom="fit" title="ย่อพอดีหน้าจอ">พอดีหน้าจอ</button><button type="button" class="register-zoom-btn" data-zoom="0.55" title="ย่อ 55%">55%</button><button type="button" class="register-zoom-btn" data-zoom="0.75" title="ย่อ 75%">75%</button><button type="button" class="register-zoom-btn" data-zoom="1.0" title="ขนาดจริง 100%">100%</button></div><span id="registerFormStatus" role="status">A4 แนวนอน · ตรวจและเติมช่องว่างก่อนพิมพ์</span>';
+  panel.append(actions);
   const paper=$('.register-paper'),scroll=document.createElement('div');scroll.className='register-preview-scroll';paper.before(scroll);scroll.append(paper);
+  function updateScale(){
+    if(!paper)return;
+    if(currentZoom==='fit'){
+      const scrollEl=$('.register-preview-scroll');
+      if(!scrollEl)return;
+      const targetW=1122.5, targetH=793.7;
+      const availW=Math.max(280, scrollEl.clientWidth - 28);
+      const view=$('#view-register');
+      const main=document.querySelector('main#main')||document.body;
+      const totalH=(view&&view.clientHeight>200)?view.clientHeight:(main.clientHeight||(window.innerHeight-80));
+      const navH=$('#view-register > .subpage-nav')?.offsetHeight||26;
+      const headH=$('#view-register > .page-heading')?.offsetHeight||32;
+      const selH=$('#view-register > .register-selection')?.offsetHeight||38;
+      const provH=$('#registerProvenanceSummary')?.offsetHeight||46;
+      const srcH=$('#view-register .register-source-details')?.offsetHeight||24;
+      const extraH=navH+headH+selH+provH+srcH+44;
+      const availH=Math.max(260, totalH - extraH);
+      const scaleW=availW/targetW;
+      const scaleH=availH/targetH;
+      let fit=Math.min(scaleW, scaleH);
+      fit=Math.max(0.35, Math.min(fit, 0.75));
+      fit=Math.round(fit*100)/100;
+      paper.style.setProperty('--register-scale', fit);
+      paper.style.zoom=fit;
+    }else{
+      const s=parseFloat(currentZoom)||1.0;
+      paper.style.setProperty('--register-scale', s);
+      paper.style.zoom=s;
+    }
+    actions.querySelectorAll('.register-zoom-btn').forEach(b=>{
+      b.classList.toggle('active', b.dataset.zoom===currentZoom);
+    });
+  }
+  actions.querySelectorAll('.register-zoom-btn').forEach(btn=>{
+    btn.onclick=()=>{
+      currentZoom=btn.dataset.zoom;
+      updateScale();
+    };
+  });
   const editor=document.createElement('dialog');editor.className='asset-dialog register-editor';editor.setAttribute('aria-label','แก้ไขเอกสารทะเบียนคุมทรัพย์สิน');document.body.append(editor);
   const printOld=$('#printRegister'),printButton=printOld.cloneNode(true);printOld.replaceWith(printButton);printButton.textContent='พิมพ์ / บันทึก PDF';
   const dateText=v=>{if(!v)return '';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);if(!m)return String(v);return `${Number(m[3])} ${['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][Number(m[2])-1]} ${Number(m[1])<2400?Number(m[1])+543:Number(m[1])}`;};
@@ -31,8 +73,17 @@
     }
     paper.innerHTML=pages.join('');
     fitText(paper);
+    setTimeout(updateScale, 10);
   }
-  document.addEventListener('govasset:view-changed',event=>{if(event.detail.name==='register'&&state)fitText(paper);});
+  document.addEventListener('govasset:view-changed',event=>{
+    if(event.detail.name==='register'){
+      if(state)fitText(paper);
+      setTimeout(updateScale, 20);
+    }
+  });
+  window.addEventListener('resize',()=>{
+    if($('#view-register')?.classList.contains('active')) updateScale();
+  });
   function fitText(root){
     let fits=true;
     root.querySelectorAll('.rf-field b').forEach(el=>{

@@ -1950,9 +1950,8 @@ table thead th {
   height: 100% !important;
   max-height: 100% !important;
   min-height: 0 !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  gap: 6px !important;
+  overflow: hidden !important;
+  gap: 4px !important;
 }
 
 #view-register > .subpage-nav {
@@ -1963,19 +1962,37 @@ table thead th {
 
 #view-register > .page-heading {
   flex: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
   margin: 0 !important;
   padding: 0 0 4px 0 !important;
 }
 
+#view-register > .page-heading .eyebrow {
+  display: none !important;
+}
+
+#view-register > .page-heading h1 {
+  font-size: 17px !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+#view-register > .page-heading p {
+  display: none !important;
+}
+
 #view-register > .notice {
   flex: none !important;
-  padding: 6px 14px !important;
-  margin: 0 0 4px 0 !important;
+  padding: 4px 12px !important;
+  margin: 0 0 2px 0 !important;
+  font-size: 11px !important;
+  line-height: 1.3 !important;
 }
 
 #view-register > .notice p {
-  font-size: 11px !important;
-  margin-top: 2px !important;
+  display: none !important;
 }
 
 #view-register > .register-selection {
@@ -1984,64 +2001,169 @@ table thead th {
   flex-direction: row !important;
   align-items: center !important;
   justify-content: space-between !important;
-  padding: 8px 16px !important;
-  margin: 0 0 6px 0 !important;
-  gap: 12px !important;
-  flex-wrap: wrap !important;
+  padding: 5px 12px !important;
+  margin: 0 0 4px 0 !important;
+  gap: 10px !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
 }
 
 #view-register > .register-selection > strong {
-  font-size: 14px !important;
+  font-size: 13px !important;
   color: #0f172a !important;
 }
 
 #view-register .register-form-actions {
   display: flex !important;
   align-items: center !important;
-  gap: 10px !important;
+  gap: 8px !important;
   margin: 0 !important;
+}
+
+.register-zoom-group {
+  display: inline-flex !important;
+  align-items: center !important;
+  background: #e2e8f0 !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  padding: 2px !important;
+  gap: 2px !important;
+}
+
+.register-zoom-btn {
+  border: none !important;
+  background: transparent !important;
+  color: #475569 !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  padding: 3px 8px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  line-height: 1.2 !important;
+  font-family: inherit !important;
+}
+
+.register-zoom-btn:hover {
+  background: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.register-zoom-btn.active {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.3) !important;
 }
 
 #view-register .register-scroll-body {
   flex: 1 1 auto !important;
   min-height: 0 !important;
-  overflow: visible !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 14px !important;
-  padding-bottom: 32px !important;
+  gap: 6px !important;
+  padding-bottom: 8px !important;
 }
 
 #view-register .register-preview-scroll {
   flex: 1 1 auto !important;
-  min-height: 760px !important;
+  min-height: 240px !important;
   background: #cbd5e1 !important;
   border: 1px solid #94a3b8 !important;
-  border-radius: 12px !important;
-  padding: 24px 16px !important;
-  margin: 4px 0 !important;
+  border-radius: 8px !important;
+  padding: 12px 10px !important;
+  margin: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
-  overflow-x: auto !important;
-  overflow-y: visible !important;
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  justify-content: flex-start !important;
+  overflow: auto !important;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+#view-register .register-paper {
+  zoom: var(--register-scale, 0.54) !important;
+  transform-origin: top center !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 297mm !important;
+  max-width: none !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  transition: zoom 0.15s ease !important;
 }
 
 #view-register .official-register-page {
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22) !important;
   border-radius: 2px !important;
-  margin: 0 auto 24px auto !important;
+  margin: 0 auto 12px auto !important;
   background: #ffffff !important;
   flex: none !important;
 }
 
 #view-register .asset-provenance {
-  margin-top: 8px !important;
+  flex: none !important;
+  margin: 0 !important;
+  padding: 8px 14px !important;
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
   border-radius: 8px !important;
-  padding: 14px 18px !important;
+}
+
+#view-register .asset-provenance h2 {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #334155 !important;
+  margin: 0 0 4px 0 !important;
+}
+
+#view-register .asset-provenance dl {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 4px 10px !important;
+  margin: 0 !important;
+}
+
+#view-register .asset-provenance dt {
+  font-size: 10px !important;
+  color: #64748b !important;
+  margin-bottom: 1px !important;
+  white-space: nowrap !important;
+}
+
+#view-register .asset-provenance dd {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #0f172a !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+#view-register .register-source-details {
+  flex: none !important;
+  margin: 0 !important;
+}
+
+#view-register .register-source-details > summary {
+  font-size: 11px !important;
+  color: #64748b !important;
+  cursor: pointer !important;
+  padding: 2px 4px !important;
+}
+
+@media (max-width: 900px) {
+  #view-register .asset-provenance dl {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
 }
 
 /* 10. Numbering Rules View */
