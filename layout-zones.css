@@ -375,79 +375,689 @@ table thead th {
    VIEW-SPECIFIC SCROLL CONTENT ZONES (Multi-panel natural flow)
    -------------------------------------------------------------------------- */
 
-/* 1. Dashboard View */
+/* 1. Dashboard View: Interactive Smart Hero & Lifecycle Showcase */
 #view-dashboard .smart-hero {
   display: flex !important;
   justify-content: space-between !important;
-  align-items: center !important;
+  align-items: stretch !important;
   gap: 20px !important;
-  padding: 12px 20px !important;
+  padding: 14px 22px !important;
   margin: 4px 0 10px !important;
-  background: linear-gradient(120deg, #e3f4f1 0%, #f1f7fc 100%) !important;
-  border: 1px solid #d2e8e5 !important;
-  border-radius: 12px !important;
+  background: linear-gradient(135deg, #e3f4f0 0%, #f0f7fb 100%) !important;
+  border: 1px solid #cce8e3 !important;
+  border-radius: 14px !important;
   color: var(--smart-ink, #16354a) !important;
   flex: 0 0 auto !important;
+  box-shadow: 0 2px 8px rgba(8, 126, 130, 0.05) !important;
+  position: relative !important;
 }
 
-#view-dashboard .smart-hero h2 {
-  font-size: 18px !important;
+#view-dashboard .smart-hero-main {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+}
+
+#view-dashboard .hero-eyebrow-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+  margin-bottom: 2px !important;
+}
+
+#view-dashboard .hero-live-beacon {
+  display: inline-block !important;
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+  background: #087e82 !important;
+  box-shadow: 0 0 0 2px rgba(8, 126, 130, 0.25) !important;
+  animation: beaconPulse 2s infinite !important;
+}
+
+@keyframes beaconPulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(8, 126, 130, 0.5); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(8, 126, 130, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(8, 126, 130, 0); }
+}
+
+#view-dashboard .hero-core-badge {
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  color: #087e82 !important;
+  background: #e0f7f4 !important;
+  padding: 1px 7px !important;
+  border-radius: 10px !important;
+  border: 1px solid #b6e2de !important;
+}
+
+#view-dashboard .hero-title {
+  font-size: 19px !important;
   line-height: 1.25 !important;
-  margin: 3px 0 5px !important;
+  margin: 2px 0 4px !important;
   letter-spacing: -0.03em !important;
   color: #123d56 !important;
   font-weight: 700 !important;
 }
 
-#view-dashboard .smart-hero p {
-  max-width: 520px !important;
-  line-height: 1.4 !important;
-  color: #4b6b7a !important;
-  font-size: 12px !important;
-  margin: 0 0 6px 0 !important;
-}
-
-#view-dashboard .smart-hero .eyebrow {
+#view-dashboard .hero-title-accent {
   color: #087e82 !important;
-  letter-spacing: 0.1em !important;
-  font-size: 9px !important;
-  font-weight: 700 !important;
 }
 
-#view-dashboard .smart-hero .button {
-  padding: 5px 12px !important;
+#view-dashboard .hero-target-box {
+  background: rgba(255, 255, 255, 0.85) !important;
+  border-left: 3px solid #087e82 !important;
+  padding: 6px 12px !important;
+  border-radius: 0 8px 8px 0 !important;
+  margin: 3px 0 8px 0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+}
+
+#view-dashboard .hero-quote-text {
+  font-size: 12.5px !important;
+  line-height: 1.45 !important;
+  color: #274758 !important;
+  margin: 0 !important;
+}
+
+#view-dashboard .hero-qr-highlight {
+  color: #087e82 !important;
+  font-weight: 700 !important;
+  background: #e6f6f3 !important;
+  padding: 1px 6px !important;
+  border-radius: 4px !important;
+  border: 1px solid #b8e0db !important;
+  display: inline-block !important;
+}
+
+#view-dashboard .hero-buttons-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+#view-dashboard .hero-buttons-row .button {
+  padding: 6px 13px !important;
   font-size: 11px !important;
   border-radius: 6px !important;
-  margin-right: 6px !important;
 }
 
-#view-dashboard .smart-hero-flow {
-  min-width: 250px !important;
+#view-dashboard .hero-sim-btn {
+  background: #087e82 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border: 1px solid #087e82 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  box-shadow: 0 2px 6px rgba(8, 126, 130, 0.25) !important;
+  transition: all 0.15s ease !important;
+}
+
+#view-dashboard .hero-sim-btn:hover {
+  background: #066265 !important;
+  transform: translateY(-1px) !important;
+}
+
+#view-dashboard .sim-scan-radar {
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+  background: #4ade80 !important;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.3) !important;
+}
+
+/* 3 Interactive Cards on the Right */
+#view-dashboard .smart-hero-interactive-flow {
+  min-width: 310px !important;
+  max-width: 360px !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: center !important;
-  gap: 3px !important;
+  gap: 4px !important;
+  flex: none !important;
 }
 
-#view-dashboard .smart-hero-flow span {
+#view-dashboard .hero-flow-card {
   background: rgba(255, 255, 255, 0.9) !important;
-  border: 1px solid #d4e7e6 !important;
-  padding: 5px 10px !important;
-  border-radius: 7px !important;
-  color: #087e82 !important;
-  font-size: 11px !important;
+  border: 1px solid #d4e7e4 !important;
+  border-radius: 9px !important;
+  padding: 6px 10px !important;
+  cursor: pointer !important;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  outline: none !important;
+}
+
+#view-dashboard .hero-flow-card:hover,
+#view-dashboard .hero-flow-card:focus-visible {
+  background: #ffffff !important;
+  border-color: #087e82 !important;
+  transform: translateX(3px) !important;
+  box-shadow: 0 3px 10px rgba(8, 126, 130, 0.12) !important;
+}
+
+#view-dashboard .hero-flow-head {
   display: flex !important;
   align-items: center !important;
   gap: 8px !important;
 }
 
-#view-dashboard .smart-hero-flow b {
-  color: #16354a !important;
-  font-weight: 600 !important;
+#view-dashboard .hero-step-num {
+  font-family: 'Prompt', 'Sarabun', sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 5px !important;
+  background: #e0f2fe !important;
+  color: #0284c7 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: none !important;
 }
 
-#view-dashboard .smart-hero-flow i {
+#view-dashboard .step-card-2 .hero-step-num {
+  background: #e0f7f4 !important;
+  color: #087e82 !important;
+}
+
+#view-dashboard .step-card-3 .hero-step-num {
+  background: #fef3c7 !important;
+  color: #d97706 !important;
+}
+
+#view-dashboard .hero-flow-icon {
+  font-size: 13px !important;
+  flex: none !important;
+}
+
+#view-dashboard .qr-icon-wrap {
+  position: relative !important;
+  width: 18px !important;
+  height: 18px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 3px !important;
+  background: #eef8f7 !important;
+  overflow: hidden !important;
+}
+
+#view-dashboard .laser-scan-beam {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 2px !important;
+  background: #087e82 !important;
+  box-shadow: 0 0 4px #087e82 !important;
+  animation: laserScanSweep 1.8s infinite ease-in-out !important;
+}
+
+@keyframes laserScanSweep {
+  0% { top: 0%; opacity: 0.2; }
+  50% { opacity: 1; }
+  100% { top: 90%; opacity: 0.2; }
+}
+
+#view-dashboard .hero-flow-text {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+#view-dashboard .hero-flow-text b {
+  display: block !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  color: #16354a !important;
+  line-height: 1.25 !important;
+}
+
+#view-dashboard .hero-flow-text small {
+  display: block !important;
+  font-size: 10px !important;
+  color: #64748b !important;
+  line-height: 1.25 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+#view-dashboard .hero-flow-pill {
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  padding: 1px 6px !important;
+  border-radius: 4px !important;
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  flex: none !important;
+}
+
+#view-dashboard .hero-flow-pill.highlight {
+  background: #e0f7f4 !important;
+  color: #087e82 !important;
+}
+
+#view-dashboard .hero-flow-pill.live {
+  background: #ecfdf5 !important;
+  color: #059669 !important;
+  border: 1px solid #a7f3d0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+}
+
+#view-dashboard .radar-ping {
+  width: 5px !important;
+  height: 5px !important;
+  border-radius: 50% !important;
+  background: #059669 !important;
+  animation: beaconPulse 1.5s infinite !important;
+}
+
+#view-dashboard .hero-flow-hover-hint {
+  font-size: 9.5px !important;
+  color: #087e82 !important;
+  font-weight: 600 !important;
+  margin-top: 2px !important;
   display: none !important;
+  align-items: center !important;
+  gap: 3px !important;
+}
+
+#view-dashboard .hero-flow-card:hover .hero-flow-hover-hint {
+  display: flex !important;
+}
+
+#view-dashboard .hero-flow-connector {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  height: 3px !important;
+  margin: -1px 0 !important;
+}
+
+#view-dashboard .hero-flow-connector .flow-dot {
+  width: 3px !important;
+  height: 3px !important;
+  border-radius: 50% !important;
+  background: #087e82 !important;
+  opacity: 0.5 !important;
+}
+
+/* Smart QR Phone Simulation Modal */
+.qr-simulator-modal {
+  width: min(780px, 94vw) !important;
+  max-width: 780px !important;
+  border-radius: 18px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  box-shadow: 0 25px 60px rgba(12, 38, 53, 0.3) !important;
+}
+
+.sim-modal-body {
+  padding: 16px 22px 22px !important;
+  background: #f8fafc !important;
+}
+
+.sim-selector-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin-bottom: 14px !important;
+  flex-wrap: wrap !important;
+}
+
+.sim-select-label {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #475569 !important;
+}
+
+.sim-asset-pills {
+  display: flex !important;
+  gap: 6px !important;
+  flex-wrap: wrap !important;
+}
+
+.sim-pill-btn {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 20px !important;
+  padding: 4px 10px !important;
+  font-size: 11px !important;
+  color: #334155 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.sim-pill-btn.active,
+.sim-pill-btn:hover {
+  background: #e0f7f4 !important;
+  border-color: #087e82 !important;
+  color: #087e82 !important;
+  font-weight: 700 !important;
+}
+
+.sim-phone-wrapper {
+  display: grid !important;
+  grid-template-columns: 310px 1fr !important;
+  gap: 20px !important;
+  align-items: start !important;
+}
+
+@media(max-width: 680px) {
+  .sim-phone-wrapper {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.sim-phone-frame {
+  background: #0f172a !important;
+  border: 4px solid #334155 !important;
+  border-radius: 28px !important;
+  padding: 10px 8px 14px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18) !important;
+  color: #1e293b !important;
+}
+
+.phone-notch {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 8px !important;
+  height: 12px !important;
+  margin-bottom: 4px !important;
+}
+
+.camera-lens {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: #1e293b !important;
+  border: 1px solid #475569 !important;
+}
+
+.speaker-grill {
+  width: 32px !important;
+  height: 3px !important;
+  border-radius: 3px !important;
+  background: #334155 !important;
+}
+
+.phone-status-bar {
+  display: flex !important;
+  justify-content: space-between !important;
+  font-size: 9px !important;
+  color: #cbd5e1 !important;
+  padding: 0 6px 6px !important;
+}
+
+.phone-screen-content {
+  background: #ffffff !important;
+  border-radius: 20px !important;
+  padding: 12px !important;
+  max-height: 400px !important;
+  overflow-y: auto !important;
+}
+
+.phone-scan-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding-bottom: 8px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.phone-brand-mark {
+  width: 26px !important;
+  height: 26px !important;
+  background: #e0f7f4 !important;
+  color: #087e82 !important;
+  border-radius: 6px !important;
+  display: grid !important;
+  place-items: center !important;
+  font-size: 13px !important;
+}
+
+.phone-scan-header strong {
+  display: block !important;
+  font-size: 11px !important;
+  color: #0f172a !important;
+}
+
+.phone-scan-header small {
+  display: block !important;
+  font-size: 9px !important;
+  color: #64748b !important;
+}
+
+.phone-scan-verified {
+  margin-left: auto !important;
+  font-size: 8.5px !important;
+  color: #059669 !important;
+  background: #d1fae5 !important;
+  padding: 2px 6px !important;
+  border-radius: 10px !important;
+  font-weight: 700 !important;
+}
+
+.phone-asset-card {
+  padding: 8px 0 !important;
+}
+
+.phone-card-top {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+
+.phone-kicker {
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+  color: #087e82 !important;
+  letter-spacing: 0.05em !important;
+}
+
+.phone-status-badge {
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  padding: 2px 6px !important;
+  border-radius: 10px !important;
+}
+
+.phone-status-badge.green { background: #dcfce7 !important; color: #15803d !important; }
+.phone-status-badge.amber { background: #fef3c7 !important; color: #b45309 !important; }
+
+.phone-asset-name {
+  font-size: 13px !important;
+  line-height: 1.3 !important;
+  color: #0f172a !important;
+  margin: 4px 0 2px !important;
+}
+
+.phone-code-pill {
+  display: inline-block !important;
+  font-family: monospace !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: #1e3a8a !important;
+  background: #eff6ff !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  margin-bottom: 8px !important;
+}
+
+.phone-detail-list {
+  background: #f8fafc !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 5px !important;
+  margin-bottom: 10px !important;
+}
+
+.phone-detail-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  font-size: 10.5px !important;
+}
+
+.phone-detail-row span { color: #64748b !important; }
+.phone-detail-row b { color: #1e293b !important; text-align: right !important; }
+
+.phone-qr-showcase {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 6px 8px !important;
+  border: 1px dashed #cbd5e1 !important;
+  border-radius: 8px !important;
+  margin-bottom: 10px !important;
+}
+
+.phone-mini-qr {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  padding: 3px !important;
+  flex: none !important;
+}
+
+.phone-actions-container {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+.phone-btn {
+  width: 100% !important;
+  padding: 7px 10px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  transition: all 0.15s ease !important;
+}
+
+.phone-btn-repair {
+  background: #087e82 !important;
+  color: #ffffff !important;
+  border: 1px solid #087e82 !important;
+}
+
+.phone-btn-repair:hover { background: #066265 !important; }
+
+.phone-btn-verify {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.phone-btn-verify:hover { background: #f1f5f9 !important; }
+
+.sim-feedback-msg {
+  font-size: 10.5px !important;
+  padding: 6px 8px !important;
+  border-radius: 6px !important;
+  margin: 6px 0 0 !important;
+  display: none !important;
+}
+
+.sim-feedback-msg.show { display: block !important; }
+.sim-feedback-msg.success { background: #ecfdf5 !important; color: #065f46 !important; border: 1px solid #a7f3d0 !important; }
+
+.phone-footer-credit {
+  border-top: 1px solid #f1f5f9 !important;
+  margin-top: 8px !important;
+  padding-top: 6px !important;
+  text-align: center !important;
+}
+
+.phone-footer-credit b { display: block !important; font-size: 9px !important; color: #f97316 !important; }
+.phone-footer-credit small { display: block !important; font-size: 8px !important; color: #94a3b8 !important; }
+
+/* Explainer right side */
+.sim-side-explainer {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+.explainer-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  padding: 12px 14px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+}
+
+.explainer-icon {
+  font-size: 16px !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 6px !important;
+  background: #f0fdfa !important;
+  color: #087e82 !important;
+  display: grid !important;
+  place-items: center !important;
+  flex: none !important;
+}
+
+.explainer-card b {
+  display: block !important;
+  font-size: 12px !important;
+  color: #0f172a !important;
+  margin-bottom: 2px !important;
+}
+
+.explainer-card p {
+  font-size: 11px !important;
+  color: #475569 !important;
+  line-height: 1.45 !important;
+  margin: 0 !important;
+}
+
+.explainer-card ul {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 4px 0 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.explainer-card li {
+  font-size: 10.5px !important;
+  color: #475569 !important;
+  line-height: 1.4 !important;
+}
+
+.explainer-cta-box {
+  display: flex !important;
+  gap: 8px !important;
+  margin-top: 4px !important;
+}
+
+.explainer-cta-box .button {
+  padding: 8px 14px !important;
+  font-size: 11px !important;
 }
 
 #view-dashboard .stats-grid {

@@ -225,11 +225,299 @@
       applyBranding(b);$('#brandingLogo').value='';$('#brandingStatus').textContent='บันทึกแล้ว ชื่อและโลโก้จะใช้ร่วมกับหน้าสแกนและฉลาก QR';app.toast('บันทึกอัตลักษณ์หน่วยงานแล้ว');
     }catch(error){$('#brandingStatus').textContent=error.message;}finally{brandingSaving=false;updateBrandingButton();}
   };
-  const heading=$('#view-dashboard .page-heading p'); if(heading)heading.textContent='ทะเบียนที่เป็นปัจจุบัน งานซ่อมที่ติดตามได้ และ Smart QR ที่เชื่อมทุกขั้นตอน';
-  const eyebrow=$('#view-dashboard .page-heading .eyebrow');if(eyebrow)eyebrow.textContent=new Date().toLocaleDateString('th-TH',{dateStyle:'full',timeZone:'Asia/Bangkok'});
-  const hero=document.createElement('div');hero.className='smart-hero';hero.innerHTML=`<div><span class="eyebrow">CONNECTED ASSET MANAGEMENT</span><h2>ดูแลทุกครุภัณฑ์<br>เชื่อมทุกงานซ่อม</h2><p>สแกนดูข้อมูลล่าสุด แจ้งปัญหา และติดตามจนถึงตรวจรับงาน ด้วย QR ประจำครุภัณฑ์เพียงหนึ่งเดียว</p><div><button class="button primary" id="smartGoAssets">เปิดทะเบียน / ออก QR ↗</button><button class="button outline" id="smartGoRepairs">ติดตามงานซ่อม</button></div></div><div class="smart-hero-flow"><span>01 <b>ขึ้นทะเบียน</b></span><i>↓</i><span>02 <b>ติด QR ประจำรายการ</b></span><i>↓</i><span>03 <b>สแกน · แจ้งซ่อม · ตรวจรับ</b></span></div>`;
+  const simDialog = document.createElement('dialog');
+  simDialog.className = 'asset-dialog smart-dialog qr-simulator-modal';
+  simDialog.setAttribute('aria-label', 'จำลองการใช้งาน Smart QR บนสมาร์ทโฟน');
+  document.body.append(simDialog);
+  simDialog.addEventListener('click', e => { if (e.target === simDialog || e.target.closest('[data-close-sim]')) simDialog.close(); });
+
+  function openQrSimulator(sampleIndex = 0) {
+    const sampleAssets = [
+      {
+        name: 'เครื่องฟังหัวใจเด็กในครรภ์ (Fetal Doppler)',
+        code: '6515-027-1005-0012',
+        fsn: '6515-027-1005',
+        location: 'ศูนย์แพทย์โรงพยาบาลสุรินทร์ · แผนกสูติ-นรีเวชกรรม',
+        status: 'พร้อมใช้งาน',
+        custodian: 'พว. กัลยา วารีสุข',
+        model: 'Edan Sonotrax B · S/N: SN-884210',
+        lastChecked: '26 ตุลาคม 2569 · ผ่านเกณฑ์ PM',
+        openRepairs: 0
+      },
+      {
+        name: 'เครื่องตรวจคลื่นไฟฟ้าหัวใจ (EKG 12 Leads)',
+        code: '6515-001-0019-0004',
+        fsn: '6515-001-0019',
+        location: 'ศูนย์แพทย์โรงพยาบาลสุรินทร์ · ห้องฉุกเฉิน (ER)',
+        status: 'พร้อมใช้งาน',
+        custodian: 'นพ. สมเกียรติ พยาธิกุล',
+        model: 'GE MAC 2000 · S/N: GE-992144',
+        lastChecked: '25 ตุลาคม 2569 · ผ่านเกณฑ์ PM',
+        openRepairs: 0
+      },
+      {
+        name: 'เครื่องวัดความดันโลหิตแบบสอดแขนอัตโนมัติ',
+        code: '6515-014-0008-0021',
+        fsn: '6515-014-0008',
+        location: 'ศูนย์แพทย์โรงพยาบาลสุรินทร์ · แผนกผู้ป่วยนอก (OPD)',
+        status: 'รอตรวจสอบ',
+        custodian: 'พว. นงลักษณ์ รักษ์ธรรม',
+        model: 'Omron HBP-9030 · S/N: OM-552190',
+        lastChecked: '20 ตุลาคม 2569 · ครบกำหนดรอบตรวจสอบ',
+        openRepairs: 1
+      }
+    ];
+    const item = sampleAssets[sampleIndex] || sampleAssets[0];
+    simDialog.innerHTML = `
+      <div class="smart-dialog-head">
+        <div>
+          <span class="eyebrow"><span class="hero-live-beacon"></span> SMART QR SCAN SIMULATION</span>
+          <h2>จำลองการสแกน QR บนสมาร์ทโฟน</h2>
+          <p class="field-hint">สแกนดูข้อมูลล่าสุด แจ้งปัญหา และติดตามจนถึงตรวจรับงาน ด้วย QR ประจำครุภัณฑ์เพียงหนึ่งเดียว</p>
+        </div>
+        <button class="dialog-close" data-close-sim aria-label="ปิดหน้าต่างจำลอง">×</button>
+      </div>
+      <div class="sim-modal-body">
+        <div class="sim-selector-bar">
+          <span class="sim-select-label">เลือกครุภัณฑ์ทดสอบ:</span>
+          <div class="sim-asset-pills">
+            ${sampleAssets.map((a, i) => `
+              <button type="button" class="sim-pill-btn ${i === sampleIndex ? 'active' : ''}" data-sim-pick="${i}">
+                ${esc(a.name.split(' (')[0])}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="sim-phone-wrapper">
+          <div class="sim-phone-frame">
+            <div class="phone-notch"><span class="camera-lens"></span><span class="speaker-grill"></span></div>
+            <div class="phone-status-bar">
+              <span>09:41</span>
+              <span>ศูนย์แพทย์โรงพยาบาลสุรินทร์</span>
+              <span>5G 100%</span>
+            </div>
+            <div class="phone-screen-content">
+              <div class="phone-scan-header">
+                <div class="phone-brand-mark">▦</div>
+                <div>
+                  <strong>GovAsset Smart QR</strong>
+                  <small>ศูนย์แพทย์โรงพยาบาลสุรินทร์</small>
+                </div>
+                <span class="phone-scan-verified">✓ ข้อมูลล่าสุด</span>
+              </div>
+
+              <div class="phone-asset-card">
+                <div class="phone-card-top">
+                  <span class="phone-kicker">ข้อมูลครุภัณฑ์</span>
+                  <span class="phone-status-badge ${item.status === 'พร้อมใช้งาน' ? 'green' : 'amber'}">${esc(item.status)}</span>
+                </div>
+                <h3 class="phone-asset-name">${esc(item.name)}</h3>
+                <div class="phone-code-pill">${esc(item.code)}</div>
+
+                <div class="phone-detail-list">
+                  <div class="phone-detail-row">
+                    <span>📍 ที่ตั้ง:</span>
+                    <b>${esc(item.location)}</b>
+                  </div>
+                  <div class="phone-detail-row">
+                    <span>🏷️ รุ่น / S/N:</span>
+                    <b>${esc(item.model)}</b>
+                  </div>
+                  <div class="phone-detail-row">
+                    <span>👤 ผู้รับผิดชอบ:</span>
+                    <b>${esc(item.custodian)}</b>
+                  </div>
+                  <div class="phone-detail-row">
+                    <span>↻ สถานะ PM:</span>
+                    <b style="color:#059669">${esc(item.lastChecked)}</b>
+                  </div>
+                </div>
+
+                <div class="phone-qr-showcase">
+                  <div class="phone-mini-qr">
+                    <img src="assets/govasset-mark-optimized.png" alt="QR Code" style="width:48px;height:48px;object-fit:contain;">
+                  </div>
+                  <div>
+                    <small style="color:#087e82;font-weight:700">QR ประจำครุภัณฑ์เพียงหนึ่งเดียว</small>
+                    <p style="margin:2px 0 0;font-size:11px;color:#64748b">สแกนดูประวัติเดิม หรือแจ้งซ่อมได้ทันที ไม่ต้องค้นหารหัส</p>
+                  </div>
+                </div>
+
+                <div class="phone-actions-container">
+                  <button type="button" class="phone-btn phone-btn-repair" id="simActionRepair">
+                    <span>⚒</span> แจ้งซ่อมครุภัณฑ์นี้ (จำลอง)
+                  </button>
+                  <button type="button" class="phone-btn phone-btn-verify" id="simActionVerify">
+                    <span>✓</span> สแกนตรวจรับงาน / ยืนยันสภาพ
+                  </button>
+                </div>
+                <p id="simFeedbackMsg" class="sim-feedback-msg" role="status"></p>
+              </div>
+
+              <div class="phone-footer-credit">
+                <b>POWER BY PNG TEAM</b>
+                <small>ระบบทะเบียนครุภัณฑ์และบริหารงานซ่อมภาครัฐ</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="sim-side-explainer">
+            <div class="explainer-card">
+              <div class="explainer-icon">💡</div>
+              <div>
+                <b>เป้าหมายการเชื่อมโยงงานพัสดุ</b>
+                <p>เจ้าหน้าที่ผู้ใช้งานหรือทีมแพทย์พยาบาล เพียงยกสมาร์ทโฟนสแกน QR ที่ตัวเครื่อง จะเห็นประวัติการตรวจรับและแจ้งซ่อมทันทีโดยไม่ต้องจำรหัสครุภัณฑ์ 11 หลัก</p>
+              </div>
+            </div>
+
+            <div class="explainer-card">
+              <div class="explainer-icon">⚡</div>
+              <div>
+                <b>3 ลูกเล่นสำคัญของ Smart QR</b>
+                <ul>
+                  <li><b>1. อัปเดตข้อมูลอัตโนมัติ:</b> เปลี่ยนแปลงข้อมูลในระบบ ข้อมูลหน้าสแกนเปลี่ยนทันทีโดยไม่ต้องพิมพ์ฉลากใหม่</li>
+                  <li><b>2. ส่งเรื่องตรงถึงช่าง:</b> ผู้แจ้งกรอกอาการ ระบบส่งไลน์แจ้งเตือนและออก Ticket อัตโนมัติ</li>
+                  <li><b>3. ตรวจรับงานได้ทันที:</b> เมื่อช่างซ่อมเสร็จ ผู้แจ้งตรวจเช็คและกดรับงานผ่านหน้าสแกนได้ทันที</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="explainer-cta-box">
+              <button type="button" class="button primary" id="simOpenFullScan">เปิดหน้าสแกนจริง (scan.html) ↗</button>
+              <button type="button" class="button outline" data-close-sim>ปิดหน้าต่างจำลอง</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    simDialog.querySelectorAll('[data-sim-pick]').forEach(btn => {
+      btn.onclick = () => openQrSimulator(Number(btn.dataset.simPick));
+    });
+
+    const feedback = simDialog.querySelector('#simFeedbackMsg');
+    simDialog.querySelector('#simActionRepair').onclick = () => {
+      feedback.className = 'sim-feedback-msg success show';
+      feedback.innerHTML = '⚡ <b>จำลองสำเร็จ:</b> ระบบรับคำขอแจ้งซ่อมของ ' + esc(item.name.split(' (')[0]) + ' แล้ว ส่ง Ticket ถึงช่างทันที!';
+      app.toast('จำลองการแจ้งซ่อมผ่าน Smart QR สำเร็จ');
+    };
+    simDialog.querySelector('#simActionVerify').onclick = () => {
+      feedback.className = 'sim-feedback-msg success show';
+      feedback.innerHTML = '✓ <b>ตรวจรับงานสำเร็จ:</b> ยืนยันสภาพพัสดุและตำแหน่งปัจจุบันเรียบร้อยแล้ว!';
+      app.toast('ยืนยันผลการตรวจรับผ่าน Smart QR สำเร็จ');
+    };
+    simDialog.querySelector('#simOpenFullScan').onclick = () => {
+      window.open('/scan.html', '_blank');
+    };
+
+    simDialog.showModal();
+  }
+
+  const heading = $('#view-dashboard .page-heading p');
+  if (heading) heading.textContent = 'ทะเบียนที่เป็นปัจจุบัน งานซ่อมที่ติดตามได้ และ Smart QR ที่เชื่อมทุกขั้นตอน';
+  const eyebrow = $('#view-dashboard .page-heading .eyebrow');
+  if (eyebrow) eyebrow.textContent = new Date().toLocaleDateString('th-TH', { dateStyle: 'full', timeZone: 'Asia/Bangkok' });
+
+  const hero = document.createElement('div');
+  hero.className = 'smart-hero';
+  hero.innerHTML = `
+    <div class="smart-hero-main">
+      <div class="hero-eyebrow-row">
+        <span class="eyebrow"><span class="hero-live-beacon"></span> CONNECTED ASSET MANAGEMENT</span>
+        <span class="hero-core-badge">นวัตกรรม Smart QR ภาครัฐ</span>
+      </div>
+      <h2 class="hero-title">ดูแลทุกครุภัณฑ์ <span class="hero-title-accent">เชื่อมทุกงานซ่อม</span></h2>
+      <div class="hero-target-box">
+        <p class="hero-quote-text">
+          <strong>สแกนดูข้อมูลล่าสุด แจ้งปัญหา และติดตามจนถึงตรวจรับงาน</strong>
+          <span class="hero-qr-highlight">ด้วย QR ประจำครุภัณฑ์เพียงหนึ่งเดียว</span>
+        </p>
+      </div>
+      <div class="hero-buttons-row">
+        <button class="button primary" id="smartGoAssets" type="button">เปิดทะเบียน / ออก QR ↗</button>
+        <button class="button outline" id="smartGoRepairs" type="button">ติดตามงานซ่อม</button>
+        <button class="button hero-sim-btn" id="smartDemoScan" type="button" title="คลิกเพื่อเปิดหน้าจำลองการสแกน QR">
+          <span class="sim-scan-radar"></span>
+          <span>ทดลองสแกน QR จำลอง ⚡</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="smart-hero-interactive-flow" aria-label="ขั้นตอนการทำงาน Smart QR 3 ขั้นตอน">
+      <div class="hero-flow-card step-card-1" id="heroStep1" role="button" tabindex="0" title="คลิกเพื่อไปที่ทะเบียนครุภัณฑ์">
+        <div class="hero-flow-head">
+          <span class="hero-step-num">01</span>
+          <span class="hero-flow-icon">▤</span>
+          <div class="hero-flow-text">
+            <b>1. ขึ้นทะเบียนสินทรัพย์</b>
+            <small>ออกเลข FSN &amp; บัญชีคุมทรัพย์สิน</small>
+          </div>
+          <span class="hero-flow-pill">ทะเบียน</span>
+        </div>
+        <div class="hero-flow-hover-hint">คลิกเปิดทะเบียนคุม <span>→</span></div>
+      </div>
+
+      <div class="hero-flow-connector"><span class="flow-dot"></span></div>
+
+      <div class="hero-flow-card step-card-2" id="heroStep2" role="button" tabindex="0" title="คลิกเพื่อไปที่แบบพิมพ์ฉลาก QR">
+        <div class="hero-flow-head">
+          <span class="hero-step-num">02</span>
+          <span class="hero-flow-icon qr-icon-wrap">
+            <span class="mini-qr-code">◩</span>
+            <span class="laser-scan-beam"></span>
+          </span>
+          <div class="hero-flow-text">
+            <b>2. ติดฉลาก Smart QR</b>
+            <small>พิมพ์ฉลากทนทาน ลิงก์ถาวรประจำเครื่อง</small>
+          </div>
+          <span class="hero-flow-pill highlight">Smart QR</span>
+        </div>
+        <div class="hero-flow-hover-hint">คลิกออกแบบฉลาก <span>→</span></div>
+      </div>
+
+      <div class="hero-flow-connector"><span class="flow-dot"></span></div>
+
+      <div class="hero-flow-card step-card-3 active-showcase" id="heroStep3" role="button" tabindex="0" title="คลิกเพื่อทดลองสแกนและแจ้งซ่อมจำลอง">
+        <div class="hero-flow-head">
+          <span class="hero-step-num pulse-num">03</span>
+          <span class="hero-flow-icon scan-pulse">📱</span>
+          <div class="hero-flow-text">
+            <b>3. สแกน · แจ้งซ่อม · ตรวจรับ</b>
+            <small>มือถือเครื่องเดียว จบครบทุกขั้นตอน</small>
+          </div>
+          <span class="hero-flow-pill live"><span class="radar-ping"></span> ลองสแกน</span>
+        </div>
+        <div class="hero-flow-hover-hint">คลิกทดลองสแกนสด <span>⚡</span></div>
+      </div>
+    </div>
+  `;
+
   $('#view-dashboard .notice').after(hero);
-  $('#smartGoAssets').onclick=()=>app.switchView('assets');$('#smartGoRepairs').onclick=()=>app.switchView('repairs');
+
+  $('#smartGoAssets').onclick = () => app.switchView('assets');
+  $('#smartGoRepairs').onclick = () => app.switchView('repairs');
+  $('#smartDemoScan').onclick = () => openQrSimulator(0);
+
+  $('#heroStep1').onclick = () => app.switchView('assets');
+  $('#heroStep2').onclick = () => app.switchView('stickers');
+  $('#heroStep3').onclick = () => openQrSimulator(0);
+
+  ['heroStep1', 'heroStep2', 'heroStep3'].forEach((id, idx) => {
+    const el = $('#' + id);
+    if (el) {
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (idx === 0) app.switchView('assets');
+          else if (idx === 1) app.switchView('stickers');
+          else openQrSimulator(0);
+        }
+      });
+    }
+  });
+
   app.api('/api/branding').then(applyBranding).catch(app.showError);
-  app.openAsset=openAsset;
+  app.openAsset = openAsset;
+  app.openQrSimulator = openQrSimulator;
 })();
