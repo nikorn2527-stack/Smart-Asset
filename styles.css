@@ -915,7 +915,7 @@ table thead th {
 }
 
 /* 4. Settings View */
-#view-settings {
+#view-settings.active {
   display: flex !important;
   flex-direction: column !important;
   height: 100% !important;

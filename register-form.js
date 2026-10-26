@@ -129,10 +129,56 @@
     $('#registerEditorForm').onsubmit=async event=>{event.preventDefault();const b=event.submitter;b.disabled=true;try{const raw=Object.fromEntries(new FormData(event.target));const form={fields:Object.fromEntries(fields.map(([key])=>[key,raw[key]])),rows,summary:Object.fromEntries(['annual','accumulated','net'].map(key=>[key,raw['sum_'+key]]))};const saved=await app.api(`/api/assets/${editingState.assetId}/register-form`,{method:'PUT',body:JSON.stringify({actor:app.getRole(),revision:editingState.revision,form})});if(state!==editingState)return;state.form=form;state.revision=saved.revision;render();editor.close();$('#registerFormStatus').textContent=`เอกสารที่บันทึกไว้ ฉบับแก้ไข ${saved.revision}`;app.toast('บันทึกเอกสารทะเบียนคุมแล้ว');}catch(error){if(state!==editingState)return;$('#registerEditorStatus').textContent=error.message;b.disabled=false;}};
     editor.showModal();
   };
+  let cachedRegisterCss = '';
+  async function getRegisterCss() {
+    if (!cachedRegisterCss) {
+      try {
+        const res = await fetch('/register-form.css');
+        if (res.ok) cachedRegisterCss = await res.text();
+      } catch (e) {}
+    }
+    return cachedRegisterCss;
+  }
+  getRegisterCss();
   printButton.onclick=async()=>{
     if(!state)return app.toast('เลือกรายการครุภัณฑ์ก่อนพิมพ์');
-    const frame=document.createElement('iframe');frame.className='smart-print-frame';frame.title='ทะเบียนคุมทรัพย์สิน A4 แนวนอน';document.body.append(frame);
-    const doc=frame.contentDocument;doc.open();doc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ทะเบียนคุมทรัพย์สิน ${esc(state.form.fields.code)}</title><link rel="stylesheet" href="${location.origin}/register-form.css"></head><body class="register-print">${paper.innerHTML}</body></html>`);doc.close();
-    await new Promise(resolve=>{if(doc.readyState==='complete')resolve();else frame.onload=resolve;});await doc.fonts.ready;if(!fitText(doc)){frame.remove();return app.toast('มีข้อความยาวเกินช่องเอกสาร กรุณาย่อข้อความหรือแยกเป็นแถวเพิ่มเติมก่อนพิมพ์');}frame.contentWindow.focus();frame.contentWindow.print();frame.contentWindow.addEventListener('afterprint',()=>frame.remove(),{once:true});
+    let css = await getRegisterCss();
+    if(!css) {
+      const link = document.querySelector('link[href*="register-form.css"]');
+      if (link) {
+        try {
+          const r = await fetch(link.href);
+          if (r.ok) css = await r.text();
+        } catch(e) {}
+      }
+    }
+    const frame=document.createElement('iframe');
+    frame.className='smart-print-frame';
+    frame.style.cssText='position:fixed;top:-9999px;left:-9999px;width:297mm;height:210mm;border:0;opacity:0;pointer-events:none;';
+    frame.title='ทะเบียนคุมทรัพย์สิน A4 แนวนอน';
+    document.body.append(frame);
+    const doc=frame.contentDocument;
+    doc.open();
+    doc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ทะเบียนคุมทรัพย์สิน ${esc(state.form.fields.code)}</title><style>
+@page { size: 297mm 210mm; margin: 0; }
+${css}
+.official-register-page .rf-table th, .official-register-page .rf-table td {
+  border: 1px solid #000 !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+</style></head><body class="register-print">${paper.innerHTML}</body></html>`);
+    doc.close();
+
+    try {
+      if (doc.fonts) await doc.fonts.ready;
+    } catch(e) {}
+
+    fitText(doc);
+    await new Promise(r => setTimeout(r, 120));
+
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+    frame.contentWindow.addEventListener('afterprint', () => frame.remove(), {once: true});
   };
 })();

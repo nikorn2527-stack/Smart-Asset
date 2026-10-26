@@ -2024,7 +2024,7 @@ table thead th {
 }
 
 /* 4. Settings View */
-#view-settings {
+#view-settings.active {
   display: flex !important;
   flex-direction: column !important;
   height: 100% !important;
@@ -2576,7 +2576,7 @@ table thead th {
 }
 
 /* 9.1 Depreciation Policies & Useful Life View */
-#view-depreciation {
+#view-depreciation.active {
   display: flex !important;
   flex-direction: column !important;
   height: 100% !important;
@@ -2723,5 +2723,89 @@ footer.footer {
   }
   .asset-kpi-banner {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Print Architecture: Clean A4 Landscape for official registers and print dialogs */
+@media print {
+  html, body {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+  .app-shell {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+  }
+  .sidebar, header.topbar, footer.footer, .subpage-nav, .notice, .page-actions, .register-form-actions, .register-side-panel, .smart-dialog, .toast {
+    display: none !important;
+  }
+  .main-column {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+  main#main {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+  .view:not(.active) {
+    display: none !important;
+  }
+  #view-register.active {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  #view-register .register-scroll-body {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  #view-register .register-preview-scroll {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  #view-register .register-paper {
+    zoom: 1 !important;
+    transform: none !important;
+    width: 297mm !important;
+    margin: 0 !important;
+  }
+  .official-register-page {
+    width: 297mm !important;
+    height: 210mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    break-after: page !important;
+    page-break-after: always !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .official-register-page .rf-table th, .official-register-page .rf-table td {
+    border: 1px solid #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
