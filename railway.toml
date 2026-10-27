@@ -12,6 +12,7 @@ ASSET_DB_PATH = "/data/govasset.sqlite3"
 REPAIR_APPROVAL_THRESHOLD = "5000"
 PYTHONUNBUFFERED = "1"
 TZ = "Asia/Bangkok"
+ASSET_AUTH_REQUIRED = "0"
 
 [[deploy.volumes]]
 name = "smart-asset-data"
