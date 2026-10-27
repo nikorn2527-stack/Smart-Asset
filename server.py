@@ -895,7 +895,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}", flush=True)
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -957,7 +957,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -987,10 +987,45 @@ class Handler(BaseHTTPRequestHandler):
                 if not 0<length<=1_000_000:
                     raise ApiError("ขนาด webhook ไม่ถูกต้อง",413)
                 raw=self.rfile.read(length)
-                with connect() as db:
-                    result=verify_webhook(db,raw,self.headers.get("X-Line-Signature", ""))
-                self.send_json(result)
-                return
+            if method == "POST" and unquote(parsed.path) == "/api/admin/upload-database":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    raise ApiError("ขนาดไฟล์ไม่ถูกต้อง")
+                if not 0 < length <= 2_000_000_000:
+                    raise ApiError("ขนาดไฟล์ต้องไม่เกิน 2 GB", 413)
+                DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+                temp_upload = DB_PATH.parent / f"upload-{secrets.token_hex(6)}.tmp"
+                try:
+                    remaining = length
+                    with temp_upload.open("wb") as out:
+                        while remaining > 0:
+                            chunk = self.rfile.read(min(remaining, 1024 * 1024))
+                            if not chunk:
+                                break
+                            out.write(chunk)
+                            remaining -= len(chunk)
+                    if remaining > 0:
+                        raise ApiError("การอัปโหลดไฟล์ไม่สมบูรณ์ ข้อมูลขาดหาย")
+                    with sqlite3.connect(f"file:{temp_upload.resolve()}?mode=ro", uri=True) as test_conn:
+                        check = test_conn.execute("PRAGMA integrity_check").fetchone()
+                        if not check or check[0] != "ok":
+                            raise ApiError("ไฟล์ที่ส่งมาไม่ใช่ฐานข้อมูล SQLite หรือไฟล์เสียหาย")
+                        tables = [r[0] for r in test_conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+                        if "assets" not in tables:
+                            raise ApiError("ฐานข้อมูลไม่มีตาราง assets ของระบบ GovAsset")
+                        asset_count = test_conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
+
+                    shm = Path(str(DB_PATH) + "-shm")
+                    wal = Path(str(DB_PATH) + "-wal")
+                    shm.unlink(missing_ok=True)
+                    wal.unlink(missing_ok=True)
+                    shutil.move(str(temp_upload), str(DB_PATH))
+                    initialize()
+                    self.send_json({"ok": True, "assets": asset_count, "message": f"นำเข้าฐานข้อมูลสำเร็จ ({asset_count:,} ครุภัณฑ์)"})
+                    return
+                finally:
+                    temp_upload.unlink(missing_ok=True)
             body = self.read_json()
             result = self.handle_api(method, unquote(parsed.path), parse_qs(parsed.query), body)
             status = 200

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>อัปโหลดฐานข้อมูลขึ้นระบบ — GovAsset</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    body {
+      background: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .upload-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      max-width: 580px;
+      width: 92%;
+      padding: 32px;
+      box-sizing: border-box;
+    }
+    .upload-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .upload-header .eyebrow {
+      font-size: 11px;
+      color: #0f766e;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .upload-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 8px 0;
+    }
+    .upload-header p {
+      font-size: 13px;
+      color: #64748b;
+      margin: 0;
+      line-height: 1.5;
+    }
+    .dropzone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      background: #f8fafc;
+      transition: all 0.2s ease;
+      margin-bottom: 20px;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: #0f766e;
+      background: #f0fdfa;
+    }
+    .dropzone-icon {
+      font-size: 40px;
+      color: #0f766e;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .dropzone-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+    .dropzone-hint {
+      font-size: 11.5px;
+      color: #64748b;
+    }
+    .file-input {
+      display: none;
+    }
+    .file-meta {
+      background: #f0fdfa;
+      border: 1px solid #ccfbf1;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .file-meta b {
+      font-size: 13px;
+      color: #0f766e;
+      display: block;
+      word-break: break-all;
+    }
+    .file-meta span {
+      font-size: 12px;
+      color: #64748b;
+    }
+    .progress-wrap {
+      margin-bottom: 20px;
+    }
+    .progress-bar-bg {
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0f766e, #14b8a6);
+      width: 0%;
+      transition: width 0.15s ease;
+    }
+    .progress-status {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 6px;
+      font-weight: 600;
+    }
+    .btn-submit {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      background: #0f766e;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-submit:hover:not(:disabled) {
+      background: #115e59;
+    }
+    .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .status-msg {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: center;
+    }
+    .status-msg.error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+    }
+    .status-msg.success {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #15803d;
+    }
+    .back-home {
+      display: block;
+      text-align: center;
+      margin-top: 18px;
+      color: #64748b;
+      font-size: 13px;
+      text-decoration: none;
+    }
+    .back-home:hover {
+      color: #0f766e;
+      text-decoration: underline;
+    }
+    .tips-box {
+      margin-top: 24px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 11.5px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+    .tips-box b {
+      color: #334155;
+    }
+  </style>
+</head>
+<body>
+  <div class="upload-card">
+    <div class="upload-header">
+      <div class="eyebrow">RAILWAY / PRODUCTION DEPLOYMENT</div>
+      <h1>นำเข้าฐานข้อมูลขึ้นเซิร์ฟเวอร์</h1>
+      <p>อัปโหลดไฟล์ฐานข้อมูล <code>prototype.sqlite3</code> เพื่อนำข้อมูลครุภัณฑ์จริงขึ้นสู่เซิร์ฟเวอร์ Railway โดยตรง</p>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <span class="dropzone-icon">📁</span>
+      <div class="dropzone-text">คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวางที่นี่</div>
+      <div class="dropzone-hint">รองรับไฟล์ SQLite (.sqlite3, .db) ขนาดไฟล์ประมาณ 400 - 600 MB</div>
+      <input type="file" id="dbFileInput" class="file-input" accept=".sqlite3,.db">
+    </div>
+
+    <div class="file-meta" id="fileMeta" style="display: none;">
+      <div>
+        <b id="fileName">—</b>
+        <span id="fileSize">—</span>
+      </div>
+      <button type="button" class="button outline" id="changeFileBtn" style="font-size: 11px; padding: 4px 8px;">เปลี่ยนไฟล์</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap" style="display: none;">
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-status">
+        <span id="progressText">กำลังอัปโหลด…</span>
+        <span id="progressPercent">0%</span>
+      </div>
+    </div>
+
+    <button type="button" class="btn-submit" id="startUploadBtn" disabled>เริ่มอัปโหลดไฟล์ฐานข้อมูล</button>
+    <div id="statusMsg" class="status-msg" style="display: none;"></div>
+
+    <a href="/" class="back-home">← กลับไปที่หน้าหลัก GovAsset</a>
+
+    <div class="tips-box">
+      <b>💡 คำแนะนำ:</b><br>
+      • เลือกไฟล์ฐานข้อมูลจากเครื่องของคุณที่พาธ: <code>d:\Smart-Asset\data\prototype.sqlite3</code><br>
+      • เมื่ออัปโหลดครบ 100% เซิร์ฟเวอร์จะตรวจสอบความสมบูรณ์ (Integrity Check) และสลับไปใช้ฐานข้อมูลจริงทันที<br>
+      • ข้อมูลจะถูกจัดเก็บลงใน Persistent Volume ของ Railway อย่างถาวร
+    </div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const input = document.getElementById('dbFileInput');
+    const fileMeta = document.getElementById('fileMeta');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const changeBtn = document.getElementById('changeFileBtn');
+    const startBtn = document.getElementById('startUploadBtn');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const progressPercent = document.getElementById('progressPercent');
+    const statusMsg = document.getElementById('statusMsg');
+
+    let selectedFile = null;
+
+    dropzone.onclick = () => input.click();
+    changeBtn.onclick = () => input.click();
+
+    dropzone.ondragover = e => { e.preventDefault(); dropzone.classList.add('dragover'); };
+    dropzone.ondragleave = () => dropzone.classList.remove('dragover');
+    dropzone.ondrop = e => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    };
+
+    input.onchange = () => {
+      if (input.files.length) handleFile(input.files[0]);
+    };
+
+    function handleFile(file) {
+      if (!file.name.match(/\.(sqlite3|db|sqlite)$/i)) {
+        showStatus('กรุณาเลือกไฟล์ฐานข้อมูล SQLite (.sqlite3 หรือ .db)', 'error');
+        return;
+      }
+      selectedFile = file;
+      fileName.textContent = file.name;
+      fileSize.textContent = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
+      dropzone.style.display = 'none';
+      fileMeta.style.display = 'flex';
+      startBtn.disabled = false;
+      statusMsg.style.display = 'none';
+    }
+
+    startBtn.onclick = () => {
+      if (!selectedFile) return;
+      if (!confirm(`ยืนยันการนำเข้าไฟล์ ${selectedFile.name} (${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB) ขึ้นสู่เซิร์ฟเวอร์?`)) return;
+
+      startBtn.disabled = true;
+      progressWrap.style.display = 'block';
+      statusMsg.style.display = 'none';
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/admin/upload-database', true);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          progressFill.style.width = percent + '%';
+          progressPercent.textContent = percent + '%';
+          progressText.textContent = `กำลังส่งข้อมูล (${(e.loaded / (1024 * 1024)).toFixed(1)} / ${(e.total / (1024 * 1024)).toFixed(1)} MB)…`;
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          try {
+            const res = JSON.parse(xhr.responseText);
+            progressFill.style.width = '100%';
+            progressPercent.textContent = '100%';
+            progressText.textContent = 'เสร็จสมบูรณ์!';
+            showStatus(`✅ ${res.message || 'นำเข้าฐานข้อมูลเรียบร้อยแล้ว'}! กำลังพากลับหน้าหลักใน 3 วินาที…`, 'success');
+            setTimeout(() => window.location.href = '/', 3500);
+          } catch (err) {
+            showStatus('นำเข้าสำเร็จ แต่ไม่สามารถอ่านการตอบกลับได้', 'success');
+          }
+        } else {
+          try {
+            const err = JSON.parse(xhr.responseText);
+            showStatus(`❌ เกิดข้อผิดพลาด (${xhr.status}): ${err.error || 'ไม่สามารถอัปโหลดได้'}`, 'error');
+          } catch {
+            showStatus(`❌ เกิดข้อผิดพลาด (${xhr.status}): ไม่สามารถอัปโหลดไฟล์ได้`, 'error');
+          }
+          startBtn.disabled = false;
+        }
+      };
+
+      xhr.onerror = () => {
+        showStatus('❌ การเชื่อมต่อล้มเหลว กรุณาตรวจสอบอินเทอร์เน็ตหรือขนาดไฟล์', 'error');
+        startBtn.disabled = false;
+      };
+
+      xhr.send(selectedFile);
+    };
+
+    function showStatus(msg, type) {
+      statusMsg.textContent = msg;
+      statusMsg.className = 'status-msg ' + type;
+      statusMsg.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
