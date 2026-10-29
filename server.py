@@ -22,6 +22,17 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 from asset_api import handle as handle_asset_api
 from smart_assets import base_url, branding, public_asset, public_receipt, qr_url, token_for
+from qr_smart import (
+    initialize as initialize_qr_smart,
+    handle as handle_qr_smart,
+    require_flag as require_qr_flag,
+    guard_guest_report,
+    mark_guest_ticket,
+    ensure_guest_screened,
+    screen_guest_on_review,
+    ticket_scope_sql,
+    flags as qr_flags,
+)
 from work_api import handle as handle_work_api, WorkError, generate_due
 from register_forms import handle as handle_register_form
 from notifications import handle as handle_notifications, NotificationError, approval_threshold
@@ -309,6 +320,7 @@ def initialize() -> None:
                     db.execute("INSERT INTO ticket_events(ticket_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)", (cur.lastrowid, ROLE_OFFICER, "อัปเดตตัวอย่าง", "รับแจ้งใหม่", status, "สถานะเริ่มต้นในชุดข้อมูลสาธิต", created))
 
         seed_starter_catalog(db)
+        initialize_qr_smart(db)
 
 
 def asset_dict(row: sqlite3.Row) -> dict:
@@ -331,6 +343,11 @@ def ticket_dict(row: sqlite3.Row) -> dict:
         "finalCostApprovalRequired": bool(row["final_cost_approval_required"]), "finalCostStatus": row["final_cost_status"], "finalCostApprovedBy": row["final_cost_approved_by"],
         "assignedTo": row["assigned_to"], "workNotes": row["work_notes"], "actualCost": row["actual_cost"],
         "closeNote": row["close_note"], "createdAt": row["created_at"], "updatedAt": row["updated_at"], "closedAt": row["closed_at"],
+        "sourceChannel": row["source_channel"] if "source_channel" in row.keys() else "staff",
+        "locationPointId": row["location_point_id"] if "location_point_id" in row.keys() else None,
+        "problemType": row["problem_type"] if "problem_type" in row.keys() else "",
+        "guestScreened": bool(row["guest_screened"]) if "guest_screened" in row.keys() else True,
+        "contactVerified": bool(row["contact_verified"]) if "contact_verified" in row.keys() else False,
     }
 
 
@@ -376,6 +393,9 @@ class Handler(BaseHTTPRequestHandler):
             ctx = access.authenticate(db,self,method,path,body)
             if path == '/api/health' and access.required(): return {'ok':True,'database':'sqlite'}
             access.authorize(db,ctx,method,path,query,body)
+            qr = handle_qr_smart(self, db, method, path, query, body, self.qr_origin())
+            if qr is not None:
+                return qr
             result = self.route_api(db,method,path,query,body)
             if ctx and method not in ('GET','HEAD'):
                 db.execute('INSERT INTO account_events(actor,kind,before_json,after_json) VALUES(?,?,?,?)',(ctx['user']['username'],'request','{}',json.dumps({'method':method,'path':path,'accountId':ctx['accountId'],'branchId':ctx['branchId'],'action':body.get('action')},ensure_ascii=False)))
@@ -421,7 +441,7 @@ class Handler(BaseHTTPRequestHandler):
                 return {"ok": True, "database": "sqlite", "approvalThreshold": approval_threshold(db), "assets": db.execute("SELECT COUNT(*) FROM assets").fetchone()[0]}
             if method == "GET" and path == "/api/config":
                 imported = bool(db.execute("SELECT 1 FROM source_documents WHERE source_kind='workbook' LIMIT 1").fetchone())
-                return {"approvalThreshold": approval_threshold(db), "roles": [ROLE_REQUESTER, ROLE_OFFICER, ROLE_APPROVER, ROLE_TECHNICIAN], "demoOnly": True, "dataMode": "imported-test" if imported else "demo"}
+                return {"approvalThreshold": approval_threshold(db), "roles": [ROLE_REQUESTER, ROLE_OFFICER, ROLE_APPROVER, ROLE_TECHNICIAN], "demoOnly": True, "dataMode": "imported-test" if imported else "demo", "featureFlags": qr_flags(db)["flags"]}
             if method == "POST" and path in {"/api/sticker/render", "/api/sticker/bulk-render", "/api/sticker/print"}:
                 body = {**body, "baseUrl": self.qr_origin()}
             extended = handle_asset_api(db, method, path, query, body)
@@ -441,7 +461,7 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET" and path == "/api/survey":
                 return [survey_dict(row) for row in db.execute("SELECT * FROM survey_items ORDER BY id")]
             if method == "GET" and path == "/api/tickets":
-                return [ticket_dict(row) for row in db.execute("SELECT t.* FROM tickets t LEFT JOIN assets a ON a.id=t.asset_id WHERE "+access.scope_sql(db)+" ORDER BY t.id DESC")]
+                return [ticket_dict(row) for row in db.execute("SELECT t.* FROM tickets t LEFT JOIN assets a ON a.id=t.asset_id WHERE "+ticket_scope_sql(db)+" ORDER BY t.id DESC")]
             if method == "GET" and re.fullmatch(r"/api/tickets/[0-9]+", path):
                 try:
                     ticket_id = int(path.rsplit("/", 1)[1])
@@ -478,7 +498,7 @@ class Handler(BaseHTTPRequestHandler):
     def smart_api(self, db, method, path, query, body):
         if method == "GET" and path == "/api/overview":
             assets = db.execute("SELECT COUNT(*),COALESCE(SUM(status IN ('รออนุมัติ','รอตรวจสอบ')),0) FROM assets a WHERE "+access.scope_sql(db)).fetchone()
-            repairs = db.execute("SELECT COUNT(*),COALESCE(SUM(t.status NOT IN ('ปิดงาน','ยกเลิก','ไม่อนุมัติ')),0),COALESCE(SUM(CASE WHEN t.status NOT IN ('ยกเลิก','ไม่อนุมัติ') THEN actual_cost ELSE 0 END),0) FROM tickets t LEFT JOIN assets a ON a.id=t.asset_id WHERE "+access.scope_sql(db)).fetchone()
+            repairs = db.execute("SELECT COUNT(*),COALESCE(SUM(t.status NOT IN ('ปิดงาน','ยกเลิก','ไม่อนุมัติ')),0),COALESCE(SUM(CASE WHEN t.status NOT IN ('ยกเลิก','ไม่อนุมัติ') THEN actual_cost ELSE 0 END),0) FROM tickets t LEFT JOIN assets a ON a.id=t.asset_id WHERE "+ticket_scope_sql(db)).fetchone()
             return {"assets": assets[0], "pendingAssets": assets[1], "tickets": repairs[0], "activeRepairs": repairs[1], "actualRepairCost": repairs[2], "activeCategories": db.execute("SELECT COUNT(*) FROM asset_categories WHERE is_active=1").fetchone()[0]}
         if path == "/api/branding":
             if method == "GET":
@@ -531,16 +551,24 @@ class Handler(BaseHTTPRequestHandler):
             return after
         match = re.fullmatch(r"/api/scan/([A-Za-z0-9_-]{32})(/repairs)?", path)
         if match:
+            require_qr_flag(db, "assetQr", "ยังไม่ได้เปิด Asset QR")
             row = db.execute("SELECT a.* FROM assets a JOIN asset_qr_links q ON q.asset_id=a.id WHERE q.token=?", (match[1],)).fetchone()
             if row is None:
                 raise ApiError("ไม่พบ QR นี้ กรุณาตรวจฉลากหรือติดต่อเจ้าหน้าที่พัสดุ", 404)
             if method == "GET" and not match[2]:
-                return public_asset(db, row)
+                view = public_asset(db, row)
+                view.pop("custodian", None)
+                return view
             if method == "POST" and match[2]:
+                require_qr_flag(db, "guestReporting")
+                require_qr_flag(db, "repairManagement")
                 clean_text(body.get("contact"), 160, "ช่องทางติดต่อ")
+                issue = clean_text(body.get("issue"), 3000, "อาการ")
+                guard_guest_report(db, self, "asset:" + str(row["id"]), body, issue)
                 ticket, status = self.create_ticket(db, {**{k: body[k] for k in ("issue", "requester", "contact", "urgency", "reporterNote", "locationMismatch") if k in body}, "assetId": row["id"], "assetName": row["name"], "assetCode": row["code"], "location": row["location"] or body.get("location", "")})
                 receipt = secrets.token_urlsafe(24)
                 db.execute("INSERT INTO ticket_receipts(ticket_id,token) VALUES(?,?)", (ticket["id"], receipt))
+                mark_guest_ticket(db, ticket["id"], "asset_qr", self, {"ticket": ticket["ticketNo"]})
                 return {"ticketNo": ticket["ticketNo"], "receiptToken": receipt, "status": ticket["status"]}, status
             raise ApiError("ไม่รองรับคำสั่งนี้", 405)
         match = re.fullmatch(r"/api/receipts/([A-Za-z0-9_-]{32})(/action)?", path)
@@ -754,10 +782,13 @@ class Handler(BaseHTTPRequestHandler):
         stamp = now_iso()
         fields = {}
 
+        if action != "review":
+            ensure_guest_screened(row, action)
         if action == "review":
             require_role(actor, ROLE_OFFICER)
             if old != "รับแจ้งใหม่":
                 raise ApiError("ตรวจรับได้เฉพาะ Ticket ใหม่")
+            screen_guest_on_review(db, ticket_id)
             estimate = safe_money(body.get("estimateCost", 0))
             flags = [bool(body.get("requiresPurchase")), bool(body.get("requiresExternal")), bool(body.get("requiresReplacement"))]
             threshold = approval_threshold(db)
@@ -857,7 +888,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
-        if re.fullmatch(r"/(q|t)/[A-Za-z0-9_-]{32}", path):
+        if re.fullmatch(r"/(q|t|l)/[A-Za-z0-9_-]{32}", path):
             path = "/scan.html"
         if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
             folder = None
@@ -895,7 +926,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}", flush=True)
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/qr-smart.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -920,7 +951,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
-        if re.fullmatch(r"/(q|t)/[A-Za-z0-9_-]{32}", path):
+        if re.fullmatch(r"/(q|t|l)/[A-Za-z0-9_-]{32}", path):
             path = "/scan.html"
         if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
             folder = None
@@ -957,7 +988,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/qr-smart.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return

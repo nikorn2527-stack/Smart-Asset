@@ -99,7 +99,7 @@ def new_session(db,handler,user):
 
 def authenticate(db,handler,method,path,body):
     if not required():db.access=None;return None
-    if path=='/api/health' or re.fullmatch(r'/api/(scan|receipts)/[A-Za-z0-9_-]{32}(?:/repairs|/action)?',path):return None
+    if path=='/api/health' or path=='/api/qr/public-config' or re.fullmatch(r'/api/(scan|receipts)/[A-Za-z0-9_-]{32}(?:/repairs|/action)?',path) or re.fullmatch(r'/api/places/[A-Za-z0-9_-]{32}(?:/reports)?',path):return None
     user,session=session_user(db,handler)
     if method not in ('GET','HEAD'):
         origin_check(handler)
@@ -236,9 +236,14 @@ def authorize(db,ctx,method,path,query,body):
     if asset:can_asset(db,int(asset[1]))
     ticket=re.match(r'/api/tickets/(\d+)(?:/|$)',path)
     if ticket:
-        r=db.execute('SELECT asset_id FROM tickets WHERE id=?',(int(ticket[1]),)).fetchone()
+        r=db.execute('SELECT asset_id,location_point_id FROM tickets WHERE id=?',(int(ticket[1]),)).fetchone()
         if not r:fail('ไม่พบคำขอ',404)
         if r[0] is not None:can_asset(db,r[0])
+        elif r[1] is not None:
+            loc=db.execute('SELECT account_id,branch_id FROM service_locations WHERE id=?',(r[1],)).fetchone()
+            if not loc:fail('ไม่พบจุดบริการของคำขอนี้',404)
+            if aid is not None and loc['account_id'] not in (None,aid):fail('ไม่มีสิทธิ์เข้าถึงคำแจ้งนี้',404)
+            if bid is not None and loc['branch_id'] not in (None,bid):fail('ไม่มีสิทธิ์เข้าถึงคำแจ้งนี้',404)
         elif aid is not None:fail('คำขอยังไม่เชื่อมครุภัณฑ์ในองค์กรที่ได้รับสิทธิ์',404)
     supply=re.match(r'/api/supply/(documents|files)/(\d+)',path)
     if supply:
@@ -272,18 +277,18 @@ def authorize(db,ctx,method,path,query,body):
     if path.startswith('/api/sticker/'):
         if not perms['export']:fail('ไม่ได้รับสิทธิ์ส่งออกหรือพิมพ์')
         return
-    if path.startswith(('/api/operational-master','/api/supply/settings','/api/governance/branches','/api/governance/profiles','/api/governance/catalog','/api/governance/bindings','/api/workspace/categories')):
+    if path.startswith(('/api/operational-master','/api/supply/settings','/api/governance/branches','/api/governance/profiles','/api/governance/catalog','/api/governance/bindings','/api/workspace/categories','/api/features')):
         needed='manage'
     elif body.get('action') in ('approve','reject','approve_final_cost','reject_final_cost') or path.endswith('/action') and body.get('action') in ('approve','reject'):
         needed='approve'
     elif path.startswith('/api/work/items/') or path.endswith('/action') and body.get('action') in ('complete','resume','wait_parts'):
         if not (perms['work'] or perms['edit']):fail('ไม่ได้รับสิทธิ์ดำเนินงาน')
         return
-    elif path in ('/api/assets','/api/tickets','/api/supply/documents','/api/work/plans','/api/imports/preview','/api/imports/commit'):needed='create'
+    elif path in ('/api/assets','/api/tickets','/api/supply/documents','/api/work/plans','/api/imports/preview','/api/imports/commit','/api/qr/locations'):needed='create'
     else:needed='edit'
     if not perms[needed]:fail('ไม่ได้รับสิทธิ์'+{'manage':'จัดการตั้งค่า','approve':'อนุมัติ','create':'เพิ่มข้อมูล','edit':'แก้ไขข้อมูล'}[needed])
     # Mutations in unknown modules fail closed for ordinary users.
-    known=('/api/assets','/api/tickets','/api/supply/','/api/work/','/api/workspace/','/api/governance/','/api/operational-master','/api/imports/','/api/equipment/','/api/catalog/','/api/backups','/api/line/','/api/branding','/api/workflow/settings','/api/survey')
+    known=('/api/assets','/api/tickets','/api/supply/','/api/work/','/api/workspace/','/api/governance/','/api/operational-master','/api/imports/','/api/equipment/','/api/catalog/','/api/backups','/api/line/','/api/branding','/api/workflow/settings','/api/survey','/api/features','/api/qr/','/api/lifecycle/')
     if not path.startswith(known):fail('เส้นทางนี้ยังไม่เปิดให้สิทธิ์ระดับองค์กร')
 
 def filter_result(db,path,value):

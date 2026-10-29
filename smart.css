@@ -19,3 +19,26 @@ body{background:#f3f6fa}.panel{border-radius:16px;box-shadow:0 3px 16px #16354a0
 .scan-card input[readonly]{background:#edf3f7;color:#27485d;cursor:default}
 .scan-card .scan-location-check{display:flex;align-items:flex-start;gap:9px;font-weight:500}
 .scan-location-check input{width:18px;height:18px;padding:0;margin:0;flex:none;accent-color:#245eaa}
+
+/* QR Smart scan hub and settings (append-only; do not restyle the rest of the app). */
+.scan-legal-notice{max-width:720px;margin:0 auto 16px;padding:0 20px;color:#6c8394;font-size:12px;line-height:1.7;text-align:center}
+.scan-legal{margin-top:16px}
+.scan-services{display:grid;gap:10px;margin:20px 0 8px}
+.scan-service-btn{min-height:48px}
+.scan-service-btn.is-active,.scan-button.scan-service-btn[aria-pressed=true]{background:#0c5f62;border-color:#0c5f62}
+.scan-service-panel{margin-top:8px}
+.scan-service-panel:empty{display:none}
+.scan-honeypot{position:absolute!important;left:-10000px;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%)}
+.scan-card form{position:relative}
+#scanServiceStatus{min-height:1.4em;color:#c44538;font-size:13px}
+.qr-smart-flags{display:grid;gap:10px;margin:12px 0 20px}
+.qr-smart-flag{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #dfe8ee;border-radius:10px;min-height:44px}
+.qr-smart-flag b{display:block}
+.qr-smart-flag small{display:block;font-weight:400;color:#64798b}
+.qr-smart-location{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}
+.qr-smart-location>div{min-width:0;flex:1}
+.qr-smart-location strong,.qr-smart-location span,.qr-smart-location small{display:block}
+.qr-smart-location span,.qr-smart-location small{font-size:12px;color:#64798b;font-weight:400}
+.qr-smart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.qr-smart-location-form{margin-top:16px;padding-top:8px}
+@media(max-width:540px){.scan-services{gap:8px}.qr-smart-location{flex-direction:column}.qr-smart-location .button{width:100%;min-height:44px}}

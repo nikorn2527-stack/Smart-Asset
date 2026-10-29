@@ -97,7 +97,7 @@
     ] },
     { name: 'ทะเบียนและหลักเกณฑ์', views: ['equipment', 'operational-master', 'administration', 'numbering', 'codes', 'depreciation'] },
     { name: 'เอกสารและการพิมพ์', views: ['stickers'] },
-    { name: 'การทำงานและการเชื่อมต่อ', views: ['supply-settings'], entries: [
+    { name: 'การทำงานและการเชื่อมต่อ', views: ['supply-settings', 'qr-smart'], entries: [
       { id: 'workflowSettings', icon: '✓', name: 'แจ้งเตือนและเกณฑ์ส่งอนุมัติ', description: 'วงเงินส่งพิจารณางานซ่อม และจำนวนวันเตือนงานล่วงหน้า', keywords: 'PM ตรวจนับ ซ่อม reminder' },
       { id: 'lineSettings', icon: '↗', name: 'เชื่อมต่อ LINE', description: 'ผู้รับตามบทบาท สถานะการเชื่อมต่อ และผลส่งข้อความ', keywords: 'OA Messaging API webhook แจ้งเตือน' }
     ] }
