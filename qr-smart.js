@@ -84,10 +84,12 @@
   function renderLocations() {
     const list = $('#qrSmartLocationList');
     const on = Boolean(features.flags?.locationQr);
-    $('#qrSmartLocationsPanel').hidden = false;
+    $('#qrSmartLocationsPanel').hidden = !on;
+    const notice = $('#qrSmartSimpleNotice');
+    if (notice) notice.hidden = on && Boolean(features.flags?.borrowIssueReturn);
     $('#qrSmartNewLocation').disabled = !on || !canWrite();
     if (!on) {
-      list.innerHTML = '<p class="field-hint">เปิด Location QR ก่อนจึงจะจัดการจุดบริการได้</p>';
+      list.innerHTML = '';
       $('#qrSmartLocationForm').hidden = true;
       return;
     }

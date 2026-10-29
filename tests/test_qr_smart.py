@@ -73,6 +73,7 @@ class QrSmart(HTTPFixture):
         self.assertEqual(ticket['assetId'], aid)
         self.assertNotEqual(ticket['assetCode'], 'forged')
         self.assertFalse(ticket['guestScreened'])
+        self.assertTrue(ticket['provisional'])
         self.assertEqual(ticket['sourceChannel'], 'asset_qr')
         self.assertIn('receiptToken', receipt)
         self.call('/api/receipts/' + receipt['receiptToken'])
@@ -177,6 +178,20 @@ class QrSmart(HTTPFixture):
         assigned = self.action(tid, 'assign', OFFICER, assignedTo='ช่าง A')
         self.assertEqual(assigned['status'], 'กำลังซ่อม')
         self.assertEqual(assigned['assignedTo'], 'ช่าง A')
+
+    def test_user_qr_report_can_be_dismissed_as_not_genuine(self):
+        aid = self.asset(self.uniq('FAKE'))
+        token = self.smart(aid)['qrUrl'].rsplit('/', 1)[1]
+        receipt = self.call(f'/api/scan/{token}/repairs', {
+            'requester': 'ผู้ทดสอบ', 'contact': '1', 'issue': self.uniq('อาจไม่จริง')}, expected=201)
+        ticket = self.smart(aid)['tickets'][0]
+        self.assertTrue(ticket['provisional'])
+        dismissed = self.action(ticket['id'], 'dismiss', OFFICER, note='ทดลองกด ไม่ใช่เครื่องเสียจริง')
+        self.assertEqual(dismissed['status'], 'ยกเลิก')
+        self.assertFalse(dismissed['provisional'])
+        tracked = self.call('/api/receipts/' + receipt['receiptToken'])
+        self.assertEqual(tracked['status'], 'ยกเลิก')
+        self.assertFalse(tracked['canConfirm'])
 
     def test_lifecycle_intake_loan_return_and_overdue(self):
         self.enable_location_and_borrow()

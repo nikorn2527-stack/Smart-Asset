@@ -348,6 +348,8 @@ def ticket_dict(row: sqlite3.Row) -> dict:
         "problemType": row["problem_type"] if "problem_type" in row.keys() else "",
         "guestScreened": bool(row["guest_screened"]) if "guest_screened" in row.keys() else True,
         "contactVerified": bool(row["contact_verified"]) if "contact_verified" in row.keys() else False,
+        "provisional": (row["source_channel"] in ("asset_qr", "location_qr") if "source_channel" in row.keys() else False)
+        and not (bool(row["guest_screened"]) if "guest_screened" in row.keys() else True),
     }
 
 
@@ -782,7 +784,7 @@ class Handler(BaseHTTPRequestHandler):
         stamp = now_iso()
         fields = {}
 
-        if action != "review":
+        if action not in ("review", "dismiss"):
             ensure_guest_screened(row, action)
         if action == "review":
             require_role(actor, ROLE_OFFICER)
@@ -867,6 +869,15 @@ class Handler(BaseHTTPRequestHandler):
             if action == "confirm":
                 fields["closed_at"] = stamp
                 note = note or "ผู้แจ้งยืนยันรับมอบงานแล้ว"
+        elif action == "dismiss":
+            require_role(actor, ROLE_OFFICER)
+            if old != "รับแจ้งใหม่":
+                raise ApiError("ปิดว่าแจ้งไม่จริงได้เฉพาะคำแจ้งใหม่")
+            screen_guest_on_review(db, ticket_id)
+            new = "ยกเลิก"
+            fields["guest_screened"] = 1
+            fields["close_note"] = note or "ตรวจแล้วไม่ใช่การแจ้งจริง"
+            note = fields["close_note"]
         elif action == "cancel":
             if actor not in (ROLE_REQUESTER, ROLE_OFFICER):
                 raise ApiError("ยกเลิกได้โดยผู้แจ้งหรือเจ้าหน้าที่พัสดุเท่านั้น", 403)

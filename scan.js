@@ -180,7 +180,7 @@
           return '';
         }
         panel.innerHTML = `<span class="scan-kicker">REPAIR REQUEST</span><h2>พบปัญหา ให้เราช่วยดูแล</h2>
-          <p>แจ้งอาการและช่องทางติดต่อ เจ้าหน้าที่จะรับเรื่องและประสานงานซ่อมให้</p>
+          <p>ส่งคำแจ้งได้เลย ใบจะเข้าสถานะรับแจ้งใหม่ เจ้าหน้าที่จะตรวจว่าเป็นปัญหาจริงหรือไม่ ก่อนเปิดงานซ่อม</p>
           <form id="scanRepairForm">
             ${honeypot()}
             <label>อาการหรือปัญหาที่พบ <span>*</span><textarea name="issue" required maxlength="3000" rows="4" placeholder="เช่น เปิดเครื่องไม่ติด มีเสียงผิดปกติ เริ่มพบเมื่อใด"></textarea></label>
