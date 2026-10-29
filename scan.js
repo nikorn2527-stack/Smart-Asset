@@ -158,7 +158,7 @@
       return true;
     }) : [];
     const services = [...guest, ...staff];
-    main.innerHTML = `<div class="scan-breadcrumb">ข้อมูลจาก QR ประจำครุภัณฑ์ <span>✓ ข้อมูลล่าสุด</span></div>
+    main.innerHTML = `<div class="scan-breadcrumb">ฉลากติดที่ตัวครุภัณฑ์ · หนึ่งเครื่องหนึ่งฉลาก <span>✓ ข้อมูลล่าสุด</span></div>
       <section class="scan-card scan-asset-card">
         <div class="scan-asset-symbol">▤</div>
         <span class="scan-kicker">ASSET QR</span>
@@ -325,7 +325,7 @@
     }) : [];
     const services = [...guest, ...staff];
     const assets = place.active ? (place.guestAssets || []) : [];
-    main.innerHTML = `<div class="scan-breadcrumb">ข้อมูลจาก QR ประจำสถานที่ <span>${place.active ? '✓ พร้อมรับบริการ' : 'ปิดรับคำแจ้งใหม่'}</span></div>
+    main.innerHTML = `<div class="scan-breadcrumb">${esc(place.placement || 'ฉลากติดที่จุดพื้นที่ ไม่ใช่ตัวครุภัณฑ์')} <span>${place.active ? '✓ พร้อมรับบริการ' : 'ปิดรับคำแจ้งใหม่'}</span></div>
       <section class="scan-card">
         <span class="scan-kicker">LOCATION QR</span>
         <h1>${esc(place.name)}</h1>

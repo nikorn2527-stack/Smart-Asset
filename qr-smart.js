@@ -103,9 +103,31 @@
           <label>URL ของ Location QR<input readonly value="${esc(item.qrUrl || '')}"></label>
           <label>โทเคน (คงที่เมื่อเปลี่ยนชื่อ)<input readonly value="${esc(item.qrToken || '')}"></label>
         </div>
-        <button type="button" class="button outline" data-edit-location="${item.id}" ${canWrite()?'':'disabled'}>แก้ไข</button>
+        <div class="dialog-actions">
+          <button type="button" class="button outline" data-print-location="${item.id}">พิมพ์ฉลากจุด</button>
+          <button type="button" class="button outline" data-edit-location="${item.id}" ${canWrite()?'':'disabled'}>แก้ไข</button>
+        </div>
       </article>`;
-    }).join('') : '<p class="field-hint">ยังไม่มีจุดบริการ กดเพิ่มจุดบริการเพื่อสร้าง Location QR</p>';
+    }).join('') : '<p class="field-hint">ยังไม่มีจุดบริการ กดเพิ่มจุดบริการตามมาตรฐาน แล้วพิมพ์ฉลากไปติดที่ประตูหรือเคาน์เตอร์</p>';
+  }
+
+  function printLocation(item) {
+    const branding = window.govAssetBranding || {};
+    const name = item.publicName || item.public_name || item.name || 'จุดบริการ';
+    const kind = KIND_LABELS[item.kind] || item.kind || 'จุดบริการ';
+    const frame = document.createElement('iframe');
+    frame.className = 'smart-print-frame';
+    frame.title = 'พิมพ์ฉลาก Location QR';
+    document.body.append(frame);
+    const doc = frame.contentDocument;
+    doc.open();
+    doc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>Location QR ${esc(name)}</title><style>@page{size:80mm 70mm;margin:3mm}*{box-sizing:border-box}body{font:11px Tahoma,sans-serif;margin:0;color:#123d56}.label{width:72mm;border:1px solid #b7c8d5;border-radius:3mm;padding:3mm;text-align:center}header{display:flex;align-items:center;gap:2mm;justify-content:center}header img{width:9mm;height:9mm;object-fit:contain}.qr{width:28mm;height:28mm;display:block;margin:auto}b{display:block}.kicker{font-size:8px;letter-spacing:.12em;color:#087e82;margin:1mm 0}p{margin:1mm}</style></head><body><div class="label"><header><img src="${esc(branding.logo || `${location.origin}/assets/govasset-mark-optimized.png`)}" alt=""><b>${esc(branding.organization || 'GovAsset')}</b></header><p class="kicker">LOCATION QR · ติดที่จุดพื้นที่</p><img class="qr" src="${esc(item.qrImage || '')}" alt="QR"><b>${esc(name)}</b><p>${esc(kind)}</p><p>แจ้งปัญหาของห้องหรือจุดบริการ ห้ามติดบนตัวเครื่อง</p></div></body></html>`);
+    doc.close();
+    Promise.all([...doc.images].map(img => img.decode().catch(() => {}))).then(() => {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    });
+    frame.contentWindow.addEventListener('afterprint', () => frame.remove(), {once: true});
   }
 
   function showLocationForm(item = null) {
@@ -118,7 +140,7 @@
     const ids = (item?.guestAssetIds || []).join(', ');
     form.hidden = false;
     form.innerHTML = `<h3>${item ? 'แก้ไขจุดบริการ' : 'เพิ่มจุดบริการ'}</h3>
-      <p class="field-hint">เปลี่ยนชื่อได้ โทเคนและ URL ของ QR ยังคงเดิม ไม่มีปุ่มลบ ให้ปิดใช้งานชั่วคราวแทน</p>
+      <p class="field-hint">มาตรฐาน: ฉลากจุดนี้ติดที่ประตูห้อง เคาน์เตอร์ หรือโถง ไม่ติดบนครุภัณฑ์ เปลี่ยนชื่อได้ โทเคนเดิม ไม่มีปุ่มลบ ให้ปิดใช้งานชั่วคราวแทน</p>
       ${item ? `<label>URL ของ Location QR<input readonly value="${esc(item.qrUrl || '')}"></label>
         <label>โทเคน<input readonly value="${esc(item.qrToken || '')}"></label>` : ''}
       <div class="qr-smart-grid">
@@ -226,7 +248,18 @@
 
   $('#qrSmartNewLocation').onclick = () => showLocationForm();
 
-  $('#qrSmartLocationList').onclick = event => {
+  $('#qrSmartLocationList').onclick = async event => {
+    const printBtn = event.target.closest('[data-print-location]');
+    if (printBtn) {
+      try {
+        const item = await call(`/api/qr/locations/${printBtn.dataset.printLocation}`);
+        if (!item.qrImage) throw new Error('ยังสร้างภาพ QR ของจุดนี้ไม่ได้');
+        printLocation(item);
+      } catch (error) {
+        status(error.message, true);
+      }
+      return;
+    }
     const button = event.target.closest('[data-edit-location]');
     if (!button) return;
     const item = locations.find(row => String(row.id) === button.dataset.editLocation);

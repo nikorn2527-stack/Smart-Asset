@@ -277,21 +277,31 @@ def public_location(db, row):
         "problemTypes": list(PROBLEM_TYPES),
         "guestAssets": assets,
         "notice": "การสแกน QR ไม่ใช่การยืนยันตัวตน และไม่ยืนยันว่าผู้ใช้กำลังอยู่ในสถานที่จริง",
+        "placement": "ฉลากนี้ติดที่จุดพื้นที่ ไม่ใช่ตัวครุภัณฑ์",
         "token": token,
     }
 
 
-def staff_location(db, row, origin=""):
+def staff_location(db, row, origin="", include_qr=False):
     url = location_url(db, row["id"], origin)
     guest_ids = [r[0] for r in db.execute("SELECT asset_id FROM location_guest_assets WHERE location_id=?", (row["id"],))]
-    return {
+    data = {
         **dict(row),
         "isActive": bool(row["is_active"]),
         "guestCanReportPlace": bool(row["guest_can_report_place"]),
         "qrUrl": url,
         "qrToken": location_token(db, row["id"]),
         "guestAssetIds": guest_ids,
+        "placeKind": "location",
+        "placement": "ติดที่ประตูห้อง เคาน์เตอร์ หรือจุดบริการ ไม่ติดบนตัวครุภัณฑ์",
     }
+    if include_qr:
+        try:
+            from asset_api import _qr_data_uri
+            data["qrImage"] = _qr_data_uri(url)
+        except Exception:
+            data["qrImage"] = ""
+    return data
 
 
 def custody(db, asset_id):
@@ -560,7 +570,7 @@ def handle(handler, db, method, path, query, body, origin=""):
                 db.execute("INSERT OR IGNORE INTO location_guest_assets(location_id,asset_id) VALUES(?,?)", (lid, asset["id"]))
             return staff_location(db, location_row(db, lid), origin)
         if method == "GET":
-            return staff_location(db, row, origin)
+            return staff_location(db, row, origin, include_qr=True)
         if method == "PUT":
             return save_location(db, lid, body, origin, handler)
         fail("ไม่รองรับคำสั่งนี้", 405)

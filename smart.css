@@ -40,5 +40,9 @@ body{background:#f3f6fa}.panel{border-radius:16px;box-shadow:0 3px 16px #16354a0
 .qr-smart-location strong,.qr-smart-location span,.qr-smart-location small{display:block}
 .qr-smart-location span,.qr-smart-location small{font-size:12px;color:#64798b;font-weight:400}
 .qr-smart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.qr-smart-standard{padding:20px 24px;margin-bottom:16px}
+.qr-smart-standard h2{margin:0 0 10px;font-size:16px}
+.qr-smart-standard ol{margin:0;padding-left:20px;display:grid;gap:10px;color:#314d62;font-size:13px;line-height:1.6}
+.qr-smart-standard b{color:#16354a}
 .qr-smart-location-form{margin-top:16px;padding-top:8px}
 @media(max-width:540px){.scan-services{gap:8px}.qr-smart-location{flex-direction:column}.qr-smart-location .button{width:100%;min-height:44px}}

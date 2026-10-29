@@ -258,7 +258,7 @@
               <div class="panel-heading">
                 <div>
                   <h2>ค้นหาและเลือกครุภัณฑ์</h2>
-                  <p>เลือกรายการเพื่อสั่งพิมพ์ฉลาก</p>
+                  <p>พิมพ์ฉลากติดตัวเครื่อง หนึ่งเครื่องหนึ่งฉลาก Location QR พิมพ์จากตั้งค่า QR Smart</p>
                 </div>
                 <span id="stickerSelectionCount" class="sheet-count">0 รายการ</span>
               </div>
@@ -548,6 +548,15 @@
           <div class="subpage-nav"><button class="button outline" type="button" data-go-view="settings">← กลับตั้งค่า</button></div>
           <div class="page-heading"><div><div class="eyebrow">QR SMART</div><h1>QR Smart</h1><p>QR ครุภัณฑ์ Location QR แจ้งซ่อม ยืม–เบิก–คืน และติดตามงาน ใช้จากฉลากเดิมได้ทั้งผู้สแกนและเจ้าหน้าที่</p></div></div>
           <p id="qrSmartStatus" role="status"></p>
+          <section class="panel qr-smart-standard" id="qrSmartStandard">
+            <h2>มาตรฐานการวาง QR</h2>
+            <ol>
+              <li><b>ฉลากครุภัณฑ์</b> ติดที่ตัวเครื่อง หนึ่งเครื่องหนึ่งฉลาก ด้านที่สแกนง่าย ไม่บังป้ายเลขทะเบียน สแกนแล้วดูข้อมูล แจ้งซ่อม ยืม–เบิก–คืน ของเครื่องนั้น พิมพ์จากทะเบียนหรือหน้าสติกเกอร์</li>
+              <li><b>Location QR</b> ติดที่ประตูห้อง เคาน์เตอร์ โถง หรือจุดบริการ ไม่ติดบนเครื่อง สแกนแล้วแจ้งปัญหาของพื้นที่ หรือเลือกเครื่องในรายการที่จุดนั้นอนุญาต สร้างจุดด้านล่างแล้วพิมพ์ฉลากจุด</li>
+              <li><b>ผู้ใช้หน้างาน</b> สแกนฉลากด้วยมือถืออย่างเดียว ไม่เข้าแอปเจ้าหน้าที่ การถือ QR ไม่ยืนยันตัวตนและไม่ยืนยันว่าอยู่ห้องนั้นจริง</li>
+              <li><b>เจ้าหน้าที่</b> ทำงานที่คอมพิวเตอร์ คัดกรองจริง/ไม่จริง มอบหมายช่าง บันทึกยืม–เบิก–คืน ลงพื้นที่แผนกนำร่องก่อน แล้วค่อยขยาย จุดชื่อว่าทดสอบใช้ซ้อม อย่าติดของจริง</li>
+            </ol>
+          </section>
           <div class="notice" id="qrSmartSimpleNotice" hidden><span class="notice-icon">i</span><div><b>บริการบางรายการยังปิด</b><p>เปิด Location QR หรือยืม–เบิก–คืนด้านล่างเมื่อหน่วยงานพร้อมใช้งานจุดนั้น</p></div></div>
           <form id="qrSmartFlagsForm" class="panel settings-panel">
             <h2>บริการที่เปิดใช้งาน</h2>
@@ -559,7 +568,7 @@
             <div class="panel-heading">
               <div>
                 <h2>Location QR / จุดบริการ</h2>
-                <p>เปลี่ยนชื่อได้ โทเคนและ URL ยังคงเดิม · ปิดใช้งานแทนการลบ</p>
+                <p>ติดฉลากที่จุดพื้นที่ ไม่ติดบนเครื่อง · เปลี่ยนชื่อได้ โทเคนเดิม · ปิดใช้งานแทนการลบ</p>
               </div>
               <button class="button primary" type="button" id="qrSmartNewLocation">＋ เพิ่มจุดบริการ</button>
             </div>
