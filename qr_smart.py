@@ -31,17 +31,17 @@ DEFAULT_FLAGS = {
     "additionalQrServices": False,
 }
 FLAG_LABELS = {
-    "assetQr": "Asset QR",
-    "locationQr": "Location QR",
-    "guestReporting": "Guest Reporting",
-    "assetIntake": "Asset Intake",
-    "borrowIssueReturn": "Borrow / Issue / Return",
-    "repairManagement": "Repair Management",
-    "returnNotifications": "Return Notifications",
-    "fullAssetRegistration": "Full Asset Registration",
-    "assetNumberGeneration": "Asset Number Generation / FSN",
-    "depreciation": "Depreciation",
-    "additionalQrServices": "Additional QR Services",
+    "assetQr": "QR ครุภัณฑ์",
+    "locationQr": "Location QR / จุดบริการ",
+    "guestReporting": "แจ้งซ่อมจากผู้สแกน",
+    "assetIntake": "รับเข้าครุภัณฑ์",
+    "borrowIssueReturn": "ยืม / เบิก / คืน",
+    "repairManagement": "งานซ่อม",
+    "returnNotifications": "แจ้งเตือนครบกำหนดคืน",
+    "fullAssetRegistration": "ทะเบียนครุภัณฑ์เต็มรูปแบบ",
+    "assetNumberGeneration": "ออกเลขครุภัณฑ์ / FSN",
+    "depreciation": "ค่าเสื่อมราคา",
+    "additionalQrServices": "บริการเพิ่มจาก QR",
 }
 
 SCHEMA = """

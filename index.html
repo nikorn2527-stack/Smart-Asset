@@ -546,12 +546,12 @@
 
         <section class="view" id="view-qr-smart">
           <div class="subpage-nav"><button class="button outline" type="button" data-go-view="settings">← กลับตั้งค่า</button></div>
-          <div class="page-heading"><div><div class="eyebrow">QR SMART</div><h1>QR Smart</h1><p>โหมดเริ่มต้นใช้ QR ครุภัณฑ์เดิม ดูข้อมูล แจ้งซ่อม และติดตามงาน ไม่ต้องติดตั้งจุดพื้นที่จนกว่าหน่วยงานจะพร้อม</p></div></div>
+          <div class="page-heading"><div><div class="eyebrow">QR SMART</div><h1>QR Smart</h1><p>QR ครุภัณฑ์ Location QR แจ้งซ่อม ยืม–เบิก–คืน และติดตามงาน ใช้จากฉลากเดิมได้ทั้งผู้สแกนและเจ้าหน้าที่</p></div></div>
           <p id="qrSmartStatus" role="status"></p>
-          <div class="notice" id="qrSmartSimpleNotice"><span class="notice-icon">i</span><div><b>ใช้แบบง่ายไว้ก่อน</b><p>สแกนฉลากครุภัณฑ์แล้วแจ้งซ่อมได้เลย Location QR และการยืม–เบิก–คืนยังปิดอยู่ จะเปิดทีหลังเมื่อติดตั้งจุดบริการ</p></div></div>
+          <div class="notice" id="qrSmartSimpleNotice" hidden><span class="notice-icon">i</span><div><b>บริการบางรายการยังปิด</b><p>เปิด Location QR หรือยืม–เบิก–คืนด้านล่างเมื่อหน่วยงานพร้อมใช้งานจุดนั้น</p></div></div>
           <form id="qrSmartFlagsForm" class="panel settings-panel">
             <h2>บริการที่เปิดใช้งาน</h2>
-            <p class="field-hint">ค่าเริ่มต้นคงของเดิมไว้ อย่าเปิด Location QR หรือยืม–เบิก–คืนจนกว่าจะติดตั้งและทดลองบนสำเนาฐานแล้ว</p>
+            <p class="field-hint">ติ๊กเปิดบริการที่หน่วยงานใช้ ปิดได้เมื่อยังไม่พร้อม โดยไม่ลบข้อมูลที่บันทึกไว้</p>
             <div id="qrSmartFlagFields" class="qr-smart-flags"></div>
             <button class="button primary" type="submit">บันทึกการเปิด-ปิดบริการ</button>
           </form>

@@ -214,7 +214,7 @@
     try {
       const flags = {};
       event.target.querySelectorAll('input[type=checkbox][name]').forEach(input => { flags[input.name] = input.checked; });
-      features = await call('/api/features', {method:'PUT', body:JSON.stringify({flags, revision:features.revision})});
+      features = await call('/api/features', {method:'PUT', body:JSON.stringify({flags, revision:features.revision, actor:app.getRole?.() || 'เจ้าหน้าที่พัสดุ'})});
       flagFields();
       applyModuleVisibility();
       await Promise.all([loadLocations(), loadOverdue()]);
@@ -275,4 +275,5 @@
     load();
   });
   if (view.classList.contains('active')) load();
+  else loadFeatures().catch(() => {});
 })();

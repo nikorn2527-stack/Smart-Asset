@@ -79,11 +79,12 @@
 
   async function openAsset(id) {
     try {
-      const [data, categories, accountContext, regData] = await Promise.all([
+      const [data, categories, accountContext, regData, life] = await Promise.all([
         app.api(`/api/assets/${id}/smart`),
         app.api('/api/catalog/categories'),
         app.api(`/api/governance/assets/${id}`),
-        app.api(`/api/assets/${id}/register`).catch(() => null)
+        app.api(`/api/assets/${id}/register`).catch(() => null),
+        app.api(`/api/lifecycle/assets/${id}`).catch(() => ({state:{}, history:[]}))
       ]);
       selected = data;
       const a = data.asset, canEdit = app.getRole() === 'เจ้าหน้าที่พัสดุ';
@@ -94,6 +95,7 @@
           <button role="tab" aria-selected="false" data-smart-tab="ledger">📋 ใบคุมทรัพย์สิน</button>
           <button role="tab" aria-selected="false" data-smart-tab="repairs">ประวัติซ่อม (${data.tickets.length})</button>
           <button role="tab" aria-selected="false" data-smart-tab="history">ประวัติทะเบียน</button>
+          <button role="tab" aria-selected="false" data-smart-tab="custody">ยืม / เบิก / คืน</button>
         </div>
         <div class="smart-layout"><div>
           <section data-smart-panel="info"><div class="smart-state"><span class="badge blue">${esc(a.status)}</span><span>${active.length ? `มีงานซ่อมที่กำลังดำเนินการ ${active.length} งาน` : 'ไม่มีงานซ่อมค้าง'}</span></div>
@@ -113,7 +115,23 @@
             </div>
           </section>
           <section data-smart-panel="repairs" hidden><h3>ประวัติงานซ่อม</h3><p class="field-hint">ค่าใช้จ่ายจริงรวม ${data.tickets.filter(t => t.status !== 'ยกเลิก').reduce((sum,t) => sum + Number(t.actualCost || 0), 0).toLocaleString('th-TH')} บาท</p><div class="smart-ticket-list">${data.tickets.map(t => `<button type="button" data-smart-ticket="${t.id}"><span><b>${esc(t.ticketNo)}</b><small>${esc(t.issue)}</small><small>${esc(app.fmtDate(t.createdAt))} · ${esc(t.assignedTo || 'ยังไม่มอบหมาย')}</small></span><span class="badge blue">${esc(t.status)}</span></button>`).join('') || '<div class="smart-empty">ยังไม่มีประวัติซ่อมสำหรับครุภัณฑ์นี้</div>'}</div></section>
-          <section data-smart-panel="history" hidden><h3>ประวัติการเปลี่ยนแปลงทะเบียน</h3><ol class="smart-history">${data.events.map(e => `<li><b>${esc(e.action)}</b><span>${esc(e.actor)} · ${esc(app.fmtDate(e.createdAt))}</span></li>`).join('') || '<li>ยังไม่มีการแก้ไขทะเบียน</li>'}</ol></section></div>
+          <section data-smart-panel="history" hidden><h3>ประวัติการเปลี่ยนแปลงทะเบียน</h3><ol class="smart-history">${data.events.map(e => `<li><b>${esc(e.action)}</b><span>${esc(e.actor)} · ${esc(app.fmtDate(e.createdAt))}</span></li>`).join('') || '<li>ยังไม่มีการแก้ไขทะเบียน</li>'}</ol></section>
+          <section data-smart-panel="custody" hidden>
+            <h3>ยืม เบิก คืน</h3>
+            <p class="field-hint">สถานะถือครอง ${esc(life.state?.loan_status || 'ยังไม่บันทึก')}${life.state?.overdue ? ' · เกินกำหนด' : ''} · ผู้ถือ ${esc(life.state?.custodian || '—')}</p>
+            <form id="smartCustodyForm" class="smart-form">
+              <div class="form-grid">
+                <label>ประเภทงาน<select name="kind" required><option value="loan">ยืม</option><option value="issue">เบิก</option><option value="return">คืน</option></select></label>
+                <label>ผู้ยืม / ผู้เบิก / ผู้รับผิดชอบ<input name="party" required maxlength="160" value="${esc(life.state?.custodian || '')}"></label>
+                <label>กำหนดคืน<input name="dueAt" type="date" value="${esc((life.state?.due_at || '').slice(0,10))}"></label>
+                <label>สถานที่<input name="location" maxlength="300" value="${esc(life.state?.location_text || a.location || '')}"></label>
+              </div>
+              <label>หมายเหตุ<textarea name="note" rows="2" maxlength="1000"></textarea></label>
+              <div class="dialog-actions"><button class="button primary" type="submit">บันทึกรายการ</button></div>
+              <p id="smartCustodyStatus" role="status"></p>
+            </form>
+            <ol class="smart-history">${(life.history||[]).map(e => `<li><b>${esc(e.kind)}</b><span>${esc(e.actor)} · ${esc(app.fmtDate(e.created_at))}${e.note ? ' · ' + esc(e.note) : ''}</span></li>`).join('') || '<li>ยังไม่มีประวัติยืม เบิก คืน</li>'}</ol>
+          </section></div>
           <aside class="smart-qr-card"><span class="eyebrow">SMART ASSET QR</span><img class="smart-qr" src="${data.qrImage}" alt="QR ประจำครุภัณฑ์ ${esc(a.code)}"><h3>หนึ่งฉลาก ข้อมูลล่าสุดเสมอ</h3><p>สแกนดูข้อมูลและแจ้งซ่อมได้ทันที เปลี่ยนชื่อ รหัส หรือที่ตั้งได้โดยใช้ QR เดิม</p><a class="button primary" href="${esc(data.qrUrl)}" target="_blank" rel="noopener">เปิดหน้าสแกน</a><button type="button" class="button outline" id="copySmartUrl">คัดลอกลิงก์</button><button type="button" class="button outline" id="printSmartLabel">พิมพ์ฉลาก QR</button><small>โทรศัพท์ต้องเข้าถึงโดเมนระบบได้ ตั้งค่าโดเมนถาวรก่อนพิมพ์ใช้งาน</small><span>${credit}</span></aside></div>`;
       if(a.accountId) {
         dialog.querySelector('#smartAssetForm [name="code"]').readOnly=true;
@@ -137,6 +155,24 @@
       $('#smartRegister', dialog).onclick = () => { dialog.close(); app.openRegister(a.id); };
       $('#openFullRegisterPage', dialog).onclick = () => { dialog.close(); app.openRegister(a.id); };
       $('#printSmartLabel', dialog).onclick = () => printLabel(data);
+      $('#smartCustodyForm', dialog)?.addEventListener('submit', async event => {
+        event.preventDefault();
+        const button = event.submitter; if (button) button.disabled = true;
+        const statusEl = $('#smartCustodyStatus', dialog);
+        try {
+          const fields = Object.fromEntries(new FormData(event.target));
+          const body = {kind:fields.kind, note:fields.note || '', location:fields.location || '', dueAt:fields.dueAt || '', actor:app.getRole()};
+          if (fields.kind === 'loan') body.borrower = fields.party;
+          else if (fields.kind === 'issue') body.recipient = fields.party;
+          else body.custodian = fields.party;
+          await app.api(`/api/lifecycle/assets/${a.id}`, {method:'POST', body:JSON.stringify(body)});
+          app.toast('บันทึกยืม เบิก หรือคืนแล้ว');
+          await openAsset(a.id);
+        } catch (error) {
+          if (statusEl) statusEl.textContent = error.message;
+          if (button) button.disabled = false;
+        }
+      });
       $('#smartAssetForm', dialog).onsubmit = async event => {
         event.preventDefault(); const button = event.submitter; button.disabled = true;
         try {

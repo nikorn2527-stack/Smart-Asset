@@ -452,7 +452,7 @@ class Handler(BaseHTTPRequestHandler):
                 return {"ok": True, "database": "sqlite", "approvalThreshold": approval_threshold(db), "assets": db.execute("SELECT COUNT(*) FROM assets").fetchone()[0]}
             if method == "GET" and path == "/api/config":
                 imported = bool(db.execute("SELECT 1 FROM source_documents WHERE source_kind='workbook' LIMIT 1").fetchone())
-                return {"approvalThreshold": approval_threshold(db), "roles": [ROLE_REQUESTER, ROLE_OFFICER, ROLE_APPROVER, ROLE_TECHNICIAN], "demoOnly": True, "dataMode": "imported-test" if imported else "demo", "featureFlags": qr_flags(db)["flags"]}
+                return {"approvalThreshold": approval_threshold(db), "roles": [ROLE_REQUESTER, ROLE_OFFICER, ROLE_APPROVER, ROLE_TECHNICIAN], "demoOnly": not imported, "dataMode": "imported-test" if imported else "demo", "featureFlags": qr_flags(db)["flags"]}
             if method == "POST" and path in {"/api/sticker/render", "/api/sticker/bulk-render", "/api/sticker/print"}:
                 body = {**body, "baseUrl": self.qr_origin()}
             extended = handle_asset_api(db, method, path, query, body)

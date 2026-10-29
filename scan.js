@@ -100,6 +100,12 @@
       try {
         const html = await renderPanel(id, status, panel);
         if (typeof html === 'string') panel.innerHTML = html;
+        const copy = panel.querySelector('#copyExtraQr');
+        if (copy) copy.onclick = async () => {
+          const note = panel.querySelector('#extraQrStatus');
+          try { await navigator.clipboard.writeText(location.href); if (note) note.textContent = 'คัดลอกลิงก์แล้ว'; }
+          catch { if (note) note.textContent = location.href; }
+        };
       } catch (err) {
         panel.innerHTML = '';
         status.setAttribute('role', err.status === 403 ? 'alert' : 'status');
@@ -282,10 +288,22 @@
         return;
       }
       if (id === 'more') {
-        return `<span class="scan-kicker">ADDITIONAL SERVICES</span><h2>บริการเพิ่มเติม</h2><p>ยังไม่มีบริการเพิ่มเติมที่เปิดไว้ในขณะนี้</p>`;
+        return extraServices(location.href, a.qrUrl || location.href, a.name);
       }
       return `<p>ไม่พบบริการนี้</p>`;
     });
+  }
+
+  function extraServices(pageUrl, qrUrl, title) {
+    const url = qrUrl || pageUrl;
+    return `<span class="scan-kicker">ADDITIONAL SERVICES</span><h2>บริการเพิ่มจาก QR</h2>
+      <p>${esc(title || 'รายการนี้')}</p>
+      <div class="scan-actions">
+        <button class="scan-button" type="button" id="copyExtraQr">คัดลอกลิงก์ QR</button>
+        <a class="scan-button secondary" href="${esc(pageUrl)}" target="_blank" rel="noopener">เปิดหน้านี้อีกครั้ง</a>
+      </div>
+      <p id="extraQrStatus" role="status"></p>
+      <p class="scan-privacy">ใช้ลิงก์นี้พิมพ์ฉลากหรือส่งให้เจ้าหน้าที่ อย่าส่งต่อลิงก์ติดตามงานซ่อมของผู้แจ้ง</p>`;
   }
 
   async function locationPage(token) {
@@ -300,7 +318,11 @@
       if (s.id === 'repair') return canRepair || !place.active;
       return true;
     });
-    const staff = config.authenticated ? serviceList('staff').filter(s => s.id === 'more' && flagOn('additionalQrServices', false)) : [];
+    const staff = config.authenticated ? serviceList('staff').filter(s => {
+      if (s.id === 'borrow' || s.id === 'history') return false;
+      if (s.id === 'more') return flagOn('additionalQrServices', false);
+      return true;
+    }) : [];
     const services = [...guest, ...staff];
     const assets = place.active ? (place.guestAssets || []) : [];
     main.innerHTML = `<div class="scan-breadcrumb">ข้อมูลจาก QR ประจำสถานที่ <span>${place.active ? '✓ พร้อมรับบริการ' : 'ปิดรับคำแจ้งใหม่'}</span></div>
@@ -375,7 +397,7 @@
         return `<span class="scan-kicker">MY REPORTS</span><h2>ใบรับแจ้งบนอุปกรณ์นี้</h2>${receiptLinks(savedReceipts(), 'ยังไม่มีใบรับแจ้งที่บันทึกบนอุปกรณ์นี้')}`;
       }
       if (id === 'more') {
-        return `<span class="scan-kicker">ADDITIONAL SERVICES</span><h2>บริการเพิ่มเติม</h2><p>ยังไม่มีบริการเพิ่มเติมที่เปิดไว้ในขณะนี้</p>`;
+        return extraServices(location.href, location.href, place.name);
       }
       return `<p>ไม่พบบริการนี้</p>`;
     });
@@ -434,9 +456,9 @@
     if (config.authenticated) return;
     try {
       const session = await api('/api/auth/session');
-      if (!session?.authenticated) return;
+      if (!session?.authenticated && session?.required !== false) return;
       config.authenticated = true;
-      config.actor = session.actor || '';
+      config.actor = session.actor || (typeof localStorage !== 'undefined' && localStorage.getItem('govAssetPrototype.role')) || 'เจ้าหน้าที่พัสดุ';
       config.permissions = session.permissions || {};
       config.csrf = session.csrf || '';
       const flags = config.flags;

@@ -113,12 +113,18 @@ FEED = """WITH feed AS (
  OR (s.status='pending' AND :role=json_extract(s.rules_json,'$.approvalRole'))
  OR (s.status='approved' AND :role=json_extract(s.rules_json,'$.issueRole'))
  OR (s.status='issued' AND :role IN ('ผู้แจ้ง','เจ้าหน้าที่พัสดุ'))
+ UNION ALL
+ SELECT 'loan:'||c.asset_id||':'||c.due_at,'loan',c.asset_id,a.code,a.name,c.loan_status,c.updated_at,'work',
+ 88,'ครุภัณฑ์ยืมหรือเบิกเกินกำหนด','ผู้ถือ '||c.custodian||' · กำหนดคืน '||c.due_at,c.due_at,c.custodian
+ FROM asset_custody_state c JOIN assets a ON a.id=c.asset_id
+ WHERE :role IN ('เจ้าหน้าที่พัสดุ','ช่าง') AND c.loan_status IN ('loaned','issued') AND c.due_at<>'' AND c.due_at<:today
 ), scoped_feed AS (
  SELECT * FROM feed f WHERE :scopeAccount IS NULL
  OR (f.entity='asset' AND EXISTS(SELECT 1 FROM assets a WHERE a.id=f.entityId AND a.numbering_account_id=:scopeAccount AND (:scopeBranch IS NULL OR a.branch_id=:scopeBranch)))
  OR (f.entity='ticket' AND EXISTS(SELECT 1 FROM tickets t JOIN assets a ON a.id=t.asset_id WHERE t.id=f.entityId AND a.numbering_account_id=:scopeAccount AND (:scopeBranch IS NULL OR a.branch_id=:scopeBranch)))
  OR (f.entity='work' AND EXISTS(SELECT 1 FROM scheduled_work w JOIN assets a ON a.id=w.asset_id WHERE w.id=f.entityId AND a.numbering_account_id=:scopeAccount AND (:scopeBranch IS NULL OR a.branch_id=:scopeBranch)))
  OR (f.entity='supply' AND EXISTS(SELECT 1 FROM supply_documents s WHERE s.id=f.entityId AND s.account_id=:scopeAccount AND (:scopeBranch IS NULL OR s.branch_id=:scopeBranch)))
+ OR (f.entity='loan' AND EXISTS(SELECT 1 FROM assets a WHERE a.id=f.entityId AND a.numbering_account_id=:scopeAccount AND (:scopeBranch IS NULL OR a.branch_id=:scopeBranch)))
 ), inbox AS (
  SELECT feed.*,r.read_at AS readAt FROM scoped_feed feed LEFT JOIN notification_reads r
  ON r.recipient_role=:recipient AND r.notification_key=feed.key
