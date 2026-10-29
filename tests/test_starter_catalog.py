@@ -114,3 +114,12 @@ class StarterHTTP(HTTPFixture):
         after=self.call('/api/catalog/numbering?'+urlencode({'categoryId':office,'code':code}))
         self.assertNotEqual(after['nextCode'],created['code'])
         self.assertEqual(len(self.call('/api/assets')),len(server.SAMPLE_ASSETS)+1)
+
+    def test_codes_page_uses_starter_pack_before_fsn_manual_import(self):
+        catalog=self.call('/api/catalog/fsn?limit=5')
+        self.assertGreater(catalog['total'],100)
+        self.assertTrue(catalog['items'])
+        self.assertTrue(any(item.get('fullCode') for item in catalog['items']))
+        chair=self.call('/api/catalog/fsn?'+urlencode({'q':'เก้าอี้ทุกชนิด','limit':'5'}))
+        self.assertTrue(chair['items'])
+        self.assertEqual(chair['items'][0]['sourceKind'],'classification_starter')

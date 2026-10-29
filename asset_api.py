@@ -456,6 +456,30 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
         return {"id":cur.lastrowid,"fullCode":code,"name":name,"reference":reference,"categoryId":category_id},201
     if method=="GET" and path=="/api/catalog/fsn":
         q=_one(query,"q").strip();limit=_safe_limit(query);offset=_safe_offset(query)
+        official=int(db.execute("SELECT COUNT(*) FROM fsn_catalog_items").fetchone()[0])
+        if official==0:
+            where=" WHERE r.type_name LIKE ? OR r.fsn_code LIKE ? OR c.category_name LIKE ?" if q else ""
+            args=[f"%{q}%"]*3 if q else []
+            total=int(db.execute("SELECT COUNT(*) FROM starter_catalog_rows r JOIN asset_categories c ON c.id=r.category_id"+where,args).fetchone()[0])
+            rows=db.execute(
+                """SELECT r.rowid AS id, NULL AS page, '' AS groupNo, c.category_name AS groupTitle,
+                          r.type_name AS name, r.fsn_code AS fullCode, s.title AS sourceTitle, s.source_kind AS sourceKind
+                   FROM starter_catalog_rows r
+                   JOIN asset_categories c ON c.id=r.category_id
+                   JOIN source_documents s ON s.id=r.source_document_id"""
+                + where + " ORDER BY r.fsn_code, r.type_name LIMIT ? OFFSET ?",
+                (*args, limit, offset),
+            ).fetchall()
+            items=[]
+            for row in rows:
+                item=dict(row)
+                code=item.get("fullCode") or ""
+                parts=code.split("-") if re.fullmatch(r"[0-9]{4}-[0-9]{3}-[0-9]{4}", code) else ["", "", ""]
+                item["categoryCode"]=parts[0]
+                item["typeCode"]=parts[1]
+                item["reference"]=""
+                items.append(item)
+            return {"items":items,"total":total,"limit":limit,"offset":offset}
         where=" WHERE f.item_name LIKE ? OR f.category_code LIKE ? OR f.type_code LIKE ? OR f.canonical_fsn_code LIKE ?" if q else ""
         args=[f"%{q}%"]*4 if q else []
         total=int(db.execute("SELECT COUNT(*) FROM fsn_catalog_items f"+where,args).fetchone()[0])
