@@ -13,6 +13,7 @@ REPAIR_APPROVAL_THRESHOLD = "5000"
 PYTHONUNBUFFERED = "1"
 TZ = "Asia/Bangkok"
 ASSET_AUTH_REQUIRED = "0"
+PUBLIC_BASE_URL = "https://smart-asset-production.up.railway.app"
 
 [[deploy.volumes]]
 name = "smart-asset-data"

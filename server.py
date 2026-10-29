@@ -177,6 +177,15 @@ def initialize() -> None:
             db.execute("ALTER TABLE app_branding ADD COLUMN revision INTEGER NOT NULL DEFAULT 1")
         db.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
         db.execute("INSERT OR IGNORE INTO workflow_settings(id,approval_threshold,reminder_days,updated_at,updated_by) VALUES(1,?,3,?,?)", (APPROVAL_THRESHOLD,now_iso(),"ค่าเริ่มต้นระบบ"))
+        public = os.environ.get("PUBLIC_BASE_URL", "").strip()
+        if public:
+            try:
+                public = base_url(public)
+                row = db.execute("SELECT public_base_url FROM app_branding WHERE id=1").fetchone()
+                if row is not None and not (row["public_base_url"] or "").strip():
+                    db.execute("UPDATE app_branding SET public_base_url=? WHERE id=1", (public,))
+            except ValueError:
+                pass
         plan_columns = {r["name"] for r in db.execute("PRAGMA table_info(work_plans)")}
         for column, definition in {"schedule_unit": "TEXT NOT NULL DEFAULT 'day'", "interval_count": "INTEGER NOT NULL DEFAULT 30", "anchor_day": "INTEGER NOT NULL DEFAULT 0"}.items():
             if column not in plan_columns:
@@ -493,7 +502,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def qr_origin(self):
         try:
-            return base_url("http://" + self.headers.get("Host", f"localhost:{PORT}"))
+            proto = (self.headers.get("X-Forwarded-Proto") or "http").split(",")[0].strip().lower()
+            if proto not in ("http", "https"):
+                proto = "http"
+            return base_url(f"{proto}://{self.headers.get('Host', f'localhost:{PORT}')}")
         except ValueError as exc:
             raise ApiError(str(exc))
 
