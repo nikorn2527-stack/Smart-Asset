@@ -93,7 +93,7 @@ async function api(path, options={}) {
   if(options.method&&options.method!=='GET')document.dispatchEvent(new CustomEvent('govasset:data-changed',{detail:{path}}));
   return payload;
 }
-function toast(message) { const el=$('#toast'); if(!el) return; el.innerHTML=`<span class="toast-icon">✓</span> <span>${esc(message)}</span>`; el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),3800); }
+function toast(message) { const el=$('#toast'); if(!el) return; el.innerHTML=`<span class="toast-icon">✓</span> <span>${esc(message)}</span>`; if(typeof el.showPopover==='function'){el.popover='manual';if(el.matches(':popover-open'))el.hidePopover();el.showPopover();} el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),3800); }
 function showError(error) { const message=error?.message || 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้'; toast(message); const badge=$('#dbIndicator'); if(badge){badge.textContent='เชื่อมต่อระบบไม่ได้';badge.classList.add('offline');} }
 function setConnected() { const badge=$('#dbIndicator'); if(badge){badge.innerHTML='<i></i> ระบบพร้อมใช้งาน';badge.classList.remove('offline');} }
 function populateAssetCategoryOptions(rows) {
@@ -146,7 +146,7 @@ const statusClass = status => ['พร้อมใช้','ทะเบียน
 function badge(status) { return `<span class="gov-badge ${statusClass(status)}">${esc(status)}</span>`; }
 function assetNameCell(item, withPhoto=false) {
   const modelText = [item.model, item.serialNumber ? `S/N: ${item.serialNumber}` : ''].filter(Boolean).join(' · ');
-  const text = `<div class="asset-info-cell"><div class="asset-primary-name">${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}</div><div class="asset-secondary-meta">${esc(modelText || item.detail || '—')}</div></div>`;
+  const text = `<div class="asset-info-cell"><div class="asset-primary-name" title="${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}">${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}</div><div class="asset-secondary-meta" title="${esc(modelText || item.detail || '—')}">${esc(modelText || item.detail || '—')}</div></div>`;
   if(!withPhoto) return text;
   const photo = item.photoUrl
     ? `<button type="button" class="asset-thumb" data-smart-id="${item.id}" title="ดูรูปและรายละเอียด"><img src="${esc(item.photoUrl)}" alt="รูป ${esc(item.name || '')}" loading="lazy"></button>`
@@ -179,8 +179,8 @@ function renderAssets() {
         <td>${assetNameCell(item, true)}</td>
         <td><span class="category-badge-chip">${esc(item.group || 'ทั่วไป')}</span></td>
         <td>
-          <div class="asset-primary-name" style="font-size:12px;">${esc(item.location || '—')}</div>
-          <div class="asset-secondary-meta">${esc(item.accountName || '')}${item.branchName ? ' · ' + esc(item.branchName) : ''}</div>
+          <div class="asset-primary-name" style="font-size:12px;" title="${esc(item.location || '—')}">${esc(item.location || '—')}</div>
+          <div class="asset-secondary-meta" title="${esc(item.accountName || '')}${item.branchName ? ' · ' + esc(item.branchName) : ''}">${esc(item.accountName || '')}${item.branchName ? ' · ' + esc(item.branchName) : ''}</div>
         </td>
         <td>
           <div class="asset-cost-main">${cost}</div>

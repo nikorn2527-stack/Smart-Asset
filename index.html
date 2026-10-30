@@ -24,8 +24,9 @@
   <link rel="stylesheet" href="equipment.css">
   <link rel="stylesheet" href="action-buttons.css">
   <link rel="stylesheet" href="asset-register.css?v=5">
-  <link rel="stylesheet" href="layout-zones.css?v=9">
-  <link rel="stylesheet" href="dialogs-fit.css?v=1">
+  <link rel="stylesheet" href="layout-zones.css?v=11">
+  <link rel="stylesheet" href="dialogs-fit.css?v=3">
+  <link rel="stylesheet" href="dashboard-showcase.css?v=1">
 </head>
 <body>
   <a class="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
@@ -653,6 +654,7 @@
         <div>
           <label for="assetCategoryId">หมวดหมู่ครุภัณฑ์ <span class="required">*</span></label>
           <select id="assetCategoryId" name="categoryId" required aria-describedby="assetCategoryHelp"><option value="">กำลังโหลดหมวด…</option></select>
+          <small id="assetCategoryHelp" class="item-meta">เลือกจากหมวดที่หน่วยงานใช้ การเลือกหมวดไม่ได้กำหนดหลักเกณฑ์ค่าเสื่อมให้อัตโนมัติ</small>
         </div>
       </div>
       <div id="assetClassificationFields" class="dialog-grid-2">
@@ -714,24 +716,25 @@
   </form></dialog>
   <div id="toast" role="status" aria-live="polite" class="toast"></div>
   <script src="access.js?v=4"></script>
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=7"></script>
   <script src="action-buttons.js"></script>
   <script src="register-form.js?v=4"></script>
-  <script src="asset-tools.js"></script>
+  <script src="asset-tools.js?v=2"></script>
   <script src="master-data.js"></script>
   <script src="smart.js?v=7"></script>
   <script src="work.js"></script>
   <script src="notifications.js"></script>
   <script src="line-settings.js"></script>
   <script src="asset-numbering.js"></script>
-  <script src="catalog-guidance.js"></script>
+  <script src="catalog-guidance.js?v=2"></script>
   <script src="governance.js"></script>
-  <script src="account-registration.js?v=2"></script>
+  <script src="account-registration.js?v=3"></script>
   <script src="simple-workspace.js"></script>
   <script src="inventory-workspace.js"></script>
   <script src="operational-master.js"></script>
   <script src="supply.js"></script>
   <script src="equipment-workspace.js"></script>
   <script src="qr-smart.js"></script>
+  <script src="dashboard-showcase.js?v=1"></script>
   </body>
 </html>

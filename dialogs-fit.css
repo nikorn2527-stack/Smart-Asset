@@ -19,6 +19,9 @@ dialog .smart-dialog-head h2,
 dialog .notification-header h2 { overflow-wrap: anywhere; }
 dialog .dialog-actions { flex-wrap: wrap !important; }
 
+/* Toast is shown as a manual popover so it sits above an open modal; size it to the text. */
+#toast.toast { margin: 0; overflow: visible; width: max-content; max-width: min(90vw, 560px); pointer-events: none; }
+
 /* ---------- Manual (คู่มือ): content was clipped at 740px with no scroll ---------- */
 .asset-dialog.manual-dialog > .ticket-dialog-inner > .manual-content {
   flex: 1 1 auto;

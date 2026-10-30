@@ -3666,7 +3666,7 @@ footer.footer {
 
   /* PM filters: long plan / assignee names must not stretch the selects. */
   #view-work .work-filters select {
-    max-width: 260px !important;
+    max-width: 200px !important;
   }
 
   /* Dashboard repair list: long problem text no longer makes one row
@@ -3711,6 +3711,53 @@ footer.footer {
   }
 }
 
+@media (max-width: 1180px) {
+  /* Sticker designer: three side-by-side columns no longer fit, so the
+     properties panel moves under the preview and the editor scrolls. */
+  #view-stickers .sticker-editor-panel {
+    overflow-y: auto !important;
+  }
+  #view-stickers .sticker-editor-workarea {
+    grid-template-columns: minmax(0, 1fr) !important;
+    flex: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  #view-stickers .sticker-preview-panel {
+    height: auto !important;
+  }
+  #view-stickers .sticker-preview-wrap {
+    flex: none !important;
+    height: auto !important;
+    min-height: 120px !important;
+  }
+  #view-stickers .sticker-properties-panel {
+    height: auto !important;
+    overflow: visible !important;
+  }
+}
+
+@media (max-width: 900px) {
+  /* Sticker designer on tablets/phones: one column, the page scrolls. */
+  #view-stickers.active {
+    overflow-y: auto !important;
+  }
+  #view-stickers .sticker-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    flex: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  #view-stickers .sticker-asset-panel {
+    height: auto !important;
+    max-height: 460px !important;
+  }
+  #view-stickers .sticker-editor-panel {
+    height: auto !important;
+    overflow: visible !important;
+  }
+}
+
 @media (max-width: 1199px) {
   /* Too narrow for all register columns: scroll sideways with the sticky
      action column instead of crushing every column. */
@@ -3737,6 +3784,10 @@ footer.footer {
   }
   header.topbar .topbar-left {
     min-width: 0 !important;
+  }
+  header.topbar .crumb > span,
+  header.topbar .role-picker > span {
+    display: none !important;
   }
   header.topbar .btn-topbar-back {
     flex: none !important;
@@ -3804,5 +3855,207 @@ footer.footer {
   }
   header.topbar .btn-topbar-back .back-text {
     display: none !important;
+  }
+  header.topbar .topbar-left {
+    flex: none !important;
+  }
+
+  /* KPI cards: four columns cannot fit a phone. */
+  #view-approvals .approval-summary,
+  #view-work .work-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  #view-work .work-filters label {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+  #view-work .work-filters select {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Dashboard flow steps: let the step text shrink inside its card. */
+  #view-dashboard .hero-flow-head {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  #view-dashboard .hero-flow-text {
+    overflow: hidden !important;
+  }
+
+  /* List filters, long selects and pagers stay inside their panels. */
+  #view-assets .flex-search {
+    min-width: 0 !important;
+  }
+  #view-assets .filter-select-group select {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  #view-supply-settings select,
+  #view-stickers .toolbar-group label {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  #view-stickers .toolbar-group label {
+    flex-wrap: wrap !important;
+  }
+  .pager-nav {
+    flex-wrap: wrap !important;
+    min-width: 0 !important;
+  }
+  #view-register > .register-selection,
+  #view-register .register-form-actions {
+    flex-wrap: wrap !important;
+  }
+
+  /* Supply: list above detail; the side-by-side detail was ~30px wide. */
+  #view-supply.active {
+    overflow-y: auto !important;
+  }
+  #view-supply .supply-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    flex: none !important;
+    overflow: visible !important;
+  }
+  #view-supply .supply-list {
+    height: auto !important;
+    max-height: 360px !important;
+  }
+  #view-supply .supply-detail {
+    max-height: none !important;
+  }
+  #view-supply .supply-grid-receipt,
+  #view-supply .supply-grid-extra,
+  #view-supply .supply-grid-issue {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  #view-supply .supply-receipt-subbar,
+  #view-supply .supply-issue-search-row,
+  #view-supply .supply-bottom-bar,
+  #view-supply .supply-actions,
+  #view-supply .supply-files {
+    flex-wrap: wrap !important;
+  }
+  #view-supply .supply-action-hint {
+    white-space: normal !important;
+  }
+  #view-supply .supply-table-wrap {
+    overflow-x: auto !important;
+  }
+  #view-supply .supply-lines-table {
+    min-width: 560px !important;
+  }
+}
+
+/* Register list: long official names and locations stop at three lines;
+   the full text is in the row's title tooltip and the asset detail. */
+#assetRows .asset-primary-name,
+#assetRows .asset-secondary-meta {
+  display: -webkit-box !important;
+  -webkit-line-clamp: 3 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Short laptop windows: tighter headings, notices and KPI cards so lists
+   start higher. 1080px-tall desktops never match this query. */
+@media (max-height: 820px) and (min-width: 1024px) {
+  .view:not(#view-dashboard) > .page-heading {
+    padding: 0 0 2px !important;
+    gap: 6px 16px !important;
+  }
+  .view:not(#view-dashboard) > .page-heading > div:first-child {
+    flex: 1 1 220px !important;
+    min-width: 0 !important;
+  }
+  .view:not(#view-dashboard) > .page-heading .eyebrow {
+    display: none !important;
+  }
+  .view:not(#view-dashboard) > .page-heading h1 {
+    font-size: 19px !important;
+    line-height: 1.25 !important;
+  }
+  .view:not(#view-dashboard) > .page-heading p {
+    margin-top: 1px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .view:not(#view-dashboard) > .page-heading .button {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
+  .view:not(#view-dashboard) > .notice {
+    padding: 6px 12px !important;
+    margin-bottom: 2px !important;
+  }
+  .view:not(#view-dashboard) > .notice p {
+    margin-top: 1px !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 1 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+  }
+  .view:not(#view-dashboard) > .notice:hover p,
+  .view:not(#view-dashboard) > .notice:focus-within p {
+    -webkit-line-clamp: unset !important;
+  }
+
+  .asset-kpi-banner,
+  .repair-summary,
+  .approval-summary,
+  .work-totals {
+    margin-bottom: 4px !important;
+  }
+  .asset-kpi-card {
+    padding: 6px 12px !important;
+  }
+  .asset-kpi-card .kpi-icon {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 15px !important;
+  }
+  .asset-kpi-card b {
+    font-size: 18px !important;
+  }
+  .repair-summary .stat-card,
+  #view-approvals .approval-summary .stat-card,
+  .work-stat-card {
+    min-height: 0 !important;
+    padding: 7px 14px !important;
+  }
+  .repair-summary .stat-number,
+  .approval-summary .stat-number,
+  .work-stat-card .stat-number,
+  #view-work .work-totals strong {
+    font-size: 20px !important;
+    margin: 0 !important;
+    line-height: 1.2 !important;
+  }
+}
+
+/* Touch screens: finger-sized page controls. Mouse layouts are unchanged
+   because a mouse never matches (pointer: coarse). Dialogs are excluded. */
+@media (pointer: coarse) {
+  .main-column button:not(.link-button):not(dialog button):not(#view-dashboard button),
+  .main-column .button:not(dialog .button):not(#view-dashboard .button),
+  .sidebar button,
+  .pager-btn,
+  .pager-select,
+  .register-zoom-btn {
+    min-height: 40px !important;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 720px) {
+  .main-column button:not(.link-button):not(dialog button):not(#view-dashboard button),
+  .main-column .button:not(dialog .button):not(#view-dashboard .button),
+  .sidebar button,
+  .pager-btn,
+  .pager-select,
+  .register-zoom-btn {
+    min-height: 44px !important;
   }
 }

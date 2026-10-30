@@ -22,6 +22,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 from asset_api import handle as handle_asset_api
 import asset_photos
+import dashboard_api
 from smart_assets import base_url, branding, public_asset, public_receipt, qr_url, token_for
 from qr_smart import (
     initialize as initialize_qr_smart,
@@ -421,6 +422,11 @@ class Handler(BaseHTTPRequestHandler):
             except asset_photos.PhotoError as exc:
                 raise ApiError(str(exc), exc.status)
             if photos is not None: return photos
+            try:
+                showcase = dashboard_api.handle(db, method, path, query)
+            except dashboard_api.DashboardError as exc:
+                raise ApiError(str(exc), exc.status)
+            if showcase is not None: return showcase
             imported = handle_asset_import(db, DB_PATH, method, path, query, body)
             if imported is not None: return imported
             shared = handle_shared_catalog(db, method, path, query, body)
@@ -978,7 +984,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}", flush=True)
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/qr-smart.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/qr-smart.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -1040,7 +1046,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/qr-smart.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/qr-smart.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return

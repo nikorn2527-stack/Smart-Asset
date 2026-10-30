@@ -11,7 +11,8 @@
   const accountLabel=$('label[for=entryAccount]',root);root.insertBefore(headerGrid,accountLabel);
   const accountWrap=document.createElement('div');accountWrap.className='entry-account';accountWrap.append(accountLabel,$('#entryAccount'));headerGrid.append(accountWrap);
   const categoryWrap=document.createElement('div');categoryWrap.className='entry-category';
-  categoryWrap.append(...[$('label[for=assetCategoryId]'),$('#assetCategoryId'),$('#assetCategoryHelp')].filter(Boolean));headerGrid.append(categoryWrap);
+  const categoryGuidance=$('#assetCategoryHelp')?.nextElementSibling?.classList.contains('guidance-reading')?$('#assetCategoryHelp').nextElementSibling:null;
+  categoryWrap.append(...[$('label[for=assetCategoryId]'),$('#assetCategoryId'),$('#assetCategoryHelp'),categoryGuidance].filter(Boolean));headerGrid.append(categoryWrap);
   root.insertBefore($('label[for=assetNumberMode]'),$('#scopedEntry'));root.insertBefore($('#assetNumberMode'),$('#scopedEntry'));root.insertBefore($('#manualAssetCodeField'),$('#scopedEntry'));
   const variableDetails=document.createElement('details');variableDetails.id='entryVariableDetails';variableDetails.innerHTML='<summary>รายละเอียดรหัส — กรอกเองเมื่อไม่มีชนิดให้เลือก</summary>';$('#entryVariables').before(variableDetails);variableDetails.append($('#entryVariables'));
   const more=document.createElement('details');more.className='entry-more';more.innerHTML='<summary>สาขา วันที่ และข้อยกเว้นเพิ่มเติม</summary>';

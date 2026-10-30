@@ -447,10 +447,26 @@
     });
   }
 
+  function previewScale(root, w, h) {
+    // Border-box width ignores the scrollbar, so showing one cannot shrink the scale and loop.
+    const boxW = root.getBoundingClientRect().width - 24;
+    const fit = boxW > 40 ? boxW / w : Infinity;
+    return Math.min(7.5, 560 / w, 330 / h, fit);
+  }
+  let previewObserver = null, lastPreviewScale = 0;
   function renderPreview() {
     const root = $('#stickerPreview'); if (!root || !state.template) return;
     const w = Math.max(5, Number(state.template.canvas.width) || 75.2), h = Math.max(5, Number(state.template.canvas.height) || 36);
-    const scale = Math.min(7.5, 560 / w, 330 / h), pxW = w * scale, pxH = h * scale;
+    const scale = previewScale(root, w, h), pxW = w * scale, pxH = h * scale;
+    lastPreviewScale = scale;
+    if (!previewObserver && 'ResizeObserver' in window) {
+      previewObserver = new ResizeObserver(() => {
+        if (!state.template) return;
+        const cw = Math.max(5, Number(state.template.canvas.width) || 75.2), ch = Math.max(5, Number(state.template.canvas.height) || 36);
+        if (Math.abs(previewScale(root, cw, ch) - lastPreviewScale) > 0.01) renderPreview();
+      });
+      previewObserver.observe(root);
+    }
     $('#stickerCanvasSizeLabel').textContent = `${w.toLocaleString('th-TH')} × ${h.toLocaleString('th-TH')} มม.`;
 
     const nodes = (state.template.elements || []).slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(el => {
