@@ -99,7 +99,8 @@ def new_session(db,handler,user):
 
 def authenticate(db,handler,method,path,body):
     if not required():db.access=None;return None
-    if path=='/api/health' or path=='/api/qr/public-config' or re.fullmatch(r'/api/(scan|receipts)/[A-Za-z0-9_-]{32}(?:/repairs|/action)?',path) or re.fullmatch(r'/api/places/[A-Za-z0-9_-]{32}(?:/reports)?',path):return None
+    # Branding (name, logo) is printed on every QR label, so the login screen and QR pages may read it.
+    if path=='/api/health' or path=='/api/qr/public-config' or (path=='/api/branding' and method=='GET') or re.fullmatch(r'/api/(scan|receipts)/[A-Za-z0-9_-]{32}(?:/repairs|/action)?',path) or re.fullmatch(r'/api/places/[A-Za-z0-9_-]{32}(?:/reports)?',path):return None
     user,session=session_user(db,handler)
     if method not in ('GET','HEAD'):
         origin_check(handler)

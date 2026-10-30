@@ -55,18 +55,18 @@
     return `${Number(m[3])} ${['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][Number(m[2])-1]} ${y<2400?y+543:y}`;
   };
   const plain=v=>v==null?'':String(v);
+  function fullest(...parts){return parts.map(v=>plain(v).trim()).filter(Boolean).sort((a,b)=>b.length-a.length)[0]||'';}
   function defaultForm(data){
     const a=data.asset||{},r=data.register||{},d=(data.depreciationSnapshots||[]).at(-1)||{};
-    const f={organization:r.organization_name||a.organization||window.govAssetBranding?.organization||'',department:r.department_name||a.department||a.responsibleUnit||'',type:r.asset_type||a.assetType||a.group||'',code:a.code||r.asset_code_printed||'',description:a.name||r.description||'',model:r.model||a.model||'',location:a.location||r.location||'',vendor:r.vendor_name||a.vendor||'',address:r.vendor_address||'',phone:r.vendor_phone||'',gfmis:r.gfmis_no||a.gfmisNo||'',po:r.po_no||a.poNo||'',serial:a.serialNumber||r.serial_number||'',warranty:r.warranty_end||a.warrantyEnd||'',fiscalYear:r.fiscal_year_th||a.fiscalYear||'',fund:r.fund_type||a.fundType||'',method:r.acquisition_method||a.acquisitionMethod||''};
+    const f={organization:r.organization_name||a.organization||window.govAssetBranding?.organization||'',department:r.department_name||a.department||a.responsibleUnit||'',type:r.asset_type||a.assetType||a.group||'',code:a.code||r.asset_code_printed||'',description:fullest(r.description,a.detail,a.name),model:r.model||a.model||'',location:a.location||r.location||'',vendor:r.vendor_name||a.vendor||'',address:r.vendor_address||'',phone:r.vendor_phone||'',gfmis:r.gfmis_no||a.gfmisNo||'',po:r.po_no||a.poNo||'',serial:a.serialNumber||r.serial_number||'',warranty:r.warranty_end||a.warrantyEnd||'',fiscalYear:r.fiscal_year_th||a.fiscalYear||'',fund:r.fund_type||a.fundType||'',method:r.acquisition_method||a.acquisitionMethod||''};
     Object.keys(f).forEach(k=>f[k]=plain(f[k]));
     const acqs=(data.acquisitions&&data.acquisitions.length>0)?data.acquisitions:[{}];
     const rows=acqs.map((acq,i)=>{
-      const desc=acq.model?`${f.description} (${acq.model})`:f.description;
       return {
         date:dateText(acq.acquired_on||a.acquiredOn),
         document:plain(acq.document_no||acq.po_no||f.po||f.gfmis),
-        description:desc,
-        quantity:plain(acq.quantity||1),
+        description:f.description,
+        quantity:plain(acq.quantity),
         unitPrice:plain(acq.unit_price??acq.total_price??a.purchasePrice),
         total:plain(acq.total_price??acq.unit_price??a.purchasePrice),
         life:plain(d.useful_life_years??a.usefulLifeYears),
@@ -91,9 +91,19 @@
     const pageSize = 8;
     for(let offset=0;offset<rows.length;offset+=pageSize){
       const chunk=rows.slice(offset,offset+pageSize),last=offset+chunk.length===rows.length;
-      const rowsHtml=chunk.map(r=>`<tr>${columns.map(([key])=>{const val=r[key]!=null&&r[key]!==''?display(key,r[key]):'';return `<td><div class="rf-cell-value">${val?esc(val):'&nbsp;'}</div></td>`;}).join('')}</tr>`).join('');
-      const summaryHtml=last?`<tr class="rf-summary-row"><td class="rf-sum-date"><div class="rf-cell-value rf-sum-val">${esc(state.form.fields.fiscalYear||'')}</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td><td class="rf-sum-money"><div class="rf-cell-value rf-sum-val">${esc(total('annual'))}</div></td><td class="rf-sum-money"><div class="rf-cell-value rf-sum-val">${esc(total('accumulated'))}</div></td><td class="rf-sum-money"><div class="rf-cell-value rf-sum-val">${esc(total('net'))}</div></td><td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td></tr>`:`<tr class="rf-summary-row">${columns.map(()=>'<td><div class="rf-cell-value rf-sum-val">&nbsp;</div></td>').join('')}</tr>`;
-      pages.push(`<section class="official-register-page" aria-label="ทะเบียนคุมทรัพย์สิน หน้า ${pages.length+1}"><div class="register-title rf-title">ทะเบียนคุมทรัพย์สิน</div><div class="rf-org">${field('organization')}${field('department')}</div><div class="rf-fields"><div class="rf-line rf-line-1">${field('type')}${field('code')}</div><div class="rf-line rf-line-2">${field('description')}${field('model')}</div><div class="rf-line rf-line-3">${field('location')}${field('vendor')}</div><div class="rf-line rf-line-4">${field('address')}${field('phone')}</div><div class="rf-line rf-line-5">${field('gfmis')}${field('po')}${field('serial')}${field('warranty')}</div><div class="rf-line rf-line-6">${field('fiscalYear')}${field('fund')}${field('method')}</div></div><table class="register-table rf-table"><colgroup>${colgroupHtml}</colgroup>${theadHtml}<tbody>${rowsHtml}${summaryHtml}</tbody></table></section>`);
+      const year=last?(state.form.fields.fiscalYear||''):'';
+      const feet=last?{annual:total('annual'),accumulated:total('accumulated'),net:total('net')}:null;
+      const showFoot=Boolean(feet&&['annual','accumulated','net'].some(key=>feet[key]));
+      const rowsHtml=chunk.map((r,index)=>{
+        const closing=last&&index===chunk.length-1;
+        return `<tr>${columns.map(([key],col)=>{
+          const val=r[key]!=null&&r[key]!==''?display(key,r[key]):'';
+          const yearNote=closing&&key==='date'&&year?`<div class="rf-year-note">${esc(year)}</div>`:'';
+          const foot=closing&&showFoot&&col>=2?`<div class="rf-cell-foot">${feet[key]?esc(feet[key]):'&nbsp;'}</div>`:'';
+          return `<td${yearNote?' class="rf-date-cell"':''}><div class="rf-cell-value${key==='description'?' rf-item-value':''}">${val?esc(val):'&nbsp;'}</div>${yearNote}${foot}</td>`;
+        }).join('')}</tr>`;
+      }).join('');
+      pages.push(`<section class="official-register-page" aria-label="ทะเบียนคุมทรัพย์สิน หน้า ${pages.length+1}"><div class="register-title rf-title">ทะเบียนคุมทรัพย์สิน</div><div class="rf-org">${field('organization')}${field('department')}</div><div class="rf-fields"><div class="rf-line rf-line-1">${field('type')}${field('code')}</div><div class="rf-line rf-line-2">${field('description')}${field('model')}</div><div class="rf-line rf-line-3">${field('location')}${field('vendor')}</div><div class="rf-line rf-line-4">${field('address')}${field('phone')}</div><div class="rf-line rf-line-5">${field('gfmis')}${field('po')}${field('serial')}${field('warranty')}</div><div class="rf-line rf-line-6">${field('fiscalYear')}${field('fund')}${field('method')}</div></div><table class="register-table rf-table"><colgroup>${colgroupHtml}</colgroup>${theadHtml}<tbody>${rowsHtml}</tbody></table></section>`);
     }
     paper.innerHTML=pages.join('');
     fitText(paper);
@@ -111,11 +121,12 @@
   function fitText(root){
     let fits=true;
     root.querySelectorAll('.rf-field b').forEach(el=>{
+      if(el.closest('[data-field="description"]'))return;
       let size=12;el.style.fontSize=`${size}pt`;
       while(el.scrollWidth>el.clientWidth+1&&size>8){size-=.25;el.style.fontSize=`${size}pt`;}
       if(el.scrollWidth>el.clientWidth+1)fits=false;
     });
-    root.querySelectorAll('.rf-cell-value').forEach(el=>{let size=10;el.style.fontSize=`${size}pt`;while((el.scrollHeight>el.clientHeight+1||el.scrollWidth>el.clientWidth+1)&&size>8){size-=.25;el.style.fontSize=`${size}pt`;}if(el.scrollHeight>el.clientHeight+1||el.scrollWidth>el.clientWidth+1)fits=false;});
+    root.querySelectorAll('.rf-cell-value').forEach(el=>{if(el.classList.contains('rf-item-value'))return;let size=10;el.style.fontSize=`${size}pt`;while((el.scrollHeight>el.clientHeight+1||el.scrollWidth>el.clientWidth+1)&&size>8){size-=.25;el.style.fontSize=`${size}pt`;}if(el.scrollHeight>el.clientHeight+1||el.scrollWidth>el.clientWidth+1)fits=false;});
     return fits;
   }
   printButton.disabled=true;
@@ -127,7 +138,7 @@
   document.addEventListener('govasset:register-loaded',async event=>{
     const n=++epoch,data=event.detail;
     const source=defaultForm(data).fields;
-    const entries=[['วิธีการได้มา',source.method],['แหล่งเงิน',source.fund],['ผู้ขาย / ผู้บริจาค',source.vendor],['เลขที่ GFMIS / PO',[source.gfmis,source.po].filter(Boolean).join(' / ')],['ปีงบประมาณที่ได้มา',source.fiscalYear],['สถานที่ / หน่วยงานรับผิดชอบ',source.location]];
+    const entries=[['ลักษณะ/คุณสมบัติ',source.description],['รุ่น/แบบ',source.model],['วิธีการได้มา',source.method],['ประเภทเงิน',source.fund],['ผู้ขาย / ผู้รับจ้าง / ผู้บริจาค',source.vendor],['ที่อยู่',source.address],['โทร.',source.phone],['เลขที่ GFMIS',source.gfmis],['เลขที่ PO',source.po],['S/N',source.serial],['สิ้นสุดประกัน',source.warranty],['ปีงบประมาณที่ได้มา',source.fiscalYear],['สถานที่ตั้ง / หน่วยงานรับผิดชอบ',source.location]];
     $('#registerProvenanceSummary').innerHTML='<h2>ที่มาของครุภัณฑ์จากทะเบียน</h2><dl>'+entries.map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value||'ยังไม่ระบุ')}</dd></div>`).join('')+'</dl>';
     try{
       const saved=await app.api(`/api/assets/${data.asset.id}/register-form`);

@@ -13,6 +13,7 @@ from master_data_api import handle as handle_master_data
 from numbering import get_catalog, link_code
 from catalog_guidance import handle as handle_guidance
 from smart_assets import qr_url, branding
+from asset_photos import primary_photo_sql
 
 try:
     import qrcode
@@ -79,7 +80,8 @@ def _inventory_select() -> str:
         COALESCE(dep.net_book_value,a.net_book_value) AS linked_net_book_value,
         COALESCE(NULLIF(reg.fund_type,''),NULLIF(acq.fund_type,'')) AS linked_fund_type,
         acq.document_no AS linked_document_no,acq.quantity AS linked_quantity,
-        (SELECT id FROM asset_register_details r2 WHERE r2.asset_id=a.id ORDER BY r2.id DESC LIMIT 1) AS register_id
+        (SELECT id FROM asset_register_details r2 WHERE r2.asset_id=a.id ORDER BY r2.id DESC LIMIT 1) AS register_id,
+        """ + primary_photo_sql("a") + """ AS photo_id
       FROM assets a
       LEFT JOIN asset_profiles profile ON profile.asset_id=a.id
       LEFT JOIN asset_categories c ON c.id=a.category_id
@@ -113,6 +115,7 @@ def _inventory_item(row: sqlite3.Row) -> dict[str, Any]:
         "annualDepreciation": row["annual_depreciation"], "accumulatedDepreciation": row["linked_accumulated_depreciation"],
         "depreciationValue":row["depreciation_value"], "netBookValue": row["linked_net_book_value"], "hasRegister": bool(row["register_id"]),
         "sourceDocumentId": row["source_document_id"], "sourceRowNo": row["source_row_no"],
+        "photoUrl": f"/api/assets/{row['id']}/photos/{row['photo_id']}/thumb" if row["photo_id"] else "",
     }
 
     numbering=json.loads(row["numbering_snapshot"] or '{}');changed=numbering.get('currentFields',{})
@@ -295,7 +298,13 @@ def render_sticker(template: dict[str, Any], asset: dict[str, Any], settings: di
             styles += [f"background:{background}",f"border:{border}",f"border-radius:{radius:g}mm"]
             nodes.append(f'<div class="sticker-node sticker-rect" style="{html.escape(";".join(styles),quote=True)}"></div>')
         elif kind == "qr":
-            qr_text = _substitute(str(element.get("content") or "{{QrUrl}}"), values) or str(asset.get("code") or "")
+            content = str(element.get("content") or "{{QrUrl}}")
+            # A QR that names {{QrUrl}} must encode only the scan link. Text glued around it
+            # (for example "{{FsnCode}}{{QrUrl}}") makes phones show plain text instead of opening the page.
+            if re.search(r"\{\{\s*[Qq]rUrl\s*\}\}", content) and values.get("QrUrl"):
+                qr_text = str(values["QrUrl"])
+            else:
+                qr_text = _substitute(content, values) or str(asset.get("code") or "")
             src = _qr_data_uri(qr_text)
             styles += ["display:flex","align-items:center","justify-content:center","background:#fff"]
             nodes.append(f'<div class="sticker-node sticker-qr" style="{html.escape(";".join(styles),quote=True)}"><img alt="QR" src="{html.escape(src,quote=True)}" style="width:100%;height:100%;object-fit:contain"></div>')

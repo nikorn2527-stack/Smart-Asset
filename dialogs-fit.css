@@ -1,0 +1,229 @@
+/* Staff dialogs: keep every modal inside the viewport with its own scroll area,
+   the close button and primary actions reachable, and no sideways scrolling.
+   Loaded last, so selectors mirror the !important rules in styles.css / layout-zones.css. */
+
+/* ---------- Shared ---------- */
+dialog .dialog-close {
+  display: inline-grid !important;
+  place-items: center !important;
+  flex: none !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  border-radius: 8px !important;
+}
+dialog .dialog-head > div:first-child,
+dialog .smart-dialog-head > div:first-child,
+dialog .notification-header > div:first-child { min-width: 0; }
+dialog .dialog-head h2,
+dialog .smart-dialog-head h2,
+dialog .notification-header h2 { overflow-wrap: anywhere; }
+dialog .dialog-actions { flex-wrap: wrap !important; }
+
+/* ---------- Manual (คู่มือ): content was clipped at 740px with no scroll ---------- */
+.asset-dialog.manual-dialog > .ticket-dialog-inner > .manual-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 16px 24px 22px;
+}
+
+/* ---------- New asset (#assetDialog): the owner/category block sat outside the scroll area ---------- */
+#assetDialog > form { overflow-y: auto !important; overscroll-behavior: contain; }
+#assetDialog > form > .dialog-content-scroll { flex: none !important; overflow: visible !important; }
+
+/* ---------- Notification center: header/toolbar were stacked as columns and the list was clipped ---------- */
+.asset-dialog.notification-dialog[open] {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+.asset-dialog.notification-dialog > div {
+  flex: none !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.asset-dialog.notification-dialog > .notification-header {
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 18px 22px 12px !important;
+}
+.asset-dialog.notification-dialog > .notification-toolbar {
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: flex-end !important;
+  gap: 10px !important;
+  padding: 14px 22px 0 !important;
+}
+.asset-dialog.notification-dialog > #notificationItems {
+  display: block !important;
+  flex: 1 1 auto !important;
+  min-height: 120px;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  padding: 0 22px !important;
+}
+.asset-dialog.notification-dialog > .notification-pager {
+  flex-direction: row !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 10px 22px !important;
+  border-top: 1px solid #e4eaf0;
+}
+.notification-pager .button:disabled { visibility: hidden; }
+.notification-pager:has(#notificationPrev:disabled):has(#notificationNext:disabled) { display: none !important; }
+.asset-dialog.notification-dialog > .notification-scope { flex: none; margin: 6px 22px 16px; }
+
+/* ---------- Work / PM dialog: one flex column with overflow hidden squeezed the asset list to 0px ---------- */
+.asset-dialog.work-dialog[open] { overflow-y: auto !important; overscroll-behavior: contain; }
+.asset-dialog.work-dialog > form,
+.asset-dialog.work-dialog > div {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.asset-dialog.work-dialog > form { display: block !important; }
+.asset-dialog.work-dialog > .dialog-head { flex-direction: row !important; }
+.asset-dialog.work-dialog > form > :not(.dialog-head):not(.dialog-actions),
+.asset-dialog.work-dialog > :not(.dialog-head):not(form#workPlanForm) {
+  margin-left: 24px !important;
+  margin-right: 24px !important;
+}
+.asset-dialog.work-dialog > .work-detail-meta {
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  padding: 12px !important;
+  margin-top: 14px !important;
+  margin-bottom: 14px !important;
+}
+.asset-dialog.work-dialog > .work-reassign {
+  flex-direction: row !important;
+  align-items: flex-end !important;
+  padding: 0 0 16px !important;
+  margin-top: 16px !important;
+  margin-bottom: 16px !important;
+}
+.asset-dialog.work-dialog .work-asset-options { min-height: 120px; }
+.asset-dialog.work-dialog form > .dialog-actions { margin-top: 12px !important; }
+
+/* ---------- Asset workspace (smart.js openAsset) ---------- */
+/* Fixed height so the tab row does not jump when switching to a short tab. */
+.asset-dialog.smart-dialog:not(.qr-simulator-modal) { height: min(92vh, 840px) !important; }
+.asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-tabs {
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 64px;
+}
+.asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-tabs button {
+  flex: none !important;
+  white-space: nowrap !important;
+}
+.asset-dialog.smart-dialog .smart-tabs.has-more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent); }
+.asset-dialog.smart-dialog .smart-tabs.has-more-left { -webkit-mask-image: linear-gradient(to right, transparent, #000 56px); mask-image: linear-gradient(to right, transparent, #000 56px); }
+.asset-dialog.smart-dialog .smart-tabs.has-more-left.has-more-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 56px, #000 calc(100% - 56px), transparent); mask-image: linear-gradient(to right, transparent, #000 56px, #000 calc(100% - 56px), transparent); }
+.asset-dialog.smart-dialog .asset-photo-actions { align-items: center; align-content: flex-start; }
+.asset-dialog.smart-dialog .mini-action { font-size: 12px !important; line-height: 1.4; height: auto; white-space: nowrap; }
+.asset-dialog.smart-dialog .modal-ledger-wrap { overflow-x: visible; }
+.asset-dialog.smart-dialog .modal-ledger-wrap .table-wrap { overflow-x: auto !important; overscroll-behavior-x: contain; }
+
+/* Tablet and narrow laptop windows: the 280px QR card squeezed the content column. */
+@media (max-width: 900px) {
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 16px !important;
+    padding: 16px 20px 20px !important;
+  }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-qr-card {
+    display: grid !important;
+    grid-template-columns: 150px minmax(0, 1fr);
+    column-gap: 18px !important;
+    row-gap: 8px !important;
+    align-items: start;
+    text-align: left !important;
+    max-width: none !important;
+  }
+  .asset-dialog.smart-dialog .mini-action,
+  .asset-dialog.notification-dialog .text-button { min-height: 36px; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-qr-card > * { grid-column: 2; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-qr-card > .smart-qr { grid-column: 1; grid-row: 1 / span 9; width: 150px !important; align-self: start !important; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-qr-card > .button { justify-self: start; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-tabs { gap: 20px !important; padding: 0 20px !important; }
+  .asset-dialog.smart-dialog .modal-ledger-table { min-width: 760px; }
+  .asset-dialog.smart-dialog .modal-ledger-wrap .table-wrap::before {
+    content: "เลื่อนซ้าย–ขวาเพื่อดูทุกคอลัมน์";
+    display: block;
+    position: sticky;
+    left: 0;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: #64748b;
+  }
+}
+
+/* ---------- Ticket: on one-column layouts show "what to do now" before the history ---------- */
+@media (max-width: 720px) {
+  #ticketDialog .ticket-columns > .ticket-actions-panel { order: -1; }
+}
+
+/* ---------- Phones ---------- */
+@media (max-width: 540px) {
+  dialog .dialog-close { min-width: 44px !important; min-height: 44px !important; }
+
+  .asset-dialog:not(.smart-dialog), .ticket-dialog, .access-dialog, .equipment-dialog, .om-dialog, .master-data-dialog {
+    width: calc(100vw - 16px) !important;
+    max-width: none !important;
+    max-height: calc(100dvh - 16px) !important;
+  }
+  .asset-dialog:not(.smart-dialog) > form, .asset-dialog:not(.smart-dialog) > div, .asset-dialog > .ticket-dialog-inner,
+  .equipment-dialog > form, .om-dialog > form, .master-data-dialog > form, .access-dialog > form {
+    max-height: calc(100dvh - 16px) !important;
+  }
+  .asset-dialog.work-dialog > form, .asset-dialog.work-dialog > div,
+  .asset-dialog.notification-dialog > div { max-height: none !important; }
+  .asset-dialog:not(.smart-dialog) .dialog-head, .equipment-dialog .dialog-head, .om-dialog .dialog-head,
+  .master-data-dialog .dialog-head, .ticket-dialog .dialog-head { padding: 10px 8px 10px 16px !important; gap: 8px; }
+  .dialog-content-scroll { padding: 14px 16px !important; }
+  dialog:not(.smart-dialog) .dialog-actions { padding: 10px 16px !important; }
+  dialog .dialog-actions > .button { flex: 1 1 auto; justify-content: center; }
+  .asset-dialog.manual-dialog > .ticket-dialog-inner > .manual-content { padding: 12px 16px 18px; }
+  .asset-dialog.work-dialog > form > :not(.dialog-head):not(.dialog-actions),
+  .asset-dialog.work-dialog > :not(.dialog-head):not(form#workPlanForm) { margin-left: 16px !important; margin-right: 16px !important; }
+  .asset-dialog.notification-dialog > .notification-header { padding: 12px 8px 10px 16px !important; }
+  .asset-dialog.notification-dialog > .notification-toolbar { padding: 10px 16px 0 !important; gap: 8px !important; }
+  .asset-dialog.notification-dialog > #notificationItems { padding: 0 12px !important; }
+  .asset-dialog.notification-dialog > .notification-scope { margin: 6px 16px 12px; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) {
+    width: calc(100vw - 16px) !important;
+    height: calc(100dvh - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+    border-radius: 14px !important;
+  }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-dialog-head { padding: 12px 8px 10px 16px !important; gap: 8px; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-dialog-head h2 { font-size: 18px !important; line-height: 1.35; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .dialog-close { min-width: 44px !important; min-height: 44px !important; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-tabs { gap: 18px !important; padding: 0 16px !important; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-tabs button { padding: 12px 2px !important; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-layout { padding: 12px !important; gap: 12px !important; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-layout > div { padding: 14px !important; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-form .form-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 0 !important; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-form input,
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-form select,
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-form textarea { font-size: 16px !important; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .dialog-actions > .button { flex: 1 1 100%; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-qr-card { display: flex !important; text-align: center !important; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-qr-card > .smart-qr { width: 160px !important; align-self: center !important; }
+  .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-qr-card > .button { justify-self: auto; }
+  .asset-dialog.smart-dialog .asset-photos { padding: 10px; gap: 12px; }
+  .asset-dialog.smart-dialog .mini-action { min-height: 38px; }
+  .asset-dialog.notification-dialog .text-button { padding: 0 6px; }
+  .asset-dialog.smart-dialog .modal-ledger-wrap { padding: 10px; }
+  .asset-dialog.smart-dialog .modal-ledger-meta { grid-template-columns: minmax(0, 1fr); }
+}

@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 from asset_api import handle as handle_asset_api
+import asset_photos
 from smart_assets import base_url, branding, public_asset, public_receipt, qr_url, token_for
 from qr_smart import (
     initialize as initialize_qr_smart,
@@ -330,6 +331,7 @@ def initialize() -> None:
 
         seed_starter_catalog(db)
         initialize_qr_smart(db)
+        asset_photos.ensure_schema(db)
 
 
 def asset_dict(row: sqlite3.Row) -> dict:
@@ -388,7 +390,7 @@ class Handler(BaseHTTPRequestHandler):
     def read_json(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length < 0 or length > (35_000_000 if self.path.startswith("/api/imports/") else 9_000_000 if self.path.startswith("/api/supply/") else 35_000_000 if self.path == "/api/backups/sources" else 750_000 if self.path == "/api/branding" else 100_000):
+            if length < 0 or length > (asset_photos.UPLOAD_BODY_LIMIT if asset_photos.UPLOAD_PATH.fullmatch(self.path) else 35_000_000 if self.path.startswith("/api/imports/") else 9_000_000 if self.path.startswith("/api/supply/") else 35_000_000 if self.path == "/api/backups/sources" else 750_000 if self.path == "/api/branding" else 100_000):
                 raise ApiError("ข้อมูลที่ส่งมายาวเกินกำหนด", 413)
             data = json.loads(self.rfile.read(length) or b"{}")
             if not isinstance(data, dict):
@@ -414,6 +416,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def route_api(self, db, method, path, query, body):
         if True:
+            try:
+                photos = asset_photos.handle(db, method, path, body)
+            except asset_photos.PhotoError as exc:
+                raise ApiError(str(exc), exc.status)
+            if photos is not None: return photos
             imported = handle_asset_import(db, DB_PATH, method, path, query, body)
             if imported is not None: return imported
             shared = handle_shared_catalog(db, method, path, query, body)
@@ -911,6 +918,28 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+        photo = asset_photos.IMAGE_PATH.fullmatch(path)
+        if photo:
+            # Images are binary, so they skip the JSON responder but keep the same access checks.
+            try:
+                with connect() as db:
+                    query = parse_qs(parsed.query); ctx = access.authenticate(db, self, 'GET', path, {})
+                    access.authorize(db, ctx, 'GET', path, query, {})
+                    found = asset_photos.image_bytes(db, int(photo[1]), int(photo[2]), photo[3])
+                if found is None:
+                    self.send_json({"error": "ไม่พบรูปนี้"}, 404)
+                    return
+                mime, data = found
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "private, max-age=86400")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(data)
+            except (ApiError, GovernanceError) as exc:
+                self.send_json({"error": str(exc)}, exc.status)
+            return
         if re.fullmatch(r"/(q|t|l)/[A-Za-z0-9_-]{32}", path):
             path = "/scan.html"
         if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
@@ -949,7 +978,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}", flush=True)
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/qr-smart.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/qr-smart.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -1011,7 +1040,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/qr-smart.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/qr-smart.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return

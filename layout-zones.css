@@ -875,6 +875,55 @@ table thead th {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
 }
 
+.asset-app {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+}
+
+.asset-app-group h3 {
+  margin: 0 0 8px !important;
+  font-size: 12px !important;
+  letter-spacing: 0.04em !important;
+  color: #087e82 !important;
+}
+
+.asset-app-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.asset-app-tile {
+  min-width: 0 !important;
+  background: #f4f8fa !important;
+  border-radius: 10px !important;
+  padding: 8px 10px !important;
+}
+
+.asset-app-tile.wide {
+  grid-column: 1 / -1 !important;
+}
+
+.asset-app-tile span {
+  display: block !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+  line-height: 1.3 !important;
+}
+
+.asset-app-tile b {
+  display: block !important;
+  margin-top: 2px !important;
+  font-size: 14px !important;
+  font-weight: 650 !important;
+  color: #0f172a !important;
+  line-height: 1.45 !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+}
+
 .asset-detail-sheet {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -918,7 +967,8 @@ table thead th {
 }
 
 @media (max-width: 700px) {
-  .asset-detail-sheet {
+  .asset-detail-sheet,
+  .asset-app-grid {
     grid-template-columns: 1fr !important;
   }
 }
@@ -3549,5 +3599,210 @@ footer.footer {
     border: 1px solid #000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+}
+
+#ticketDialog > #ticketDialogContent {
+  overflow-y: auto !important;
+}
+
+#ticketDialog .ticket-dialog-buttons {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  align-items: flex-end !important;
+  margin-top: 12px !important;
+}
+
+#ticketDialog .action-form p {
+  margin: 0 0 10px !important;
+  line-height: 1.5 !important;
+  overflow-wrap: anywhere !important;
+}
+
+/* ==========================================================================
+   SMALLER-SCREEN FIXES (laptop / tablet / phone)
+   Every rule here is either inside a max-width query below the 24" desktop
+   (1920px) or only takes effect when content would otherwise overflow, so
+   the 1920x1080 layout stays exactly as approved.
+   ========================================================================== */
+
+/* Sticker preview: a fixed-size canvas wider than its box must stay
+   reachable by scrolling instead of being cut off on the left. */
+#view-stickers .sticker-preview-wrap {
+  justify-content: safe center !important;
+  align-items: safe center !important;
+}
+
+@media (max-width: 1800px) {
+  /* Register list: status badges and row actions fit their columns. */
+  #view-assets .smart-asset-table th,
+  #view-assets .smart-asset-table td {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  #view-assets .smart-asset-table th:nth-child(1),
+  #view-assets .smart-asset-table td:nth-child(1) { width: 13% !important; }
+  #view-assets .smart-asset-table th:nth-child(2),
+  #view-assets .smart-asset-table td:nth-child(2) { width: 23% !important; }
+  #view-assets .smart-asset-table th:nth-child(3),
+  #view-assets .smart-asset-table td:nth-child(3) { width: 12% !important; }
+  #view-assets .smart-asset-table th:nth-child(4),
+  #view-assets .smart-asset-table td:nth-child(4) { width: 16% !important; }
+  #view-assets .smart-asset-table th:nth-child(5),
+  #view-assets .smart-asset-table td:nth-child(5) { width: 10% !important; }
+  #view-assets .smart-asset-table th:nth-child(6),
+  #view-assets .smart-asset-table td:nth-child(6) { width: 11% !important; }
+  #view-assets .smart-asset-table th:nth-child(7),
+  #view-assets .smart-asset-table td:nth-child(7) { width: 15% !important; }
+  #view-assets .table-action-group {
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+  }
+  #view-assets .table-action-group .btn-dossier {
+    flex: 1 0 100% !important;
+    justify-content: center !important;
+  }
+
+  /* PM filters: long plan / assignee names must not stretch the selects. */
+  #view-work .work-filters select {
+    max-width: 260px !important;
+  }
+
+  /* Dashboard repair list: long problem text no longer makes one row
+     fill the whole card. */
+  #dashboardRepairRows .item-meta {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+  }
+}
+
+@media (max-width: 1600px) {
+  /* Sticker designer: give the preview column more room on laptops. */
+  #view-stickers .sticker-layout {
+    grid-template-columns: minmax(240px, 270px) minmax(0, 1fr) !important;
+  }
+  #view-stickers .sticker-editor-workarea {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 290px) !important;
+  }
+  #view-stickers .sticker-header-strip {
+    flex-wrap: wrap !important;
+  }
+  #view-stickers .toolbar-group {
+    flex-wrap: wrap !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  #view-stickers .toolbar-group select,
+  #view-stickers .toolbar-group input[type="text"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  #view-stickers .prop-quick-align {
+    flex-wrap: wrap !important;
+  }
+  #view-stickers .prop-quick-align > .prop-align-row {
+    flex: 1 1 100% !important;
+  }
+  #view-stickers .mini-prop-btn {
+    white-space: nowrap !important;
+  }
+}
+
+@media (max-width: 1199px) {
+  /* Too narrow for all register columns: scroll sideways with the sticky
+     action column instead of crushing every column. */
+  #view-assets .smart-asset-table {
+    min-width: 900px !important;
+  }
+}
+
+@media (min-width: 981px) and (max-width: 1180px) {
+  /* A4 register page: the side panel was cut off because the fixed column
+     minimums were wider than the content area. */
+  #view-register .register-scroll-body {
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr) !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  /* Topbar: keep room for the breadcrumb next to the back button. */
+  header.topbar .environment {
+    font-size: 0 !important;
+    gap: 0 !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+  header.topbar .topbar-left {
+    min-width: 0 !important;
+  }
+  header.topbar .btn-topbar-back {
+    flex: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Icon rail: the 60px sidebar shows icons only. */
+  .sidebar .brand-copy,
+  .sidebar .nav-section-title,
+  .sidebar .security-note,
+  .sidebar .profile > div:not(.avatar),
+  .sidebar .profile .dots {
+    display: none !important;
+  }
+  .sidebar .brand {
+    justify-content: center !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  .sidebar .nav-item {
+    position: relative !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    padding: 10px 4px !important;
+    font-size: 0 !important;
+    overflow: hidden !important;
+  }
+  .sidebar .nav-icon {
+    font-size: 18px !important;
+    margin: 0 !important;
+  }
+  .sidebar .nav-badge-pill {
+    position: absolute !important;
+    top: 2px !important;
+    right: 2px !important;
+    margin: 0 !important;
+    padding: 0 4px !important;
+    font-size: 9px !important;
+    line-height: 14px !important;
+  }
+  .sidebar .profile {
+    justify-content: center !important;
+  }
+}
+
+@media (max-width: 720px) {
+  /* Phone topbar: keep the bell and role picker on screen. */
+  header.topbar {
+    padding: 0 10px !important;
+    gap: 8px !important;
+  }
+  header.topbar .crumb,
+  header.topbar .environment,
+  header.topbar .topbar-divider {
+    display: none !important;
+  }
+  header.topbar .top-actions {
+    gap: 6px !important;
+    min-width: 0 !important;
+  }
+  header.topbar .btn-topbar-back {
+    margin-right: 0 !important;
+    padding: 6px 10px !important;
+  }
+  header.topbar .btn-topbar-back .back-text {
+    display: none !important;
   }
 }

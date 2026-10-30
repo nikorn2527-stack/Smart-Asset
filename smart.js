@@ -13,46 +13,67 @@
   document.body.append(dialog);
   dialog.addEventListener('click', e => { if (e.target === dialog || e.target.closest('[data-close-smart]')) dialog.close(); });
 
+  function fullestText(...parts) {
+    return parts.map(value => String(value ?? '').trim()).filter(Boolean).sort((a, b) => b.length - a.length)[0] || '';
+  }
   function renderModalLedger(reg, a) {
     if (!reg) return '<p class="field-hint">ไม่พบข้อมูลใบคุมสำหรับรายการนี้</p>';
-    const asset = reg.asset || a || {}, acqs = (reg.acquisitions && reg.acquisitions.length) ? reg.acquisitions : [{
+    const asset = reg.asset || a || {};
+    const form = reg.register || {};
+    const spec = fullestText(form.description, asset.detail, a?.detail, asset.name, a?.name);
+    const acqs = (reg.acquisitions && reg.acquisitions.length) ? reg.acquisitions : [{
       acquired_on: asset.acquiredOn || asset.date,
-      document_no: asset.poNo || asset.gfmisNo || '—',
-      item_description: asset.name,
+      document_no: asset.poNo || asset.gfmisNo || '',
+      item_description: spec,
       quantity: 1,
       unit_price: asset.purchasePrice,
       total_price: asset.purchasePrice,
-      useful_life_years: asset.usefulLifeYears || '—',
-      monthly_depreciation: asset.monthlyDepreciation || '—',
-      annual_depreciation: asset.annualDepreciation || '—',
-      accumulated_depreciation: asset.accumulatedDepreciation || '—',
-      net_book_value: asset.netBookValue || asset.purchasePrice || '—',
-      notes: asset.detail || '—'
+      useful_life_years: asset.usefulLifeYears || '',
+      monthly_depreciation: asset.monthlyDepreciation || '',
+      annual_depreciation: asset.annualDepreciation || '',
+      accumulated_depreciation: asset.accumulatedDepreciation || '',
+      net_book_value: asset.netBookValue || '',
+      notes: ''
     }];
+    const meta = [
+      ['ส่วนราชการ', form.organization_name || asset.organization],
+      ['หน่วยงาน', form.department_name || asset.department || asset.responsibleUnit],
+      ['ประเภท', form.asset_type || asset.assetType],
+      ['หมวด', asset.group],
+      ['รหัส', asset.code || form.asset_code_printed],
+      ['ลักษณะ/คุณสมบัติ', spec],
+      ['รุ่น/แบบ', form.model || asset.model],
+      ['สถานที่ตั้ง / หน่วยงานรับผิดชอบ', form.location || asset.location],
+      ['ชื่อผู้ขาย / ผู้รับจ้าง / ผู้บริจาค', form.vendor_name || asset.vendor],
+      ['ที่อยู่', form.vendor_address],
+      ['โทร.', form.vendor_phone],
+      ['เลขที่ GFMIS', form.gfmis_no || asset.gfmisNo],
+      ['เลขที่ PO', form.po_no || asset.poNo],
+      ['S/N', form.serial_number || asset.serialNumber],
+      ['สิ้นสุดประกัน', form.warranty_end || asset.warrantyEnd],
+      ['ปีงบที่ได้มา', form.fiscal_year_th || asset.fiscalYear],
+      ['ประเภทเงิน', form.fund_type || asset.fundType],
+      ['วิธีการได้มา', form.acquisition_method || asset.acquisitionMethod]
+    ];
     return `<div class="modal-ledger-meta">
-      <div><span>ส่วนราชการ / หน่วยงาน:</span> <b>${esc(asset.organization || '—')} / ${esc(asset.department || asset.responsibleUnit || '—')}</b></div>
-      <div><span>ประเภท / หมวด:</span> <b>${esc(asset.group || asset.assetType || '—')}</b></div>
-      <div><span>เลขที่ GFMIS / PO:</span> <b>${esc([asset.gfmisNo, asset.poNo].filter(Boolean).join(' / ') || '—')}</b></div>
-      <div><span>ผู้ขาย / ผู้ส่งมอบ:</span> <b>${esc(asset.vendor || '—')}</b></div>
-      <div><span>วิธีการได้มา / แหล่งเงิน:</span> <b>${esc(asset.acquisitionMethod || 'จัดซื้อ')} / ${esc(asset.fundType || 'เงินงบประมาณ')}</b></div>
-      <div><span>มูลค่าจัดซื้อ / มูลค่าสุทธิ:</span> <b>${asset.purchasePrice ? Number(asset.purchasePrice).toLocaleString('th-TH') + ' บาท' : '—'} / ${asset.netBookValue ? Number(asset.netBookValue).toLocaleString('th-TH') + ' บาท' : '—'}</b></div>
+      ${meta.map(([label, value]) => `<div class="${['ลักษณะ/คุณสมบัติ','ที่อยู่','สถานที่ตั้ง / หน่วยงานรับผิดชอบ','ชื่อผู้ขาย / ผู้รับจ้าง / ผู้บริจาค'].includes(label) ? 'full' : ''}"><span>${esc(label)}</span> <b>${esc(value || '—')}</b></div>`).join('')}
     </div>
     <div class="table-wrap">
       <table class="modal-ledger-table">
         <thead>
           <tr>
-            <th>1. วันเดือนปี</th>
-            <th>2. ที่เอกสาร</th>
-            <th>3. รายการ</th>
-            <th>4. จำนวน</th>
-            <th>5. ราคา/หน่วย</th>
-            <th>6. มูลค่ารวม</th>
-            <th>7. อายุ (ปี)</th>
-            <th>8. ค่าเสื่อม/ด.</th>
-            <th>9. ค่าเสื่อม/ปี</th>
-            <th>10. ค่าเสื่อมสะสม</th>
-            <th>11. มูลค่าสุทธิ</th>
-            <th>12. หมายเหตุ</th>
+            <th>วัน เดือน ปี</th>
+            <th>ที่เอกสาร</th>
+            <th>รายการ</th>
+            <th>จำนวนหน่วย</th>
+            <th>ราคาต่อหน่วย</th>
+            <th>มูลค่ารวม</th>
+            <th>อายุใช้งาน</th>
+            <th>ค่าเสื่อมราคาประจำเดือน</th>
+            <th>ค่าเสื่อมราคาประจำปี</th>
+            <th>ค่าเสื่อมราคาสะสม</th>
+            <th>มูลค่าสุทธิ</th>
+            <th>หมายเหตุ</th>
           </tr>
         </thead>
         <tbody>
@@ -60,7 +81,7 @@
             <tr>
               <td>${esc(app.fmtDate(rw.acquired_on || rw.date || asset.acquiredOn))}</td>
               <td>${esc(rw.document_no || rw.po_no || asset.poNo || '—')}</td>
-              <td><b>${esc(rw.item_description || asset.name)}</b></td>
+              <td><b>${esc(rw.item_description || spec || asset.name)}</b></td>
               <td style="text-align:center">${esc(rw.quantity || 1)}</td>
               <td style="text-align:right">${rw.unit_price ? Number(rw.unit_price).toLocaleString('th-TH', {minimumFractionDigits:2}) : '—'}</td>
               <td style="text-align:right">${rw.total_price ? Number(rw.total_price).toLocaleString('th-TH', {minimumFractionDigits:2}) : '—'}</td>
@@ -79,50 +100,191 @@
 
   function money(value) {
     const amount = Number(value);
-    return value == null || value === '' || Number.isNaN(amount) ? '—' : amount.toLocaleString('th-TH') + ' บาท';
+    return value == null || value === '' || Number.isNaN(amount) ? '—' : amount.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' บาท';
+  }
+  function dateShown(value) {
+    if (value == null || String(value).trim() === '') return '—';
+    const formatted = app.fmtDate(value);
+    return formatted && formatted !== '—' ? formatted : String(value).trim();
   }
   function detailCell(label, value, wide = false) {
     const text = value == null || String(value).trim() === '' ? '—' : value;
     return `<div class="${wide ? 'full' : ''}"><dt>${esc(label)}</dt><dd>${esc(text)}</dd></div>`;
   }
   function detailSheet(a, data, reg, life, categoryName) {
-    const book = reg?.asset || {};
+    const book = reg?.asset || a || {};
+    const form = reg?.register || {};
+    const acq = (reg?.acquisitions || []).at?.(-1) || (reg?.acquisitions || []).slice(-1)[0] || {};
+    const dep = (reg?.depreciationSnapshots || []).at?.(-1) || (reg?.depreciationSnapshots || []).slice(-1)[0] || {};
+    const spec = fullestText(form.description, book.detail, a.detail, book.name, a.name);
     const events = data.events || [];
     const tickets = data.tickets || [];
     const custody = life?.history || [];
-    return `<h3>รายละเอียดครุภัณฑ์</h3><dl class="asset-detail-sheet">${[
-      detailCell('สถานะ', a.status),
-      detailCell('เลขครุภัณฑ์', a.code),
-      detailCell('รหัส FSN', a.fsnCode || book.fsnCode),
-      detailCell('หมวด', categoryName || book.group),
-      detailCell('ชนิด / รุ่น', [book.assetType, book.model].filter(Boolean).join(' · ')),
-      detailCell('Serial', a.serialNumber || book.serialNumber),
-      detailCell('สถานที่ตั้ง', a.location || book.location, true),
-      detailCell('หน่วยงาน', [book.organization, book.department, book.accountName, book.branchName].filter(Boolean).join(' · '), true),
-      detailCell('ผู้ดูแล', a.custodian),
-      detailCell('สิ้นสุดประกัน', app.fmtDate(a.warrantyEnd || book.warrantyEnd)),
-      detailCell('ราคาทุน', money(book.purchasePrice)),
-      detailCell('มูลค่าสุทธิ', money(book.netBookValue)),
-      detailCell('วันที่ได้มา', app.fmtDate(book.acquiredOn)),
-      detailCell('วิธีได้มา', book.acquisitionMethod),
-      detailCell('GFMIS / PO', [book.gfmisNo, book.poNo].filter(Boolean).join(' / ')),
-      detailCell('ผู้ขาย', book.vendor),
-      detailCell('รายละเอียด', a.detail || book.detail, true)
-    ].join('')}</dl>
+    const rows = [
+      ['สถานะ', a.status],
+      ['ส่วนราชการ', form.organization_name || book.organization],
+      ['หน่วยงาน', form.department_name || book.department || book.responsibleUnit],
+      ['บัญชี', book.accountName],
+      ['สาขา', book.branchName],
+      ['ประเภท', form.asset_type || book.assetType],
+      ['หมวด', categoryName || book.group],
+      ['รหัส', book.code || a.code || form.asset_code_printed],
+      ['รหัส FSN', a.fsnCode || book.fsnCode],
+      ['ชื่อครุภัณฑ์', a.name && a.name.trim() !== spec ? a.name : ''],
+      ['ลักษณะ/คุณสมบัติ', spec, true],
+      ['รุ่น/แบบ', form.model || book.model || acq.model],
+      ['สถานที่ตั้ง / หน่วยงานรับผิดชอบ', form.location || a.location || book.location, true],
+      ['ชื่อผู้ขาย / ผู้รับจ้าง / ผู้บริจาค', form.vendor_name || acq.vendor_name || book.vendor, true],
+      ['ที่อยู่', form.vendor_address || acq.vendor_address, true],
+      ['โทร.', form.vendor_phone || acq.vendor_phone],
+      ['เลขที่ GFMIS', form.gfmis_no || acq.gfmis_no || book.gfmisNo],
+      ['เลขที่ PO', form.po_no || acq.po_no || book.poNo],
+      ['S/N', form.serial_number || acq.serial_number || a.serialNumber || book.serialNumber],
+      ['สิ้นสุดประกัน', dateShown(form.warranty_end || a.warrantyEnd || book.warrantyEnd)],
+      ['ปีงบที่ได้มา', form.fiscal_year_th || acq.fiscal_year_th || book.fiscalYear],
+      ['ประเภทเงิน', form.fund_type || acq.fund_type || book.fundType],
+      ['วิธีการได้มา', form.acquisition_method || acq.acquisition_method || book.acquisitionMethod],
+      ['ผู้ดูแล', a.custodian || life?.state?.custodian],
+      ['วัน เดือน ปี', dateShown(acq.acquired_on || book.acquiredOn)],
+      ['ที่เอกสาร', acq.document_no],
+      ['จำนวนหน่วย', acq.quantity == null || acq.quantity === '' ? '' : acq.quantity],
+      ['ราคาต่อหน่วย', money(acq.unit_price ?? book.purchasePrice)],
+      ['มูลค่ารวม', money(acq.total_price ?? book.purchasePrice)],
+      ['อายุใช้งาน (ปี)', dep.useful_life_years ?? book.usefulLifeYears],
+      ['ค่าเสื่อมราคาประจำเดือน', money(dep.monthly_depreciation ?? book.monthlyDepreciation)],
+      ['ค่าเสื่อมราคาประจำปี', money(dep.annual_depreciation ?? book.annualDepreciation)],
+      ['ค่าเสื่อมราคาสะสม', money(dep.accumulated_depreciation ?? book.accumulatedDepreciation)],
+      ['มูลค่าสุทธิ', money(dep.net_book_value ?? book.netBookValue)],
+      ['หมายเหตุ', form.notes || acq.notes || dep.notes, true]
+    ].filter(([label, value]) => label !== 'ชื่อครุภัณฑ์' || String(value || '').trim());
+    const tile = (label, value, wide=false) => {
+      const text = value == null || String(value).trim() === '' || value === '—' ? '' : String(value).trim();
+      return text ? `<div class="asset-app-tile${wide ? ' wide' : ''}"><span>${esc(label)}</span><b>${esc(text)}</b></div>` : '';
+    };
+    const group = (title, cells) => {
+      const body = cells.filter(Boolean).join('');
+      return body ? `<section class="asset-app-group"><h3>${esc(title)}</h3><div class="asset-app-grid">${body}</div></section>` : '';
+    };
+    const filled = new Map(rows.filter(([, value]) => value != null && String(value).trim() !== '' && value !== '—'));
+    const pick = (label, wide=false) => tile(label, filled.get(label), wide);
+    return `<div class="asset-app">${[
+      group('เครื่อง', [pick('สถานะ'), pick('รหัส'), pick('รหัส FSN'), pick('หมวด'), pick('ประเภท'), pick('รุ่น/แบบ'), pick('S/N'), pick('ชื่อครุภัณฑ์', true), pick('ลักษณะ/คุณสมบัติ', true)]),
+      group('ที่ตั้ง', [pick('ส่วนราชการ'), pick('หน่วยงาน'), pick('บัญชี'), pick('สาขา'), pick('สถานที่ตั้ง / หน่วยงานรับผิดชอบ', true), pick('ผู้ดูแล')]),
+      group('ได้มา', [pick('ปีงบที่ได้มา'), pick('วัน เดือน ปี'), pick('วิธีการได้มา'), pick('ประเภทเงิน'), pick('เลขที่ GFMIS'), pick('เลขที่ PO'), pick('ที่เอกสาร'), pick('ชื่อผู้ขาย / ผู้รับจ้าง / ผู้บริจาค', true), pick('ที่อยู่', true), pick('โทร.'), pick('สิ้นสุดประกัน')]),
+      group('มูลค่า', [pick('จำนวนหน่วย'), pick('ราคาต่อหน่วย'), pick('มูลค่ารวม'), pick('อายุใช้งาน (ปี)'), pick('ค่าเสื่อมราคาประจำเดือน'), pick('ค่าเสื่อมราคาประจำปี'), pick('ค่าเสื่อมราคาสะสม'), pick('มูลค่าสุทธิ'), pick('หมายเหตุ', true)])
+    ].join('')}</div>
       <section class="asset-history-block"><h3>ประวัติการเปลี่ยนแปลงทะเบียน</h3><ol class="smart-history">${events.map(e => `<li><b>${esc(e.action)}</b><span>${esc(e.actor)} · ${esc(app.fmtDate(e.createdAt))}</span></li>`).join('') || '<li>ยังไม่มีการแก้ไขทะเบียน</li>'}</ol></section>
       <section class="asset-history-block"><h3>ประวัติงานซ่อม</h3><div class="smart-ticket-list">${tickets.map(t => `<button type="button" data-smart-ticket="${t.id}"><span><b>${esc(t.ticketNo)}</b><small>${esc(t.issue)}</small><small>${esc(app.fmtDate(t.createdAt))} · ${esc(t.status)}</small></span></button>`).join('') || '<div class="smart-empty">ยังไม่มีประวัติซ่อมสำหรับครุภัณฑ์นี้</div>'}</div></section>
       <section class="asset-history-block"><h3>ประวัติยืม เบิก คืน</h3><ol class="smart-history">${custody.map(e => `<li><b>${esc(e.kind)}</b><span>${esc(e.actor)} · ${esc(app.fmtDate(e.created_at))}${e.note ? ' · ' + esc(e.note) : ''}</span></li>`).join('') || '<li>ยังไม่มีประวัติยืม เบิก คืน</li>'}</ol></section>`;
   }
 
+  // Photos are resized in the browser so a phone photo (often 3–8 MB) uploads as a few hundred KB.
+  function loadImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`เปิดไฟล์ ${file.name} ไม่ได้ ใช้ไฟล์ JPG หรือ PNG`)); };
+      img.src = url;
+    });
+  }
+  function shrink(img, max, quality) {
+    const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return {dataUrl: canvas.toDataURL('image/jpeg', quality), width: canvas.width, height: canvas.height};
+  }
+  function photoBlock(photos, canEdit) {
+    const items = photos.items || [];
+    const main = items[0];
+    const full = items.length >= (photos.max || 12);
+    const thumbs = items.map((p, i) => `<button type="button" class="asset-photo-thumb${i === 0 ? ' is-active' : ''}" data-photo-pick="${p.id}" aria-label="ดูรูปที่ ${i + 1}"><img src="${esc(p.thumbUrl)}" alt="" loading="lazy">${p.isPrimary ? '<span>รูปหลัก</span>' : ''}</button>`).join('');
+    const actions = canEdit ? `<div class="asset-photo-actions">
+        <label class="button outline mini-action asset-photo-add${full ? ' is-disabled' : ''}">＋ เพิ่มรูป<input type="file" accept="image/*" multiple data-photo-input ${full ? 'disabled' : ''} hidden></label>
+        ${main ? `<button type="button" class="button outline mini-action" data-photo-primary ${main.isPrimary ? 'hidden' : ''}>ตั้งเป็นรูปหลัก</button><button type="button" class="button outline mini-action reject" data-photo-remove>ลบรูปนี้</button>` : ''}
+      </div>` : '';
+    const stage = main
+      ? `<a class="asset-photo-stage" href="${esc(main.url)}" target="_blank" rel="noopener" data-photo-stage title="เปิดรูปขนาดเต็ม"><img src="${esc(main.url)}" alt="รูปครุภัณฑ์"></a>`
+      : `<div class="asset-photo-stage empty"><span aria-hidden="true">📷</span><b>ยังไม่มีรูปครุภัณฑ์</b><small>${canEdit ? 'กด “เพิ่มรูป” เพื่อถ่ายหรือเลือกรูปจากเครื่อง' : 'เจ้าหน้าที่เพิ่มรูปได้จากหน้านี้'}</small></div>`;
+    return `<section class="asset-photos" data-photo-block data-current="${main ? main.id : ''}">
+      ${stage}
+      <div class="asset-photo-side">
+        <div class="asset-photo-head"><h3>รูปครุภัณฑ์</h3><small>${items.length} / ${photos.max || 12} รูป</small></div>
+        ${thumbs ? `<div class="asset-photo-strip">${thumbs}</div>` : ''}
+        ${actions}
+        <p class="asset-photo-status" data-photo-status role="status"></p>
+      </div>
+    </section>`;
+  }
+  function bindPhotos(root, assetId, photos, canEdit) {
+    const block = $('[data-photo-block]', root);
+    if (!block) return;
+    const status = $('[data-photo-status]', block);
+    const items = photos.items || [];
+    const current = () => items.find(p => String(p.id) === block.dataset.current);
+    const rerender = async next => {
+      block.outerHTML = photoBlock(next, canEdit);
+      bindPhotos(root, assetId, next, canEdit);
+      app.refreshData?.();
+    };
+    block.querySelectorAll('[data-photo-pick]').forEach(button => button.onclick = () => {
+      const p = items.find(x => String(x.id) === button.dataset.photoPick); if (!p) return;
+      block.dataset.current = p.id;
+      const stage = $('[data-photo-stage]', block);
+      if (stage) { stage.href = p.url; $('img', stage).src = p.url; }
+      block.querySelectorAll('[data-photo-pick]').forEach(b => b.classList.toggle('is-active', b === button));
+      const primary = $('[data-photo-primary]', block); if (primary) primary.hidden = p.isPrimary;
+    });
+    const input = $('[data-photo-input]', block);
+    if (input) input.onchange = async () => {
+      const files = [...input.files]; input.value = '';
+      if (!files.length) return;
+      let next = photos;
+      try {
+        for (const [index, file] of files.entries()) {
+          status.textContent = `กำลังย่อและอัปโหลดรูป ${index + 1}/${files.length}…`;
+          const img = await loadImage(file);
+          let full = shrink(img, 1600, 0.82);
+          if (full.dataUrl.length > 3_200_000) full = shrink(img, 1280, 0.7);
+          const thumb = shrink(img, 320, 0.72);
+          await app.api(`/api/assets/${assetId}/photos`, {method:'POST', body:JSON.stringify({image:full.dataUrl, thumb:thumb.dataUrl, width:full.width, height:full.height, actor:app.getRole()})});
+        }
+        next = await app.api(`/api/assets/${assetId}/photos`);
+        app.toast(files.length > 1 ? `เพิ่มรูป ${files.length} รูปแล้ว` : 'เพิ่มรูปแล้ว');
+        await rerender(next);
+      } catch (error) {
+        try { next = await app.api(`/api/assets/${assetId}/photos`); await rerender(next); } catch { /* keep the old block */ }
+        const fresh = $('[data-photo-status]', root); if (fresh) fresh.textContent = error.message;
+      }
+    };
+    const act = async (kind, confirmText) => {
+      const p = current(); if (!p) return;
+      if (confirmText && !confirm(confirmText)) return;
+      try {
+        status.textContent = 'กำลังบันทึก…';
+        const next = await app.api(`/api/assets/${assetId}/photos/${p.id}/${kind}`, {method:'POST', body:JSON.stringify({actor:app.getRole()})});
+        app.toast(kind === 'primary' ? 'ตั้งเป็นรูปหลักแล้ว' : 'ลบรูปแล้ว');
+        await rerender(next);
+      } catch (error) { status.textContent = error.message; }
+    };
+    const primary = $('[data-photo-primary]', block); if (primary) primary.onclick = () => act('primary');
+    const remove = $('[data-photo-remove]', block); if (remove) remove.onclick = () => act('remove', 'ลบรูปนี้ออกจากทะเบียน? ระบบจะเก็บประวัติว่าใครลบไว้');
+  }
+
   async function openAsset(id) {
     try {
-      const [data, categories, accountContext, regData, life] = await Promise.all([
+      const [data, categories, accountContext, regData, life, photos] = await Promise.all([
         app.api(`/api/assets/${id}/smart`),
         app.api('/api/catalog/categories'),
         app.api(`/api/governance/assets/${id}`),
         app.api(`/api/assets/${id}/register`).catch(() => null),
-        app.api(`/api/lifecycle/assets/${id}`).catch(() => ({state:{}, history:[]}))
+        app.api(`/api/lifecycle/assets/${id}`).catch(() => ({state:{}, history:[]})),
+        app.api(`/api/assets/${id}/photos`).catch(() => ({items:[], max:12}))
       ]);
+      const canPhoto = app.getRole() !== 'ผู้แจ้ง';
       selected = data;
       const a = data.asset, canEdit = app.getRole() === 'เจ้าหน้าที่พัสดุ';
       const categoryName = categories.find(c => Number(c.id) === Number(a.categoryId))?.name || '';
@@ -137,7 +299,7 @@
           <button role="tab" aria-selected="false" data-smart-tab="custody">ยืม / เบิก / คืน</button>
         </div>
         <div class="smart-layout"><div>
-          <section data-smart-panel="detail">${detailSheet(a, data, regData, life, categoryName)}</section>
+          <section data-smart-panel="detail">${photoBlock(photos, canPhoto)}${detailSheet(a, data, regData, life, categoryName)}</section>
           <section data-smart-panel="info" hidden><div class="smart-state"><span class="badge blue">${esc(a.status)}</span><span>${active.length ? `มีงานซ่อมที่กำลังดำเนินการ ${active.length} งาน` : 'ไม่มีงานซ่อมค้าง'}</span></div>
           ${window.govAssetAccountContextMarkup?.(accountContext)||''}<form id="smartAssetForm" class="smart-form"><div class="form-grid"><label>ชื่อครุภัณฑ์<input name="name" required maxlength="300" value="${esc(a.name)}"></label><label>รหัสครุภัณฑ์<input name="code" required maxlength="80" value="${esc(a.code)}"></label></div><label>หมวดครุภัณฑ์<select name="categoryId" required><option value="">เลือกหมวดครุภัณฑ์</option>${categories.map(c => `<option value="${c.id}" ${Number(c.id) === Number(a.categoryId) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label><label>รายละเอียด<textarea name="detail" maxlength="1000" rows="3">${esc(a.detail)}</textarea></label><div class="form-grid"><label>สถานที่ตั้ง<input name="location" required maxlength="300" value="${esc(a.location)}"></label><label>หมายเลขเครื่อง / Serial<input name="serialNumber" maxlength="160" value="${esc(a.serialNumber)}"></label><label>ผู้ดูแลครุภัณฑ์<input name="custodian" maxlength="160" value="${esc(a.custodian)}"></label><label>สิ้นสุดประกัน<input name="warrantyEnd" type="date" value="${esc(a.warrantyEnd)}"></label></div><p class="field-hint">${canEdit ? 'การแก้ไขจะบันทึกประวัติ และแสดงข้อมูลใหม่ผ่าน QR เดิมทันที' : 'สำหรับเจ้าหน้าที่พัสดุที่มีสิทธิ์แก้ไขทะเบียนครุภัณฑ์'}</p><div class="dialog-actions"><button class="button outline" type="button" id="smartRegister">📋 เปิดใบคุมทรัพย์สินเต็มหน้า (A4)</button><button class="button outline" type="button" id="smartRepair">แจ้งซ่อมรายการนี้</button>${canEdit ? '<button class="button primary" type="submit">บันทึกข้อมูล</button>' : ''}</div><p id="smartSaveStatus" role="status"></p></form></section>
           <section data-smart-panel="ledger" hidden>
@@ -180,9 +342,21 @@
         const preserved=document.createElement('input');preserved.type='hidden';preserved.name='categoryId';preserved.value=a.categoryId;dialog.querySelector('#smartAssetForm').append(preserved);
       }
       if (!canEdit) dialog.querySelectorAll('#smartAssetForm input,#smartAssetForm textarea,#smartAssetForm select').forEach(el => el.disabled = true);
+      bindPhotos(dialog, a.id, photos, canPhoto);
+      const tabStrip = $('.smart-tabs', dialog), body = $('.smart-layout', dialog);
+      // On narrow screens the tab row scrolls sideways; fade the edge that still has tabs.
+      const tabCue = () => {
+        const max = tabStrip.scrollWidth - tabStrip.clientWidth;
+        tabStrip.classList.toggle('has-more-left', max > 2 && tabStrip.scrollLeft > 2);
+        tabStrip.classList.toggle('has-more-right', max > 2 && tabStrip.scrollLeft < max - 2);
+      };
+      tabStrip.addEventListener('scroll', tabCue, {passive: true});
+      new ResizeObserver(tabCue).observe(tabStrip);
       dialog.querySelectorAll('[data-smart-tab]').forEach(button => button.onclick = () => {
         dialog.querySelectorAll('[data-smart-tab]').forEach(b => b.setAttribute('aria-selected', String(b === button)));
         dialog.querySelectorAll('[data-smart-panel]').forEach(p => p.hidden = p.dataset.smartPanel !== button.dataset.smartTab);
+        body.scrollTop = 0;
+        button.scrollIntoView({block: 'nearest', inline: 'nearest'});
       });
       dialog.querySelectorAll('[data-smart-ticket]').forEach(button => button.onclick = () => { dialog.close(); app.openTicket(Number(button.dataset.smartTicket)); });
       $('#smartRepair', dialog).onclick = () => {

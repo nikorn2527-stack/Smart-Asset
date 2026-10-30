@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b2a3e"/>
+      <stop offset=".55" stop-color="#123d56"/>
+      <stop offset="1" stop-color="#0c6f72"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx=".78" cy=".22" r=".45">
+      <stop offset="0" stop-color="#2fb5a9" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#2fb5a9" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx=".15" cy=".95" r=".5">
+      <stop offset="0" stop-color="#f6b25c" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#f6b25c" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.3" fill="#ffffff" fill-opacity=".09"/>
+    </pattern>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".02"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <rect width="1600" height="1000" fill="url(#glowA)"/>
+  <rect width="1600" height="1000" fill="url(#glowB)"/>
+  <rect width="1600" height="1000" fill="url(#dots)"/>
+  <!-- Building skyline: a tall clinical tower with lit windows, low wings either side. -->
+  <g fill="url(#fade)" stroke="#ffffff" stroke-opacity=".14" stroke-width="1.5">
+    <rect x="860" y="380" width="250" height="620" rx="6"/>
+    <rect x="1110" y="560" width="300" height="440" rx="6"/>
+    <rect x="640" y="620" width="220" height="380" rx="6"/>
+    <rect x="1410" y="700" width="190" height="300" rx="6"/>
+    <rect x="420" y="760" width="220" height="240" rx="6"/>
+  </g>
+  <g fill="#ffd79a">
+    <rect x="890" y="420" width="34" height="22" fill-opacity=".35"/><rect x="940" y="420" width="34" height="22" fill-opacity=".12"/><rect x="990" y="420" width="34" height="22" fill-opacity=".3"/><rect x="1040" y="420" width="34" height="22" fill-opacity=".1"/>
+    <rect x="890" y="470" width="34" height="22" fill-opacity=".1"/><rect x="940" y="470" width="34" height="22" fill-opacity=".32"/><rect x="990" y="470" width="34" height="22" fill-opacity=".1"/><rect x="1040" y="470" width="34" height="22" fill-opacity=".28"/>
+    <rect x="890" y="520" width="34" height="22" fill-opacity=".28"/><rect x="940" y="520" width="34" height="22" fill-opacity=".1"/><rect x="990" y="520" width="34" height="22" fill-opacity=".34"/><rect x="1040" y="520" width="34" height="22" fill-opacity=".12"/>
+    <rect x="890" y="570" width="34" height="22" fill-opacity=".1"/><rect x="940" y="570" width="34" height="22" fill-opacity=".3"/><rect x="990" y="570" width="34" height="22" fill-opacity=".12"/><rect x="1040" y="570" width="34" height="22" fill-opacity=".3"/>
+    <rect x="890" y="620" width="34" height="22" fill-opacity=".3"/><rect x="940" y="620" width="34" height="22" fill-opacity=".12"/><rect x="990" y="620" width="34" height="22" fill-opacity=".1"/><rect x="1040" y="620" width="34" height="22" fill-opacity=".34"/>
+    <rect x="1140" y="600" width="40" height="22" fill-opacity=".26"/><rect x="1200" y="600" width="40" height="22" fill-opacity=".1"/><rect x="1260" y="600" width="40" height="22" fill-opacity=".3"/><rect x="1320" y="600" width="40" height="22" fill-opacity=".12"/>
+    <rect x="1140" y="650" width="40" height="22" fill-opacity=".1"/><rect x="1200" y="650" width="40" height="22" fill-opacity=".3"/><rect x="1260" y="650" width="40" height="22" fill-opacity=".1"/><rect x="1320" y="650" width="40" height="22" fill-opacity=".28"/>
+    <rect x="670" y="660" width="36" height="22" fill-opacity=".24"/><rect x="726" y="660" width="36" height="22" fill-opacity=".1"/><rect x="782" y="660" width="36" height="22" fill-opacity=".28"/>
+  </g>
+  <!-- Medical cross on the tower. -->
+  <g transform="translate(985 330)" fill="#ffffff" fill-opacity=".55">
+    <rect x="-9" y="-26" width="18" height="52" rx="3"/>
+    <rect x="-26" y="-9" width="52" height="18" rx="3"/>
+  </g>
+  <!-- QR-style marks drifting on the right, hinting at the Smart QR labels. -->
+  <g fill="none" stroke="#ffffff" stroke-opacity=".16" stroke-width="2">
+    <rect x="1330" y="150" width="120" height="120" rx="14"/>
+    <rect x="1345" y="165" width="34" height="34" rx="5"/><rect x="1401" y="165" width="34" height="34" rx="5"/><rect x="1345" y="221" width="34" height="34" rx="5"/>
+  </g>
+  <g fill="#ffffff" fill-opacity=".14">
+    <rect x="1405" y="225" width="10" height="10"/><rect x="1421" y="225" width="10" height="10"/><rect x="1405" y="241" width="10" height="10"/><rect x="1425" y="245" width="10" height="10"/>
+  </g>
+  <path d="M0 930 C 300 880, 600 960, 900 910 S 1400 880, 1600 920 L1600 1000 L0 1000 Z" fill="#0a2333" fill-opacity=".55"/>
+</svg>

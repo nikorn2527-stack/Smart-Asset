@@ -136,7 +136,6 @@ async function refreshData() {
     setText('#kpiPendingAssets', pendingCount.toLocaleString('th-TH'));
     setText('#kpiRepairAssets', activeReps.toLocaleString('th-TH'));
     const navBadge = $('#navAssetBadge'); if(navBadge) navBadge.textContent = totalAssets > 1000 ? Math.round(totalAssets/1000) + 'K' : totalAssets;
-    const apprvBadge = $('#navApprovalBadge'); if(apprvBadge) apprvBadge.textContent = pendingCount;
     renderAssets(); renderRepairs(); renderSheet(); renderCatalog(); renderDepreciation(); renderApprovals(); updateCode();
     await window.govAssetMasterData?.load();
     const threshold=$('#thresholdAmount'); if(threshold) threshold.textContent=Number(config.approvalThreshold).toLocaleString('th-TH');
@@ -145,9 +144,14 @@ async function refreshData() {
 }
 const statusClass = status => ['พร้อมใช้','ทะเบียนแล้ว','ปิดงาน'].includes(status) ? 'ready' : ['รอตรวจสอบ','รออนุมัติ','รับแจ้งใหม่','รอผู้แจ้งยืนยัน'].includes(status) ? 'pending' : ['กำลังซ่อม','รออะไหล่'].includes(status) ? 'repair' : 'inactive';
 function badge(status) { return `<span class="gov-badge ${statusClass(status)}">${esc(status)}</span>`; }
-function assetNameCell(item) {
+function assetNameCell(item, withPhoto=false) {
   const modelText = [item.model, item.serialNumber ? `S/N: ${item.serialNumber}` : ''].filter(Boolean).join(' · ');
-  return `<div class="asset-info-cell"><div class="asset-primary-name">${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}</div><div class="asset-secondary-meta">${esc(modelText || item.detail || '—')}</div></div>`;
+  const text = `<div class="asset-info-cell"><div class="asset-primary-name">${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}</div><div class="asset-secondary-meta">${esc(modelText || item.detail || '—')}</div></div>`;
+  if(!withPhoto) return text;
+  const photo = item.photoUrl
+    ? `<button type="button" class="asset-thumb" data-smart-id="${item.id}" title="ดูรูปและรายละเอียด"><img src="${esc(item.photoUrl)}" alt="รูป ${esc(item.name || '')}" loading="lazy"></button>`
+    : `<button type="button" class="asset-thumb empty" data-smart-id="${item.id}" title="ยังไม่มีรูป · เปิดรายละเอียดเพื่อเพิ่มรูป" aria-label="ยังไม่มีรูป เปิดรายละเอียดเพื่อเพิ่มรูป"><span aria-hidden="true">📷</span></button>`;
+  return `<div class="asset-name-with-photo">${photo}${text}</div>`;
 }
 function renderAssets() {
   const can=permission=>!window.govAssetAccess?.session?.required||Boolean(window.govAssetAccess.session.permissions?.[permission]);
@@ -172,7 +176,7 @@ function renderAssets() {
           </div>
           ${fsnDisplay}
         </td>
-        <td>${assetNameCell(item)}</td>
+        <td>${assetNameCell(item, true)}</td>
         <td><span class="category-badge-chip">${esc(item.group || 'ทั่วไป')}</span></td>
         <td>
           <div class="asset-primary-name" style="font-size:12px;">${esc(item.location || '—')}</div>
@@ -208,9 +212,8 @@ function renderAssets() {
     const sStart = totalCount ? inventoryOffset + 1 : 0;
     const sEnd = Math.min(inventoryOffset + (inventoryRows ? inventoryRows.length : filtered.length), totalCount);
     let pageOpts = '';
-    const maxP = Math.min(pages, 100);
-    for(let p=1; p<=maxP; p++){ pageOpts += `<option value="${p}" ${p===page?'selected':''}>หน้า ${p}</option>`; }
-    if(pages > 100 && page > 100){ pageOpts += `<option value="${page}" selected>หน้า ${page}</option>`; }
+    // List every page so any part of the 66k register can be reached directly.
+    for(let p=1; p<=pages; p++){ pageOpts += `<option value="${p}" ${p===page?'selected':''}>หน้า ${p}</option>`; }
 
     pager.innerHTML = `
       <div class="pager-left">
@@ -273,7 +276,10 @@ function renderRepairs() {
   const filtered=repairs.filter(item=>`${item.ticketNo} ${item.assetCode} ${item.assetName} ${item.issue} ${item.location} ${item.reporterNote||''} ${item.requester} ${item.assignedTo} ${item.status}`.toLowerCase().includes(search)&&(status==='all'||item.status===status));
   const rowMarkup=item=>`<tr><td><button class="link-button ticket-number" data-ticket-detail="${item.id}">${esc(item.ticketNo)}</button><div class="item-meta">${esc(fmtDate(item.createdAt))}${isUserReport(item)?' · จากผู้ใช้':''}</div></td><td><div class="item-name">${esc(item.assetName)}</div><div class="item-meta">${esc(item.issue)}</div></td><td>${esc(item.location)}</td><td>${urgencyBadge(item.urgency)}</td><td>${userReportBadge(item)}${repairBadge(item.status)}</td><td>${esc(item.assignedTo||'—')}</td><td><button class="button outline mini-action" data-ticket-detail="${item.id}">ติดตาม</button> <button class="button outline mini-action" data-ticket-print="${item.id}" aria-label="พิมพ์ใบแจ้งซ่อม ${esc(item.ticketNo)}">พิมพ์</button></td></tr>`;
   const body=$('#repairRows'); if(body) body.innerHTML=filtered.length?filtered.map(rowMarkup).join(''):'<tr><td colspan="7" class="empty-cell">ไม่พบ Ticket ที่ตรงกับคำค้น</td></tr>';
-  const dash=$('#dashboardRepairRows'); if(dash) dash.innerHTML=repairs.length?repairs.slice(0,5).map(item=>`<tr><td><button class="link-button ticket-number" data-ticket-detail="${item.id}">${esc(item.ticketNo)}</button></td><td><div class="item-name">${esc(item.assetName)}</div><div class="item-meta">${esc(item.issue)}</div></td><td>${urgencyBadge(item.urgency)}</td><td>${repairBadge(item.status)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty-cell" style="text-align:center;padding:18px;color:#85939a;">ไม่มีรายการแจ้งซ่อมค้าง</td></tr>';
+  // Overview shows open work first; closed and cancelled tickets only fill leftover rows.
+  const closedStatuses=['ปิดงาน','ยกเลิก','ไม่อนุมัติ'];
+  const dashRows=[...repairs.filter(x=>!closedStatuses.includes(x.status)),...repairs.filter(x=>closedStatuses.includes(x.status))];
+  const dash=$('#dashboardRepairRows'); if(dash) dash.innerHTML=repairs.length?dashRows.slice(0,5).map(item=>`<tr><td><button class="link-button ticket-number" data-ticket-detail="${item.id}">${esc(item.ticketNo)}</button></td><td><div class="item-name">${esc(item.assetName)}</div><div class="item-meta">${esc(item.issue)}</div></td><td>${urgencyBadge(item.urgency)}</td><td>${repairBadge(item.status)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty-cell" style="text-align:center;padding:18px;color:#85939a;">ไม่มีรายการแจ้งซ่อมค้าง</td></tr>';
   const count=$('#repairResultCount'); if(count) count.textContent=`แสดง ${filtered.length} จาก ${repairs.length} Ticket`;
   setText('#repairTotal',repairs.length); setText('#repairWaiting',repairs.filter(x=>x.status==='รับแจ้งใหม่').length); setText('#repairPendingApproval',repairs.filter(x=>['รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง'].includes(x.status)).length); setText('#repairActive',repairs.filter(x=>['กำลังซ่อม','รออะไหล่','รอผู้แจ้งยืนยัน','รอมอบหมาย'].includes(x.status)).length);
   [$('#repairRows'),$('#dashboardRepairRows')].filter(Boolean).forEach(scope=>$$('[data-ticket-detail]',scope).forEach(button=>button.addEventListener('click',()=>openTicket(Number(button.dataset.ticketDetail)))));
@@ -285,6 +291,8 @@ function renderApprovals() {
   setText('#approvalTicketCount',`${pendingTickets.length} รายการ`); setText('#approvalAssetCount',`${pendingAssets.length} รายการ`);
   setText('#approvalTabBadgeTickets', pendingTickets.length); setText('#approvalTabBadgeAssets', pendingAssets.length);
   setText('#approvalKpiTickets', pendingTickets.length); setText('#approvalKpiAssets', pendingAssets.length);
+  // The nav badge counts only what this screen lists, so it can be cleared from here.
+  setText('#navApprovalBadge', pendingTickets.length + pendingAssets.length);
   const t=$('#approvalTicketRows'); if(t) t.innerHTML=pendingTickets.length?pendingTickets.map(item=>`<tr><td><button class="link-button ticket-number" data-ticket-detail="${item.id}">${esc(item.ticketNo)}</button></td><td>${esc(item.assetName)}<div class="item-meta">${esc(item.status)} · ${esc(item.approvalReason||'ตรวจยอดค่าใช้จ่ายจริง')}</div></td><td>${Number(item.status==='รออนุมัติค่าใช้จ่ายจริง'?item.actualCost:item.estimateCost||0).toLocaleString('th-TH')} บาท</td><td><button class="button outline mini-action" data-ticket-detail="${item.id}">ตรวจสอบ / อนุมัติ</button></td></tr>`).join(''):'<tr><td colspan="4" class="empty-cell">ไม่มี Ticket รออนุมัติ</td></tr>';
   const a=$('#approvalAssetRows'); if(a) a.innerHTML=pendingAssets.length?pendingAssets.map(item=>`<tr><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.name)}<div class="item-meta">${esc(item.location)}</div></td><td>${esc(item.createdBy||'—')}</td><td>${currentRole===ROLE_APPROVER?`<button class="button outline mini-action" data-asset-action="approve" data-asset-id="${item.id}">อนุมัติ</button> <button class="button outline mini-action reject" data-asset-action="reject" data-asset-id="${item.id}">ไม่อนุมัติ</button>`:'<span class="item-meta">เลือกบทบาทผู้อนุมัติเพื่อจัดการ</span>'}</td></tr>`).join(''):'<tr><td colspan="4" class="empty-cell">ไม่มีครุภัณฑ์ใหม่รออนุมัติ</td></tr>';
   $$('[data-ticket-detail]',document.querySelector('#view-approvals')||document).forEach(button=>button.addEventListener('click',()=>openTicket(Number(button.dataset.ticketDetail))));
@@ -300,7 +308,7 @@ function renderCatalog() { const search=($('#codeSearch')?.value||'').trim().toL
   const page = Math.floor(fsnOffset/fsnLimit)+1;
   const pages = Math.max(1, Math.ceil(fsnTotal/fsnLimit));
   let fsnOpts = '';
-  for(let p=1; p<=Math.min(pages, 100); p++){ fsnOpts += `<option value="${p}" ${p===page?'selected':''}>หน้า ${p}</option>`; }
+  for(let p=1; p<=pages; p++){ fsnOpts += `<option value="${p}" ${p===page?'selected':''}>หน้า ${p}</option>`; }
   pager.innerHTML = `
     <div class="pager-left">
       <label class="pager-size-control">
@@ -396,6 +404,7 @@ function actionMarkup(ticket) {
   if(role===ROLE_TECHNICIAN&&status==='กำลังซ่อม') return `<div class="action-form"><label>ผลการตรวจ/ซ่อม<textarea id="workNotes" rows="3" maxlength="3000" placeholder="บันทึกอาการที่พบ วิธีแก้ และอะไหล่"></textarea></label><label>ค่าใช้จ่ายจริง (บาท)<input id="actualCost" type="number" min="0" step="0.01" value="0"></label><div class="dialog-actions"><button class="button outline" data-ticket-action="wait_parts">บันทึกรออะไหล่</button><button class="button primary" data-ticket-action="complete">ส่งผู้แจ้งตรวจรับ</button></div></div>`;
   if(role===ROLE_TECHNICIAN&&status==='รออะไหล่') return `<div class="action-form"><p>บันทึกเหตุการณ์ใน timeline แล้ว เมื่ออะไหล่พร้อมให้กลับมาดำเนินงานต่อ</p><button class="button primary" data-ticket-action="resume">อะไหล่มาแล้ว · ทำงานต่อ</button></div>`;
   if(role===ROLE_REQUESTER&&status==='รอผู้แจ้งยืนยัน') return `<div class="action-form"><label>ความเห็นผู้แจ้ง (กรณีส่งกลับให้แก้ไขให้ระบุเหตุผล)<textarea id="requesterNote" rows="3" maxlength="1000"></textarea></label><div class="dialog-actions"><button class="button outline" data-ticket-action="send_back">ส่งกลับให้แก้ไข</button><button class="button primary" data-ticket-action="confirm">ยืนยันรับงานและปิด Ticket</button></div></div>`;
+  if(status==='รออนุมัติ'&&role!==ROLE_APPROVER) return `<div class="action-form"><p>ใบนี้อยู่คิวผู้อนุมัติ${ticket.approvalReason?` · ${esc(ticket.approvalReason)}`:''} ขั้นตอนถัดไปเป็นของผู้อนุมัติ ไม่ใช่การยกเลิก</p><button type="button" class="button primary" id="switchToApprover">เปิดในบทบาทผู้อนุมัติ</button>${[ROLE_REQUESTER,ROLE_OFFICER].includes(role)?`<label>เหตุผลยกเลิก<textarea id="cancelNote" rows="2" maxlength="1000" placeholder="ระบุสาเหตุ ถ้าต้องการยกเลิกใบนี้"></textarea></label><button class="button outline reject" data-ticket-action="cancel">ยกเลิก Ticket</button>`:''}</div>`;
   if([ROLE_REQUESTER,ROLE_OFFICER].includes(role)&&['รับแจ้งใหม่','รออนุมัติ','รอมอบหมาย','ไม่อนุมัติ'].includes(status)) return `<div class="action-form"><label>เหตุผลยกเลิก<textarea id="cancelNote" rows="2" maxlength="1000" placeholder="ระบุสาเหตุ (จำเป็น)"></textarea></label><button class="button outline reject" data-ticket-action="cancel">ยกเลิก Ticket</button></div>`;
   return `<div class="action-form muted-action">ขั้นตอนนี้ยังไม่เปิดให้บทบาท “${esc(role)}” ดำเนินการ หรือรอผู้เกี่ยวข้องขั้นถัดไป</div>`;
 }
@@ -407,6 +416,7 @@ async function openTicket(id) {
     if(!$('#ticketDialog').open) $('#ticketDialog').showModal();
     $('[data-close-ticket]')?.addEventListener('click',()=>$('#ticketDialog').close());
     $('[data-print-current]')?.addEventListener('click',()=>printTicket(id,$('.modal-print-size')?.value));
+    $('#switchToApprover')?.addEventListener('click',()=>{$('#actorRole').value=ROLE_APPROVER;switchRole(ROLE_APPROVER);});
     $$('[data-ticket-action]').forEach(button=>button.addEventListener('click',()=>runTicketAction(id,button.dataset.ticketAction)));
   } catch(error) { showError(error); }
 }

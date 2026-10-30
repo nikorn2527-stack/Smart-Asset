@@ -2,6 +2,8 @@
   const main = document.querySelector('#scanMain');
   const NOTICE = 'การสแกน QR ไม่ใช่การยืนยันตัวตน และไม่ยืนยันว่าผู้ใช้กำลังอยู่ในสถานที่จริง';
   const KIND_LABELS = {building:'อาคาร',floor:'ชั้น',room:'ห้อง',service_point:'จุดบริการ',common_area:'พื้นที่ส่วนกลาง'};
+  const LOAN_LABELS = {available:'อยู่ในความดูแล ไม่มีผู้ยืม',loaned:'ถูกยืม',issued:'ถูกเบิกใช้'};
+  const MOVE_LABELS = {intake:'รับเข้าดูแล',assign:'มอบผู้รับผิดชอบ',loan:'ยืม',issue:'เบิก',return:'คืน',relocate:'ย้ายที่ตั้ง'};
   const DEFAULT_GUEST = [
     {id:'info',label:'ดูข้อมูล',enabled:true},
     {id:'repair',label:'แจ้งซ่อม',enabled:true},
@@ -37,6 +39,7 @@
   }
 
   function error(message, alert=true) {
+    document.body.classList.remove('scan-fit');
     main.innerHTML = `<section class="scan-card"><span class="scan-kicker">ไม่สามารถเปิดรายการ</span><h1>กรุณาตรวจสอบลิงก์</h1><p id="scanErrorMessage" role="${alert?'alert':'status'}">${esc(message)}</p><button class="scan-button" type="button" id="retryScan">ลองอีกครั้ง</button></section>`;
     document.querySelector('#retryScan').onclick = init;
   }
@@ -81,9 +84,27 @@
     return `<p class="scan-notice scan-legal" role="note">${esc(NOTICE)}</p>`;
   }
 
-  function serviceMenu(ids, selected) {
+  function serviceMenu(ids, selected, compact=false) {
     const buttons = ids.map(({id,label}) => `<button type="button" class="scan-button scan-service-btn${id===selected?' is-active':''}" data-service="${esc(id)}" aria-pressed="${id===selected?'true':'false'}">${esc(label)}</button>`).join('');
-    return `<nav class="scan-services" aria-label="บริการจาก QR">${buttons}</nav><div id="scanServicePanel" class="scan-service-panel"></div><p id="scanServiceStatus" role="status"></p>`;
+    const nav = `<nav class="scan-services${compact?' scan-services-app':''}" aria-label="บริการจาก QR">${buttons}</nav>`;
+    const panel = `<div id="scanServicePanel" class="scan-service-panel"></div><p id="scanServiceStatus" role="status"></p>`;
+    return compact ? `${panel}${nav}` : `${nav}${panel}`;
+  }
+  function fieldText(f) {
+    if (f.kind === 'money') {
+      const n = Number(f.value);
+      return Number.isFinite(n) ? `${n.toLocaleString('th-TH', {minimumFractionDigits:2, maximumFractionDigits:2})} บาท` : String(f.value);
+    }
+    if (f.kind === 'date') {
+      const d = new Date(f.value);
+      return Number.isNaN(d.getTime()) ? String(f.value) : d.toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'numeric', timeZone:'Asia/Bangkok'});
+    }
+    return String(f.value);
+  }
+  function scanFact(label, value, wide=false) {
+    const text = value == null ? '' : String(value).replace(/[ \t\u00a0]{2,}/g, ' ').trim();
+    if (!text) return '';
+    return `<div class="scan-fact${wide?' wide':''}"><span>${esc(label)}</span><b>${esc(text)}</b></div>`;
   }
 
   function bindServices(ids, renderPanel) {
@@ -119,8 +140,12 @@
     if (start) return show(start);
   }
 
+  function emptyState(title, hint) {
+    return `<div class="scan-empty"><b>${esc(title)}</b>${hint ? `<span>${esc(hint)}</span>` : ''}</div>`;
+  }
+
   function receiptLinks(list, empty) {
-    if (!list.length) return `<p>${esc(empty)}</p>`;
+    if (!list.length) return emptyState(empty, 'เมื่อส่งแจ้งซ่อมจาก QR ระบบจะเก็บลิงก์ใบรับแจ้งไว้บนอุปกรณ์นี้ให้กลับมาติดตามได้ที่นี่');
     return `<p>ลิงก์ติดตามเป็นของผู้แจ้ง โปรดเก็บไว้และไม่เผยแพร่</p>${list.map(r => `<a class="scan-receipt-link" href="/t/${esc(r.token)}">${esc(r.number || 'ใบรับแจ้ง')} <span>ติดตามงาน →</span></a>`).join('')}`;
   }
 
@@ -146,6 +171,7 @@
       disabled('ยังไม่ได้เปิด Asset QR', 'บริการสแกนครุภัณฑ์ยังไม่เปิดใช้งาน กรุณาติดต่อเจ้าหน้าที่ของหน่วยงาน');
       return;
     }
+    document.body.classList.add('scan-fit');
     const a = await api(`/api/scan/${token}`);
     document.title = `${a.name} · ข้อมูลครุภัณฑ์`;
     const guest = serviceList('guest').filter(s => {
@@ -158,43 +184,51 @@
       return true;
     }) : [];
     const services = [...guest, ...staff];
-    main.innerHTML = `<div class="scan-breadcrumb">ฉลากติดที่ตัวครุภัณฑ์ · หนึ่งเครื่องหนึ่งฉลาก <span>✓ ข้อมูลล่าสุด</span></div>
-      <section class="scan-card scan-asset-card">
-        <div class="scan-asset-symbol">▤</div>
-        <span class="scan-kicker">ASSET QR</span>
-        <h1>${esc(a.name)}</h1>
-        <p class="scan-code">${esc(a.code)}</p>
-        <span class="scan-badge">${esc(a.status)}</span>
-        ${noticeCard()}
-        ${serviceMenu(services, 'info')}
+    // Every filled register field is shown for now; the organization will pick which to keep.
+    const fields = Array.isArray(a.fields) && a.fields.length ? a.fields : null;
+    const facts = fields
+      ? [scanFact('ที่ตั้ง', a.location), ...fields.map(f => { const text = fieldText(f); return scanFact(f.label, text, text.length > 34); })].join('')
+      : [
+        scanFact('ที่ตั้ง', a.location),
+        scanFact('หมวด', a.group),
+        scanFact('หมายเลขเครื่อง', a.serialNumber),
+        scanFact('ลักษณะ', a.detail, true)
+      ].join('');
+    main.innerHTML = `<div class="scan-breadcrumb">ฉลากติดที่ตัวเครื่อง <span>✓ ข้อมูลล่าสุด</span></div>
+      <section class="scan-card scan-asset-card scan-app">
+        <header class="scan-app-hero">
+          <span class="scan-kicker">ครุภัณฑ์</span>
+          <h1>${esc(a.name)}</h1>
+          <div class="scan-app-meta"><span class="scan-code">${esc(a.code)}</span><span class="scan-badge">${esc(a.status)}</span><small class="scan-app-updated">อัปเดต ${esc(date(a.updatedAt))}</small></div>
+        </header>
+        ${serviceMenu(services, 'info', true)}
       </section>`;
     await bindServices(services, async (id, status, panel) => {
       if (id === 'info') {
-        return `<span class="scan-kicker">ASSET INFORMATION</span><h2>ข้อมูลสาธารณะ</h2>
-          <dl class="scan-details">
-            <div><dt>สถานที่ตั้ง</dt><dd>${esc(a.location || 'ยังไม่ระบุ')}</dd></div>
-            <div><dt>หมวดครุภัณฑ์</dt><dd>${esc(a.group || 'ยังไม่ระบุ')}</dd></div>
-            ${a.serialNumber ? `<div><dt>Serial number</dt><dd>${esc(a.serialNumber)}</dd></div>` : ''}
-            <div><dt>รายละเอียด</dt><dd>${esc(a.detail || 'ไม่มีรายละเอียดเพิ่มเติม')}</dd></div>
-          </dl>
-          ${a.activeRepairs ? `<p class="scan-notice">มีงานซ่อมที่กำลังดำเนินการ ${a.activeRepairs} งาน หากเป็นอาการเดิม โปรดติดตามใบรับแจ้งของคุณก่อนแจ้งซ้ำ</p>` : ''}
-          <small class="scan-updated">อัปเดตล่าสุด ${esc(date(a.updatedAt))}</small>`;
+        // The asset facts live in this tab, so ดูข้อมูล fills the frame and the other tabs get the full height.
+        const repairs = a.activeRepairs
+          ? `<p class="scan-notice">มีงานซ่อมที่กำลังดำเนินการ ${a.activeRepairs} งาน หากเป็นอาการเดิม โปรดติดตามใบรับแจ้งของคุณก่อนแจ้งซ้ำ</p>`
+          : `<p class="scan-info-ok">ไม่มีงานซ่อมค้างสำหรับครุภัณฑ์นี้</p>`;
+        return `<div class="scan-info">
+          ${facts ? `<div class="scan-app-facts">${facts}</div>` : ''}
+          ${repairs}
+          <p class="scan-info-hint">พบปัญหาการใช้งาน กด <b>แจ้งซ่อม</b> ด้านล่าง · แจ้งแล้วติดตามผลได้ที่ <b>ติดตามคำแจ้งของฉัน</b></p>
+        </div>`;
       }
       if (id === 'repair') {
         if (!flagOn('guestReporting', true) || !flagOn('repairManagement', true)) {
           status.textContent = 'บริการแจ้งซ่อมยังไม่เปิดใช้งาน';
           return '';
         }
-        panel.innerHTML = `<span class="scan-kicker">REPAIR REQUEST</span><h2>พบปัญหา ให้เราช่วยดูแล</h2>
-          <p>ส่งคำแจ้งได้เลย ใบจะเข้าสถานะรับแจ้งใหม่ เจ้าหน้าที่จะตรวจว่าเป็นปัญหาจริงหรือไม่ ก่อนเปิดงานซ่อม</p>
-          <form id="scanRepairForm">
+        panel.innerHTML = `<form id="scanRepairForm" class="scan-repair">
             ${honeypot()}
-            <label>อาการหรือปัญหาที่พบ <span>*</span><textarea name="issue" required maxlength="3000" rows="4" placeholder="เช่น เปิดเครื่องไม่ติด มีเสียงผิดปกติ เริ่มพบเมื่อใด"></textarea></label>
-            <label>ที่ตั้งตามทะเบียน<input readonly value="${esc(a.location || 'ยังไม่ระบุที่ตั้งในทะเบียน')}"></label>
+            <label class="scan-repair-issue">อาการหรือปัญหาที่พบ <span>*</span><textarea name="issue" required maxlength="3000" rows="2" placeholder="เช่น เปิดเครื่องไม่ติด มีเสียงผิดปกติ เริ่มพบเมื่อใด"></textarea></label>
+            <div class="scan-repair-grid">
+              <label>ที่ตั้งตามทะเบียน<input readonly value="${esc(a.location || 'ยังไม่ระบุที่ตั้งในทะเบียน')}"></label>
+              <label>ความเร่งด่วน<select name="urgency"><option>ปกติ</option><option>เร่งด่วน</option><option>เร่งด่วนมาก</option></select></label>
+            </div>
             <label class="scan-location-check"><input type="checkbox" name="locationMismatch" id="scanLocationMismatch"> ที่ตั้งไม่ตรง / ขอให้ตรวจสอบแก้ไข</label>
-            <label>หมายเหตุเพิ่มเติม / ที่ตั้งจริง <span id="scanNoteRequired" ${a.location ? 'hidden' : ''}>*</span><textarea name="reporterNote" rows="3" maxlength="2000" ${a.location ? '' : 'required'} placeholder="ระบุที่ตั้งจริงหรือข้อมูลที่ต้องการให้เจ้าหน้าที่ตรวจสอบ"></textarea></label>
-            <p class="scan-privacy">ที่ตั้งตามทะเบียนไม่เปลี่ยนทันทีจากการแจ้งซ่อม เจ้าหน้าที่จะตรวจสอบหมายเหตุก่อนแก้ทะเบียน</p>
-            ${urgencyField()}
+            <label class="scan-repair-note">หมายเหตุเพิ่มเติม / ที่ตั้งจริง <span id="scanNoteRequired" ${a.location ? 'hidden' : ''}>*</span><textarea name="reporterNote" rows="2" maxlength="2000" ${a.location ? '' : 'required'} placeholder="ระบุที่ตั้งจริงหรือข้อมูลที่ต้องการให้เจ้าหน้าที่ตรวจสอบ"></textarea></label>
             ${contactFields()}
             <button class="scan-button" type="submit">ส่งคำขอแจ้งซ่อม</button>
             <p id="scanFormStatus" role="alert"></p>
@@ -238,8 +272,8 @@
           const life = await api(`/api/lifecycle/assets/${assetId}`);
           const history = life.history || [];
           return `<span class="scan-kicker">STAFF HISTORY</span><h2>ประวัติการเคลื่อนไหว</h2>
-            <p>สถานะถือครอง ${esc(life.state?.loan_status || '—')}${life.state?.overdue ? ' · เกินกำหนด' : ''}${life.state?.openRepair ? ' · มีงานซ่อมค้าง' : ''}</p>
-            ${history.length ? `<ol class="scan-timeline">${history.map((e,i)=>`<li class="${i===0?'current':''}"><b>${esc(e.kind)}</b><small>${esc(date(e.created_at))} · ${esc(e.actor)}</small>${e.note?`<small>${esc(e.note)}</small>`:''}</li>`).join('')}</ol>` : '<p>ยังไม่มีประวัติการเคลื่อนไหว</p>'}`;
+            <p>สถานะถือครอง: ${esc(LOAN_LABELS[life.state?.loan_status] || life.state?.loan_status || '—')}${life.state?.overdue ? ' · เกินกำหนด' : ''}${life.state?.openRepair ? ' · มีงานซ่อมค้าง' : ''}</p>
+            ${history.length ? `<ol class="scan-timeline">${history.map((e,i)=>`<li class="${i===0?'current':''}"><b>${esc(MOVE_LABELS[e.kind] || e.kind)}</b><small>${esc(date(e.created_at))} · ${esc(e.actor)}</small>${e.note && e.note !== e.kind ? `<small>${esc(e.note)}</small>` : ''}</li>`).join('')}</ol>` : emptyState('ยังไม่มีประวัติการเคลื่อนไหว', 'การยืม เบิก คืน หรือย้ายที่ตั้งของครุภัณฑ์นี้จะแสดงเรียงตามเวลาที่นี่')}`;
         }
         if (!flagOn('borrowIssueReturn', false)) {
           status.textContent = 'ยังไม่ได้เปิดบริการยืม / เบิก / คืน';
@@ -457,8 +491,13 @@
     try {
       const session = await api('/api/auth/session');
       if (!session?.authenticated && session?.required !== false) return;
+      // With login switched off, every visitor would otherwise count as staff. Treat only a browser
+      // that has opened the staff workspace (which stores a staff role) as staff; a phone scanning
+      // the label stays a guest.
+      const savedRole = typeof localStorage !== 'undefined' ? localStorage.getItem('govAssetPrototype.role') : '';
+      if (!session?.authenticated && (!savedRole || savedRole === 'ผู้แจ้ง')) return;
       config.authenticated = true;
-      config.actor = session.actor || (typeof localStorage !== 'undefined' && localStorage.getItem('govAssetPrototype.role')) || 'เจ้าหน้าที่พัสดุ';
+      config.actor = session.actor || savedRole || 'เจ้าหน้าที่พัสดุ';
       config.permissions = session.permissions || {};
       config.csrf = session.csrf || '';
       const flags = config.flags;
@@ -472,6 +511,7 @@
   }
 
   async function init() {
+    document.body.classList.remove('scan-fit');
     try {
       await loadConfig();
       if (!route) throw new Error('เปิดหน้านี้ด้วยการสแกน QR บนครุภัณฑ์ จุดบริการ หรือลิงก์ใบรับแจ้ง');
