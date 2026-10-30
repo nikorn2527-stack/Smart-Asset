@@ -3,6 +3,7 @@ import json
 import hashlib
 import re
 import sqlite3
+from contextlib import closing
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 
@@ -383,7 +384,7 @@ def create_asset(db,body,stamp):
 
 
 def initialize_manual_references(db_path):
-    with sqlite3.connect(db_path) as db:
+    with closing(sqlite3.connect(db_path)) as db, db:
         if db.execute("SELECT 1 FROM schema_migrations WHERE name='account-manual-reference-v1'").fetchone():return
         pack=json.loads((Path(__file__).parent/'reference-data/manual-catalog-v1.json').read_text(encoding='utf-8'))
         db.execute('''CREATE TABLE IF NOT EXISTS account_manual_references(id INTEGER PRIMARY KEY AUTOINCREMENT,account_id INTEGER NOT NULL REFERENCES asset_accounts(id),page INTEGER NOT NULL,name TEXT NOT NULL,group_code TEXT NOT NULL,type_code TEXT NOT NULL,raw_line TEXT NOT NULL,filename TEXT NOT NULL,sha256 TEXT NOT NULL)''')
@@ -396,7 +397,7 @@ def initialize_manual_references(db_path):
 def rehome_split_register_to_hospital(db_path):
     """The 19-workbook RAR register belongs to โรงพยาบาลสุรินทร์; DurableGoodList belongs to ศูนย์แพทย์."""
     name = 'hospital-owns-split-register-v1'
-    with sqlite3.connect(db_path) as db:
+    with closing(sqlite3.connect(db_path)) as db, db:
         db.row_factory = sqlite3.Row
         if db.execute('SELECT 1 FROM schema_migrations WHERE name=?', (name,)).fetchone():
             return
@@ -419,7 +420,8 @@ def rehome_split_register_to_hospital(db_path):
                 (org_h, hid, hid),
             )
             db.execute("UPDATE source_documents SET source_scope='โรงพยาบาลสุรินทร์' WHERE source_kind='workbook' AND extraction_method='web import preview' AND source_scope='ศูนย์แพทย์โรงพยาบาลสุรินทร์'")
-            db.execute("UPDATE asset_import_jobs SET account_id=? WHERE account_id=? AND status='completed'", (hid, cid))
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='asset_import_jobs'").fetchone():
+                db.execute("UPDATE asset_import_jobs SET account_id=? WHERE account_id=? AND status='completed'", (hid, cid))
             db.execute("UPDATE asset_accounts SET notes=? WHERE id=?", ('เจ้าของทะเบียนแยกประเภท 19 ไฟล์ของโรงพยาบาลสุรินทร์', hid))
             db.execute("UPDATE asset_accounts SET notes=? WHERE id=?", ('เจ้าของทะเบียน DurableGoodList ของศูนย์แพทย์โรงพยาบาลสุรินทร์', cid))
         db.execute('INSERT INTO schema_migrations(name) VALUES(?)', (name,))
@@ -428,7 +430,7 @@ def rehome_split_register_to_hospital(db_path):
 def apply_official_center_name(db_path):
     """Use the confirmed Thai and English names for the medical education center."""
     migration = 'medcenter-official-name-v1'
-    with sqlite3.connect(db_path) as db:
+    with closing(sqlite3.connect(db_path)) as db, db:
         if db.execute('SELECT 1 FROM schema_migrations WHERE name=?', (migration,)).fetchone():
             return
         legacy = CENTER_LEGACY_NAMES

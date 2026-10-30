@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate a backup and restore to a NEW DB path; never replace a running database."""
 import argparse,hashlib,json,os,shutil,sqlite3,tempfile,zipfile
+from contextlib import closing
 from pathlib import Path
 
 def restore(archive_path,output):
@@ -29,7 +30,7 @@ def restore(archive_path,output):
                 if digest.hexdigest()!=entry['sha256']:raise ValueError('Checksum mismatch: '+name)
             if set(archive.namelist())!=expected:raise ValueError('Unexpected archive members')
         db=stage/'database/smart-asset.sqlite3'
-        with sqlite3.connect(db.resolve().as_uri()+'?mode=ro',uri=True) as check:
+        with closing(sqlite3.connect(db.resolve().as_uri()+'?mode=ro',uri=True)) as check:
             if check.execute('PRAGMA integrity_check').fetchone()[0]!='ok' or check.execute('PRAGMA foreign_key_check').fetchone():raise ValueError('Database validation failed')
             for table,count in manifest['counts'].items():
                 if table not in ['assets','source_row_records','tickets','asset_qr_links','asset_accounts']:raise ValueError('Unexpected count')

@@ -1,6 +1,7 @@
 """Scoped generation, evidence preservation, policy snapshots and recoverable backups."""
 import base64
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 import hashlib
 import importlib.util
 import io
@@ -191,7 +192,7 @@ class AccountGovernance(HTTPFixture):
         with tempfile.TemporaryDirectory() as folder:
             backup=Path(folder)/'backup.zip';backup.write_bytes(raw);output=Path(folder)/'restored.sqlite3'
             counts=module.restore(backup,output)
-            with sqlite3.connect(output) as db:self.assertEqual(db.execute('SELECT COUNT(*) FROM assets').fetchone()[0],counts['assets'])
+            with closing(sqlite3.connect(output)) as db:self.assertEqual(db.execute('SELECT COUNT(*) FROM assets').fetchone()[0],counts['assets'])
             with self.assertRaises(ValueError):module.restore(backup,output)
             bad=Path(folder)/'bad.zip'
             with zipfile.ZipFile(io.BytesIO(raw)) as src,zipfile.ZipFile(bad,'w') as dst:
@@ -215,13 +216,13 @@ class ExistingDatabaseMigration(unittest.TestCase):
             return original_read(path, *args, **kwargs)
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'windows.sqlite3'
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.executescript((ROOT/'schema.sql').read_text(encoding='utf-8'))
                 db.execute("INSERT INTO assets(id,code,name) VALUES(1,'เดิม/001','ชื่อภาษาไทย')")
             with patch.object(Path, 'read_text', windows_read):
                 initialize(path)
                 initialize(path)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 self.assertEqual(db.execute('SELECT code,name FROM assets WHERE id=1').fetchone(),('เดิม/001','ชื่อภาษาไทย'))
                 self.assertEqual(db.execute("SELECT name FROM asset_accounts WHERE code='SURIN'").fetchone()[0],'โรงพยาบาลสุรินทร์')
                 self.assertEqual(db.execute("SELECT name FROM asset_accounts WHERE code='MEDCENTER'").fetchone()[0],CENTER_NAME)
@@ -237,17 +238,17 @@ class ExistingDatabaseMigration(unittest.TestCase):
             return original_read(path, *args, **kwargs)
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'retry.sqlite3'
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.executescript((ROOT/'schema.sql').read_text(encoding='utf-8'))
                 db.execute("INSERT INTO assets(id,code,name) VALUES(12,'OLD/001','ข้อมูลเดิม')")
             with patch.object(Path, 'read_text', fail_reference):
                 with self.assertRaises(UnicodeDecodeError):initialize(path)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 self.assertEqual(db.execute('SELECT id,code,name FROM assets').fetchall(),[(12,'OLD/001','ข้อมูลเดิม')])
                 self.assertIsNone(db.execute("SELECT 1 FROM schema_migrations WHERE name='account-numbering-v1'").fetchone())
                 self.assertIsNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='asset_accounts'").fetchone())
             initialize(path)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM asset_accounts').fetchone()[0],2)
                 self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
 
@@ -255,12 +256,12 @@ class ExistingDatabaseMigration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'imported.sqlite3'
             source=json.loads((ROOT/'reference-data/classification-v1.json').read_text(encoding='utf-8'))['categories'][0]['source']
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.executescript((ROOT/'schema.sql').read_text(encoding='utf-8'))
                 sid=db.execute("INSERT INTO source_documents(filename,source_kind) VALUES(?,'workbook')",(source,)).lastrowid
                 for aid in [1,2]:db.execute("INSERT INTO assets(id,code,name,source_document_id) VALUES(?,'DUPLICATE','ต้นฉบับ',?)",(aid,sid))
             initialize(path)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 self.assertEqual(db.execute('SELECT id,code,code_unique FROM assets ORDER BY id').fetchall(),[(1,'DUPLICATE',0),(2,'DUPLICATE',0)])
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM assets WHERE numbering_account_id IS NOT NULL').fetchone()[0],2)
                 self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
@@ -268,7 +269,7 @@ class ExistingDatabaseMigration(unittest.TestCase):
     def test_global_unique_rebuild_preserves_ids_deleted_high_water_and_foreign_keys(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'old.sqlite3'
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.executescript((ROOT/'schema.sql').read_text(encoding='utf-8'))
                 # Match the original small prototype's global unique code constraint.
                 db.execute('DROP TABLE assets')
@@ -277,7 +278,7 @@ class ExistingDatabaseMigration(unittest.TestCase):
                 db.execute("INSERT INTO assets(id,code,name) VALUES(99,'DELETED','ลบแล้ว')");db.execute('DELETE FROM assets WHERE id=99')
                 db.execute('CREATE TABLE test_links(asset_id INTEGER REFERENCES assets(id))');db.execute('INSERT INTO test_links VALUES(12)')
             initialize(path)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 self.assertEqual(db.execute('SELECT id,code FROM assets').fetchall(),[(12,'OLD-0001')])
                 self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
                 db.execute("INSERT INTO assets(code,name) VALUES('NEW','ใหม่')")
@@ -288,8 +289,9 @@ class ExistingDatabaseMigration(unittest.TestCase):
     def test_split_workbook_import_moves_to_hospital_and_leaves_center_empty(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'owners.sqlite3'
+            with closing(sqlite3.connect(path)) as db, db: db.executescript((ROOT/'schema.sql').read_text(encoding='utf-8'))
             initialize(path)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 hid=db.execute("SELECT id FROM asset_accounts WHERE code='SURIN'").fetchone()[0]
                 cid=db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER'").fetchone()[0]
                 db.execute("INSERT INTO organizations(name,code) VALUES('ศูนย์แพทย์โรงพยาบาลสุรินทร์','MEDCENTER')")
@@ -298,7 +300,7 @@ class ExistingDatabaseMigration(unittest.TestCase):
                 db.execute("DELETE FROM schema_migrations WHERE name='hospital-owns-split-register-v1'")
                 db.commit()
             rehome_split_register_to_hospital(path)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 self.assertEqual(db.execute("SELECT numbering_account_id,code FROM assets WHERE created_by='นำเข้าทะเบียน'").fetchone()[0],hid)
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM assets WHERE numbering_account_id=?",(cid,)).fetchone()[0],0)
                 self.assertEqual(db.execute("SELECT name FROM organizations WHERE id=(SELECT organization_id FROM assets WHERE code='7110-002-0001-0001')").fetchone()[0],'โรงพยาบาลสุรินทร์')

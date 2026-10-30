@@ -10,6 +10,7 @@ import tempfile
 import threading
 import uuid
 import zipfile
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from governance import GovernanceError, OFFICER, ident, text
@@ -28,7 +29,7 @@ def snapshot_database(db_path,label='manual'):
     db_path=Path(db_path);folder=backup_dir(db_path);folder.mkdir(parents=True,exist_ok=True)
     target=folder/f'{label}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:8]}.sqlite3'
     try:
-        with sqlite3.connect(db_path) as src,sqlite3.connect(target) as dst:src.backup(dst)
+        with closing(sqlite3.connect(db_path)) as src,closing(sqlite3.connect(target)) as dst:src.backup(dst)
         os.chmod(target,0o600)
     except BaseException:
         target.unlink(missing_ok=True);raise
@@ -77,8 +78,8 @@ def create_bundle(db_path,actor):
     folder=Path(tempfile.mkdtemp(prefix='smart-asset-backup-'))
     try:
         snapshot=folder/'smart-asset.sqlite3'
-        with sqlite3.connect(db_path) as src,sqlite3.connect(snapshot) as dst:src.backup(dst)
-        with sqlite3.connect(snapshot.resolve().as_uri()+'?mode=ro',uri=True) as check:
+        with closing(sqlite3.connect(db_path)) as src,closing(sqlite3.connect(snapshot)) as dst:src.backup(dst)
+        with closing(sqlite3.connect(snapshot.resolve().as_uri()+'?mode=ro',uri=True)) as check:
             check.row_factory=sqlite3.Row
             if check.execute('PRAGMA quick_check').fetchone()[0]!='ok' or check.execute('PRAGMA foreign_key_check').fetchone():raise GovernanceError('ฐานข้อมูลตรวจสอบไม่ผ่าน ไม่สร้างชุดสำรอง',409)
             sources=[dict(r) for r in check.execute('SELECT * FROM source_attachments')]
