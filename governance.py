@@ -7,6 +7,10 @@ from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 
 OFFICER = 'เจ้าหน้าที่พัสดุ'
+CENTER_NAME_TH = 'ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์'
+CENTER_NAME_EN = 'Medical Education Center, Surin Hospital'
+CENTER_NAME = f'{CENTER_NAME_TH} ({CENTER_NAME_EN})'
+CENTER_LEGACY_NAMES = ('ศูนย์แพทย์โรงพยาบาลสุรินทร์', 'ศูนย์แพทย์สุรินทร์')
 VARIABLES = {'group', 'type', 'detail', 'category', 'branch', 'department', 'prefix', 'year', 'yearBE', 'month', 'seq'}
 TOKEN = re.compile(r'\{([A-Za-z]+):([0-9]+)\}')
 
@@ -76,7 +80,7 @@ def _initialize_account_schema(db_path):
         db.execute('CREATE INDEX IF NOT EXISTS idx_assets_account_branch ON assets(numbering_account_id,branch_id)')
         db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_account_code ON assets(COALESCE(numbering_account_id,0),code) WHERE code_unique=1 AND numbering_account_id IS NOT NULL')
         hospital=db.execute('INSERT INTO asset_accounts(name,code,notes) VALUES(?,?,?)', ('โรงพยาบาลสุรินทร์','SURIN','เจ้าของทะเบียน RAR ตามที่ผู้ใช้ยืนยัน')).lastrowid
-        center=db.execute('INSERT INTO asset_accounts(name,code,notes) VALUES(?,?,?)', ('ศูนย์แพทย์โรงพยาบาลสุรินทร์','MEDCENTER','ใช้ PDF เป็นบัญชีอ้างอิง ไม่ใช่ทะเบียนทรัพย์สินจริง')).lastrowid
+        center=db.execute('INSERT INTO asset_accounts(name,code,notes) VALUES(?,?,?)', (CENTER_NAME,'MEDCENTER',CENTER_NAME_EN)).lastrowid
         hp=db.execute('INSERT INTO number_profiles(account_id,name,pattern,number_kind,source) VALUES(?,?,?,?,?)',(hospital,'ทะเบียน 4–3–4–4','{group:4}-{type:3}-{detail:4}-{seq:4}','inventory','ทะเบียน Excel ในครุภัณฑ์แยกประเภท.rar; ยังเก็บเลขนอกรูปแบบเดิมไว้')).lastrowid
         cp=db.execute('INSERT INTO number_profiles(account_id,name,pattern,number_kind,source) VALUES(?,?,?,?,?)',(center,'เลขจำแนกตาม PDF 4–3–4','{group:4}-{type:3}-{detail:4}','classification','PDF หน้า 2; เป็นเลขจำแนกชนิด ใช้ซ้ำกับหลายชิ้นได้; ID/QR แยกรายชิ้น')).lastrowid
         for aid,pid in [(hospital,hp),(center,cp)]: db.execute('INSERT INTO account_bindings(account_id,profile_id) VALUES(?,?)',(aid,pid))
@@ -389,6 +393,63 @@ def initialize_manual_references(db_path):
             db.executemany('INSERT INTO account_manual_references(account_id,page,name,group_code,type_code,raw_line,filename,sha256) VALUES(?,?,?,?,?,?,?,?)',[(account[0],r['page'],r['name'],r['group'],r['type'],r['rawLine'],pack['filename'],pack['sha256']) for r in pack['items']])
         db.execute("INSERT INTO schema_migrations(name) VALUES('account-manual-reference-v1')")
 
+def rehome_split_register_to_hospital(db_path):
+    """The 19-workbook RAR register belongs to โรงพยาบาลสุรินทร์; DurableGoodList belongs to ศูนย์แพทย์."""
+    name = 'hospital-owns-split-register-v1'
+    with sqlite3.connect(db_path) as db:
+        db.row_factory = sqlite3.Row
+        if db.execute('SELECT 1 FROM schema_migrations WHERE name=?', (name,)).fetchone():
+            return
+        hospital = db.execute("SELECT id FROM asset_accounts WHERE code='SURIN'").fetchone()
+        center = db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER'").fetchone()
+        if not hospital or not center:
+            db.execute('INSERT INTO schema_migrations(name) VALUES(?)', (name,))
+            return
+        hid, cid = hospital['id'], center['id']
+        hospital_imported = int(db.execute("SELECT COUNT(*) FROM assets WHERE numbering_account_id=? AND created_by='นำเข้าทะเบียน'", (hid,)).fetchone()[0])
+        center_imported = int(db.execute("SELECT COUNT(*) FROM assets WHERE numbering_account_id=? AND created_by='นำเข้าทะเบียน'", (cid,)).fetchone()[0])
+        if hospital_imported == 0 and center_imported:
+            from backup_store import snapshot_database
+            snapshot_database(db_path, 'before-hospital-owns-split-register')
+            db.execute('INSERT OR IGNORE INTO organizations(name,code) VALUES(?,?)', ('โรงพยาบาลสุรินทร์', 'SURIN'))
+            org_h = db.execute("SELECT id FROM organizations WHERE code='SURIN' OR name='โรงพยาบาลสุรินทร์' ORDER BY id LIMIT 1").fetchone()[0]
+            db.execute("UPDATE assets SET numbering_account_id=?, organization_id=? WHERE numbering_account_id=? AND created_by='นำเข้าทะเบียน'", (hid, org_h, cid))
+            db.execute(
+                'UPDATE org_units SET organization_id=? WHERE id IN (SELECT department_unit_id FROM assets WHERE numbering_account_id=? AND department_unit_id IS NOT NULL UNION SELECT responsible_unit_id FROM assets WHERE numbering_account_id=? AND responsible_unit_id IS NOT NULL)',
+                (org_h, hid, hid),
+            )
+            db.execute("UPDATE source_documents SET source_scope='โรงพยาบาลสุรินทร์' WHERE source_kind='workbook' AND extraction_method='web import preview' AND source_scope='ศูนย์แพทย์โรงพยาบาลสุรินทร์'")
+            db.execute("UPDATE asset_import_jobs SET account_id=? WHERE account_id=? AND status='completed'", (hid, cid))
+            db.execute("UPDATE asset_accounts SET notes=? WHERE id=?", ('เจ้าของทะเบียนแยกประเภท 19 ไฟล์ของโรงพยาบาลสุรินทร์', hid))
+            db.execute("UPDATE asset_accounts SET notes=? WHERE id=?", ('เจ้าของทะเบียน DurableGoodList ของศูนย์แพทย์โรงพยาบาลสุรินทร์', cid))
+        db.execute('INSERT INTO schema_migrations(name) VALUES(?)', (name,))
+
+
+def apply_official_center_name(db_path):
+    """Use the confirmed Thai and English names for the medical education center."""
+    migration = 'medcenter-official-name-v1'
+    with sqlite3.connect(db_path) as db:
+        if db.execute('SELECT 1 FROM schema_migrations WHERE name=?', (migration,)).fetchone():
+            return
+        legacy = CENTER_LEGACY_NAMES
+        db.execute('UPDATE asset_accounts SET name=?, notes=? WHERE code=?', (CENTER_NAME, CENTER_NAME_EN, 'MEDCENTER'))
+        db.execute(
+            f"UPDATE organizations SET name=? WHERE code='MEDCENTER' OR name IN ({','.join('?' for _ in legacy)})",
+            (CENTER_NAME, *legacy),
+        )
+        db.execute(
+            f"UPDATE source_documents SET source_scope=? WHERE source_scope IN ({','.join('?' for _ in legacy)})",
+            (CENTER_NAME, *legacy),
+        )
+        db.execute(
+            f"UPDATE app_branding SET organization=? WHERE organization IN ({','.join('?' for _ in legacy)})",
+            (CENTER_NAME, *legacy),
+        )
+        db.execute('INSERT INTO schema_migrations(name) VALUES(?)', (migration,))
+
+
 def initialize(db_path):
     _initialize_account_schema(db_path)
     initialize_manual_references(db_path)
+    rehome_split_register_to_hospital(db_path)
+    apply_official_center_name(db_path)

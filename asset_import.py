@@ -10,6 +10,21 @@ from backup_store import store_source,snapshot_database
 MAX_UPLOAD=24*1024*1024
 LIMIT_BYTES=256*1024*1024
 FIELDS={re.sub(r'\s+','',k).casefold():v for k,v in HEADER_TO_FIELD.items()}
+GROUP_ALIASES={
+    'ครุภัณฑ์วิทยาศาสตร์หรือการแพทย์':'ครุภัณฑ์วิทยาศาสตร์และการแพทย์',
+    'ครุภัณฑ์กีฬา/กายภาพ':'ครุภัณฑ์กีฬาและกายภาพ',
+    'ครุภัณฑ์ดนตรี/นาฏศิลป์':'ครุภัณฑ์ดนตรีนาฏศิลป์',
+}
+
+def category_for_group(db, group, fallback_id):
+    label=(group or '').strip()
+    name=GROUP_ALIASES.get(label, label)
+    row=db.execute('SELECT id,category_name FROM asset_categories WHERE is_active=1 AND category_name=? ORDER BY id LIMIT 1',(name,)).fetchone() if name else None
+    if not row and name:
+        row=db.execute('SELECT id,category_name FROM asset_categories WHERE is_active=1 AND category_name LIKE ? ORDER BY length(category_name),id LIMIT 1',(name+'%',)).fetchone()
+    if row: return row['id'], row['category_name']
+    fallback=db.execute('SELECT id,category_name FROM asset_categories WHERE id=?',(fallback_id,)).fetchone()
+    return fallback_id, fallback['category_name']
 SCHEMA='''
 CREATE TABLE IF NOT EXISTS asset_import_jobs(id TEXT PRIMARY KEY,account_id INTEGER NOT NULL REFERENCES asset_accounts(id),branch_id INTEGER REFERENCES account_branches(id),filename TEXT NOT NULL,sha256 TEXT NOT NULL,status TEXT NOT NULL,summary_json TEXT NOT NULL,created_at TEXT NOT NULL,completed_at TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS asset_import_links(job_id TEXT NOT NULL REFERENCES asset_import_jobs(id),source_document_id INTEGER NOT NULL REFERENCES source_documents(id),filename TEXT NOT NULL,sheet_name TEXT NOT NULL,PRIMARY KEY(job_id,filename,sheet_name));
@@ -174,8 +189,8 @@ def commit(db,path,body):
         repeats={r[0] for r in staged.execute("SELECT code FROM rows WHERE asset=1 AND code<>'' GROUP BY code HAVING COUNT(*)>1")}
         existing={r[0] for r in db.execute('SELECT code FROM assets WHERE numbering_account_id=?',(job['account_id'],))}
         for file in summary['files']:
-            cid=mappings.get(str(file['fileNo']),file['categoryId']);cid=ident(cid)
-            if not db.execute('SELECT 1 FROM asset_categories WHERE id=? AND is_active=1',(cid,)).fetchone():fail('เลือกหมวดให้ครบทุกไฟล์ก่อนนำเข้า')
+            file_cid=mappings.get(str(file['fileNo']),file['categoryId']);file_cid=ident(file_cid)
+            if not db.execute('SELECT 1 FROM asset_categories WHERE id=? AND is_active=1',(file_cid,)).fetchone():fail('เลือกหมวดให้ครบทุกไฟล์ก่อนนำเข้า')
             filename=PurePosixPath(file['filename']).name;source_hash=hashlib.sha256((job['sha256']+'\0'+file['filename']+'\0'+file['sheet']+'\0'+str(job['account_id'])+'\0'+str(job['branch_id'])).encode()).hexdigest()
             source=db.execute('INSERT INTO source_documents(filename,title,media_type,source_kind,source_scope,sha256,container_filename,extraction_method,notes) VALUES(?,?,?,\'workbook\',?,?,?,?,?)',(filename,filename+' / '+file['sheet'],'application/vnd.ms-excel',account['name'],source_hash,job['filename'],'web import preview','ต้นฉบับครบทุกคอลัมน์; job '+jid)).lastrowid
             db.execute('INSERT INTO asset_import_links VALUES(?,?,?,?)',(jid,source,file['filename'],file['sheet']))
@@ -184,7 +199,7 @@ def commit(db,path,body):
             for row in staged.execute('SELECT * FROM rows WHERE file_no=? ORDER BY row_no',(file['fileNo'],)):
                 norm=json.loads(row['norm_json']);raw=row['raw_json'];asset_id=None
                 if row['asset']:
-                    code=row['code'];desc=clean_text(norm.get('description'));detail=clean_text(norm.get('detail'));typ=clean_text(norm.get('asset_type'));dept=clean_text(norm.get('department'));responsible=clean_text(norm.get('responsible_unit'));group=db.execute('SELECT category_name FROM asset_categories WHERE id=?',(cid,)).fetchone()[0]
+                    code=row['code'];desc=clean_text(norm.get('description'));detail=clean_text(norm.get('detail'));typ=clean_text(norm.get('asset_type'));dept=clean_text(norm.get('department'));responsible=clean_text(norm.get('responsible_unit'));cid,group=category_for_group(db,clean_text(norm.get('group_name')),file_cid);group=clean_text(norm.get('group_name')) or group
                     du=create_unit(db,org,dept,'department',source);ru=create_unit(db,org,responsible,'responsible_unit',source)
                     if code in existing:
                         existing_duplicates+=1;db.execute('UPDATE assets SET code_unique=0 WHERE numbering_account_id=? AND code=?',(job['account_id'],code))

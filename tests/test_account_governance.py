@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 from test_smart_workflow import HTTPFixture,OFFICER,ROOT
 sys.path.insert(0,str(ROOT))
-from governance import initialize,calculate,GovernanceError
+from governance import CENTER_NAME, CENTER_NAME_EN, initialize,calculate,GovernanceError,rehome_split_register_to_hospital
 
 class AccountGovernance(HTTPFixture):
     def setUp(self):
@@ -224,6 +224,8 @@ class ExistingDatabaseMigration(unittest.TestCase):
             with sqlite3.connect(path) as db:
                 self.assertEqual(db.execute('SELECT code,name FROM assets WHERE id=1').fetchone(),('เดิม/001','ชื่อภาษาไทย'))
                 self.assertEqual(db.execute("SELECT name FROM asset_accounts WHERE code='SURIN'").fetchone()[0],'โรงพยาบาลสุรินทร์')
+                self.assertEqual(db.execute("SELECT name FROM asset_accounts WHERE code='MEDCENTER'").fetchone()[0],CENTER_NAME)
+                self.assertEqual(db.execute("SELECT notes FROM asset_accounts WHERE code='MEDCENTER'").fetchone()[0],CENTER_NAME_EN)
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM account_manual_references').fetchone()[0],907)
                 self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
 
@@ -282,3 +284,23 @@ class ExistingDatabaseMigration(unittest.TestCase):
                 self.assertGreater(db.execute("SELECT id FROM assets WHERE code='NEW'").fetchone()[0],99)
             initialize(path)
             self.assertEqual(len(list(Path(str(path)+'.backups').glob('*.sqlite3'))),1)
+
+    def test_split_workbook_import_moves_to_hospital_and_leaves_center_empty(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'owners.sqlite3'
+            initialize(path)
+            with sqlite3.connect(path) as db:
+                hid=db.execute("SELECT id FROM asset_accounts WHERE code='SURIN'").fetchone()[0]
+                cid=db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER'").fetchone()[0]
+                db.execute("INSERT INTO organizations(name,code) VALUES('ศูนย์แพทย์โรงพยาบาลสุรินทร์','MEDCENTER')")
+                org=db.execute("SELECT id FROM organizations WHERE code='MEDCENTER'").fetchone()[0]
+                db.execute("INSERT INTO assets(name,code,created_by,numbering_account_id,organization_id) VALUES('ตู้โรงพยาบาล','7110-002-0001-0001','นำเข้าทะเบียน',?,?)",(cid,org))
+                db.execute("DELETE FROM schema_migrations WHERE name='hospital-owns-split-register-v1'")
+                db.commit()
+            rehome_split_register_to_hospital(path)
+            with sqlite3.connect(path) as db:
+                self.assertEqual(db.execute("SELECT numbering_account_id,code FROM assets WHERE created_by='นำเข้าทะเบียน'").fetchone()[0],hid)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM assets WHERE numbering_account_id=?",(cid,)).fetchone()[0],0)
+                self.assertEqual(db.execute("SELECT name FROM organizations WHERE id=(SELECT organization_id FROM assets WHERE code='7110-002-0001-0001')").fetchone()[0],'โรงพยาบาลสุรินทร์')
+                rehome_split_register_to_hospital(path)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM assets WHERE numbering_account_id=?",(hid,)).fetchone()[0],1)

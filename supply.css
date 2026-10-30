@@ -10,18 +10,20 @@
 #view-supply .supply-layout {
   flex: 1 1 auto !important;
   min-height: 0 !important;
-  height: 100% !important;
+  height: auto !important;
   overflow: hidden !important;
   display: grid !important;
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) !important;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) !important;
   gap: 12px !important;
   margin-bottom: 4px !important;
+  align-items: stretch !important;
 }
 
 #view-supply .supply-detail {
-  padding: 10px 14px !important;
-  height: 100% !important;
+  padding: 12px 16px 20px !important;
+  height: auto !important;
   max-height: 100% !important;
+  min-height: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   overflow-y: auto !important;
@@ -96,20 +98,25 @@
   font-size: 11.5px !important;
 }
 
-/* Grid layout for Receipt: Content-proportional columns */
-.supply-grid-receipt {
+.supply-grid-receipt,
+.supply-grid-extra,
+.supply-grid-issue {
   display: grid !important;
-  grid-template-columns: 125px 155px 140px minmax(0, 1.2fr) !important;
-  gap: 4px 8px !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px 12px !important;
   align-items: end !important;
 }
 
-.supply-grid-receipt .supply-field-location {
-  grid-column: 1 / 3 !important;
+.supply-grid-receipt .supply-field-location,
+.supply-grid-receipt .supply-field-receiver,
+.supply-grid-issue .supply-field-purpose {
+  grid-column: auto !important;
 }
 
-.supply-grid-receipt .supply-field-receiver {
-  grid-column: 3 / -1 !important;
+@media (min-width: 1400px) {
+  .supply-grid-receipt {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
 }
 
 .supply-extra {
@@ -129,26 +136,23 @@
 }
 
 .supply-grid-extra {
-  display: grid !important;
-  grid-template-columns: 110px 1.2fr 1.2fr 140px !important;
-  gap: 4px 8px !important;
   margin-top: 4px !important;
 }
 
-/* Receipt lines table: Compact & fits content */
 .supply-table-wrap {
-  min-height: 60px !important;
-  max-height: clamp(75px, 16vh, 115px) !important;
-  overflow-y: auto !important;
-  overflow-x: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
   border: 1px solid #cbdbe4 !important;
   border-radius: 6px !important;
-  margin: 1px 0 !important;
+  margin: 8px 0 !important;
 }
 
 .supply-lines-table {
   width: 100% !important;
-  min-width: 660px !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
   border-collapse: collapse !important;
 }
 
@@ -171,8 +175,22 @@
   border-bottom: 1px solid #edf2f7 !important;
 }
 
+.supply-lines-table th:nth-child(1),
+.supply-lines-table td:nth-child(1) { width: 28% !important; }
+.supply-lines-table th:nth-child(2),
+.supply-lines-table td:nth-child(2) { width: 22% !important; }
+.supply-lines-table th:nth-child(3),
+.supply-lines-table td:nth-child(3) { width: 10% !important; }
+.supply-lines-table th:nth-child(4),
+.supply-lines-table td:nth-child(4) { width: 14% !important; }
+.supply-lines-table th:nth-child(5),
+.supply-lines-table td:nth-child(5) { width: 16% !important; }
+.supply-lines-table th:nth-child(6),
+.supply-lines-table td:nth-child(6) { width: 10% !important; }
+
 .supply-line-name-row {
   display: flex !important;
+  flex-wrap: wrap !important;
   gap: 4px !important;
 }
 
@@ -204,17 +222,20 @@
   box-sizing: border-box !important;
 }
 
+.supply-lines-table td:nth-child(3) input,
+.supply-lines-table td:nth-child(4) input,
+.supply-lines-table td:nth-child(5) input,
+.supply-lines-table td:nth-child(2) select {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
 .supply-lines-table td:nth-child(3) input {
-  width: 55px !important;
   text-align: center !important;
 }
 
-.supply-lines-table td:nth-child(4) input {
-  width: 75px !important;
-}
-
 .supply-lines-table td:nth-child(5) input {
-  width: 100px !important;
   text-align: right !important;
 }
 
@@ -253,13 +274,6 @@
 }
 
 /* Grid layout for Issue: Content-proportional columns */
-.supply-grid-issue {
-  display: grid !important;
-  grid-template-columns: 125px 155px minmax(0, 1fr) minmax(0, 1.2fr) !important;
-  gap: 4px 8px !important;
-  align-items: end !important;
-}
-
 .supply-grid-issue .supply-field-purpose {
   grid-column: 1 / -1 !important;
 }

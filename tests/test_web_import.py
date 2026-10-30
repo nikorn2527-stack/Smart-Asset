@@ -40,6 +40,23 @@ class WebImport(HTTPFixture):
         job=self.upload(rows=[['7110-002-0001-0001','ของทดสอบ','หมวด',100,0,100,'SERIAL',time(8,30)]])
         self.assertEqual(job['files'][0]['samples'][0]['original']['คอลัมน์เฉพาะหน่วยงาน'],'08:30:00')
 
+    def test_group_column_selects_category_without_mixing_accounts(self):
+        hospital=next(a['id'] for a in self.call('/api/governance')['accounts'] if a['code']=='SURIN')
+        office=next(c['id'] for c in self.call('/api/catalog/categories') if c['name']=='ครุภัณฑ์สำนักงาน')
+        medical=next(c['id'] for c in self.call('/api/catalog/categories') if c['name']=='ครุภัณฑ์วิทยาศาสตร์และการแพทย์')
+        fallback=next(c['id'] for c in self.call('/api/catalog/categories') if c['name']=='ครุภัณฑ์คอมพิวเตอร์')
+        job=self.upload(rows=[
+            ['7110-002-0001-7001','ตู้ศูนย์แพทย์','ครุภัณฑ์สำนักงาน'],
+            ['6515-027-1005-7002','เครื่องฟังหัวใจ','ครุภัณฑ์วิทยาศาสตร์หรือการแพทย์'],
+        ],headers=['เลขครุภัณฑ์','รายละเอียดครุภัณฑ์','กลุ่มครุภัณฑ์'])
+        self.call('/api/imports/commit',{'actor':OFFICER,'id':job['id'],'confirm':True,'categories':{'0':fallback}})
+        center=self.call(f'/api/inventory?accountId={self.aid}&limit=10')['items']
+        self.assertEqual({row['code']:row['categoryId'] for row in center},{
+            '7110-002-0001-7001':office,
+            '6515-027-1005-7002':medical,
+        })
+        self.assertEqual(self.call(f'/api/inventory?accountId={hospital}')['total'],0)
+
     def test_generic_depreciation_amount_does_not_invent_monthly_period(self):
         job=self.upload(rows=[['7110-002-0001-0001','เครื่อง',99.25,400,600]],headers=['เลขครุภัณฑ์','รายละเอียดครุภัณฑ์','มูลค่าเสื่อม','มูลค่าเสื่อมสะสม','มูลค่าคงเหลือ'])
         self.call('/api/imports/commit',{'actor':OFFICER,'id':job['id'],'confirm':True,'categories':{'0':self.cid}})
