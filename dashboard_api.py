@@ -1,4 +1,4 @@
-"""Read-only showcase data for the overview page: most borrowed, on loan, status mix, photos.
+"""Overview page data: today's work, featured equipment, most borrowed, on loan, status mix, photos.
 
 Every query starts from a small table (movements, custody, photos, tickets) and joins assets by id,
 so the cost stays flat on a 66k-row register. Only the status mix and the category bubbles scan the
@@ -6,6 +6,8 @@ scoped assets once each.
 """
 from __future__ import annotations
 
+import json
+import re
 import sqlite3
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -216,7 +218,190 @@ def showcase(db: sqlite3.Connection, query: dict) -> dict:
         "recentPhotos": _recent_photos(db, where, params, _int(query, "photos", 12, 1, 30), today),
         "center": {"name": CENTER["name"], "shortName": CENTER["shortName"], "total": center_total,
                    "categoriesScope": "center" if scan["centerMatched"] else "all", "categories": scan["bubbles"]},
+        "todayWork": _today_work(db, today),
+        "featured": _featured(db, today),
+        "featuredMax": FEATURED_MAX,
     }
+
+
+def _days_since(stamp: str, today: date):
+    try:
+        return (today - date.fromisoformat(str(stamp)[:10])).days
+    except ValueError:
+        return None
+
+
+def _today_work(db: sqlite3.Connection, today: date) -> dict:
+    """Work waiting on someone today; every query is bounded by a status index or a small table."""
+    from qr_smart import ticket_scope_sql
+    scope = access.scope_sql(db)
+    tickets_scope = ticket_scope_sql(db)
+    iso = today.isoformat()
+    ticket_cols = "t.id,t.ticket_no,t.asset_id,t.asset_name,t.status,t.urgency,t.assigned_to,t.created_at,t.estimate_cost,t.actual_cost"
+    ticket_from = f"FROM tickets t LEFT JOIN assets a ON a.id=t.asset_id WHERE {tickets_scope}"
+
+    def ticket(row):
+        return {"kind": "ticket", "id": row["id"], "ticketNo": row["ticket_no"], "assetId": row["asset_id"],
+                "title": row["asset_name"], "status": row["status"], "urgency": row["urgency"],
+                "assignedTo": row["assigned_to"], "createdAt": row["created_at"], "ageDays": _days_since(row["created_at"], today),
+                "amount": row["actual_cost"] if row["status"] == "รออนุมัติค่าใช้จ่ายจริง" else row["estimate_cost"]}
+
+    approval_sql = "t.status IN ('รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง')"
+    approval_tickets = db.execute(f"SELECT COUNT(*) {ticket_from} AND {approval_sql}").fetchone()[0]
+    approval_assets = db.execute(f"SELECT COUNT(*) FROM assets a WHERE a.status='รออนุมัติ' AND {scope}").fetchone()[0]
+    approvals = [ticket(r) for r in db.execute(f"SELECT {ticket_cols} {ticket_from} AND {approval_sql} ORDER BY t.created_at,t.id LIMIT 6")]
+    approvals += [{"kind": "asset", "id": r["id"], "assetId": r["id"], "code": r["code"] or "", "title": r["name"] or "",
+                   "status": "รออนุมัติ", "createdAt": r["created_at"] or "", "createdBy": r["created_by"] or "",
+                   "ageDays": _days_since(r["created_at"] or "", today)}
+                  for r in db.execute(f"SELECT a.id,a.code,a.name,a.created_at,a.created_by FROM assets a WHERE a.status='รออนุมัติ' AND {scope} ORDER BY a.id LIMIT 6")]
+    approvals.sort(key=lambda item: (str(item["createdAt"]), item["id"]))
+
+    open_sql = f"t.status NOT IN {CLOSED_SQL}"
+    by_status = dict(db.execute(f"SELECT t.status,COUNT(*) {ticket_from} AND {open_sql} GROUP BY t.status").fetchall())
+    repairs = [ticket(r) for r in db.execute(
+        f"SELECT {ticket_cols} {ticket_from} AND {open_sql} ORDER BY CASE WHEN t.status='รับแจ้งใหม่' THEN 0 ELSE 1 END,t.created_at,t.id LIMIT 12")]
+
+    work_from = ("FROM scheduled_work w JOIN work_plans p ON p.id=w.plan_id JOIN assets a ON a.id=w.asset_id "
+                 f"WHERE w.status<>'completed' AND w.due_on<=? AND {scope}")
+    work_total, work_overdue = db.execute(f"SELECT COUNT(*),COALESCE(SUM(w.due_on<?),0) {work_from}", (iso, iso)).fetchone()
+    work = [{"id": r["id"], "assetId": r["asset_id"], "title": r["name"] or "", "code": r["code"] or "", "kind": r["kind"],
+             "planName": r["plan_name"], "dueOn": r["due_on"], "assignee": r["assignee"], "status": r["status"],
+             "daysLate": max(0, _days_since(r["due_on"], today) or 0)}
+            for r in db.execute(f"SELECT w.id,w.asset_id,w.due_on,w.assignee,w.status,p.kind,p.name AS plan_name,a.name,a.code {work_from} "
+                                "ORDER BY w.due_on,w.id LIMIT 6", (iso,))]
+
+    loan_from = (f"FROM asset_custody_state cs JOIN assets a ON a.id=cs.asset_id WHERE cs.loan_status IN {BUSY_SQL} "
+                 f"AND cs.due_at<>'' AND cs.due_at<? AND {scope}")
+    loan_total = db.execute(f"SELECT COUNT(*) {loan_from}", (iso,)).fetchone()[0]
+    loans = [{"id": r["id"], "assetId": r["id"], "title": r["name"] or "", "code": r["code"] or "", "holder": r["custodian"] or "",
+              "dueAt": r["due_at"], "state": r["loan_status"], "daysLate": max(0, _days_since(r["due_at"], today) or 0),
+              **_photo(r["id"], r["photo_id"])}
+             for r in db.execute(f"SELECT a.id,a.name,a.code,cs.custodian,cs.due_at,cs.loan_status,{primary_photo_sql('a')} AS photo_id "
+                                 f"{loan_from} ORDER BY cs.due_at,a.id LIMIT 6", (iso,))]
+    return {
+        "approvals": {"total": approval_tickets + approval_assets, "tickets": approval_tickets, "assets": approval_assets, "items": approvals[:6]},
+        "repairs": {"total": sum(by_status.values()), "byStatus": by_status, "items": repairs},
+        "maintenance": {"total": work_total, "overdue": work_overdue, "dueToday": work_total - work_overdue, "items": work},
+        "overdueLoans": {"total": loan_total, "items": loans},
+    }
+
+
+# ---------- featured equipment ----------
+FEATURED_MAX = 12
+NOTE_MAX = 200
+BLOCKED_ROLES = {"ผู้แจ้ง"}
+FEATURED_PATH = re.compile(r"/api/assets/(\d+)/featured(?:/(remove))?")
+ORDER_PATH = "/api/assets/featured/order"
+
+
+def ensure_schema(db: sqlite3.Connection) -> None:
+    db.execute("""CREATE TABLE IF NOT EXISTS dashboard_featured(
+        asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+        sort INTEGER NOT NULL DEFAULT 0,
+        note TEXT NOT NULL DEFAULT '',
+        pinned_by TEXT NOT NULL DEFAULT '',
+        pinned_at TEXT NOT NULL
+    )""")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_dashboard_featured_sort ON dashboard_featured(sort,asset_id)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_work_open_due ON scheduled_work(status,due_on)")
+
+
+def _featured(db: sqlite3.Connection, today: date) -> list[dict]:
+    rows = db.execute(
+        f"SELECT {ASSET_COLUMNS},f.sort,f.note,f.pinned_by,f.pinned_at,"
+        "(SELECT COUNT(*) FROM asset_movements m WHERE m.asset_id=a.id AND m.kind IN ('loan','issue')) AS borrow_count,"
+        "(SELECT COUNT(*) FROM asset_photos p WHERE p.asset_id=a.id AND p.removed_at IS NULL) AS photo_count "
+        f"FROM dashboard_featured f JOIN assets a ON a.id=f.asset_id {ASSET_JOINS} WHERE {access.scope_sql(db)} "
+        "ORDER BY f.sort,f.pinned_at,a.id LIMIT ?", (FEATURED_MAX,)).fetchall()
+    return [{**_base(r, today), "note": r["note"], "pinnedBy": r["pinned_by"], "pinnedAt": r["pinned_at"],
+             "borrowCount": r["borrow_count"], "photoCount": r["photo_count"],
+             "holder": (r["custodian"] or "") if r["loan_status"] in LOAN_BUSY else ""} for r in rows]
+
+
+def _featured_payload(db: sqlite3.Connection) -> dict:
+    return {"items": _featured(db, datetime.now(TZ).date()), "max": FEATURED_MAX}
+
+
+def _actor(body: dict) -> str:
+    actor = str(body.get("actor") or "").strip()[:160]
+    if not actor:
+        raise DashboardError("ไม่ทราบผู้ดำเนินการ", 403)
+    if actor in BLOCKED_ROLES:
+        raise DashboardError("ปักหมุดอุปกรณ์เด่นได้เฉพาะเจ้าหน้าที่", 403)
+    return actor
+
+
+def _event(db, asset: sqlite3.Row, actor: str, action: str, note: dict) -> None:
+    db.execute("INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)",
+               (asset["id"], actor, action, asset["status"], asset["status"], json.dumps(note, ensure_ascii=False),
+                datetime.now(TZ).isoformat(timespec="seconds")))
+
+
+def _visible_asset(db, asset_id: int) -> sqlite3.Row:
+    asset = db.execute(f"SELECT a.id,a.code,a.name,a.status FROM assets a WHERE a.id=? AND {access.scope_sql(db)}", (asset_id,)).fetchone()
+    if asset is None:
+        raise DashboardError("ไม่พบครุภัณฑ์", 404)
+    return asset
+
+
+def _pin_state(db, asset: sqlite3.Row) -> dict:
+    row = db.execute("SELECT sort,note,pinned_by,pinned_at FROM dashboard_featured WHERE asset_id=?", (asset["id"],)).fetchone()
+    photo = db.execute(f"SELECT {primary_photo_sql('a')} FROM assets a WHERE a.id=?", (asset["id"],)).fetchone()[0]
+    total = db.execute("SELECT COUNT(*) FROM dashboard_featured").fetchone()[0]
+    return {"assetId": asset["id"], "pinned": row is not None, "note": row["note"] if row else "",
+            "pinnedBy": row["pinned_by"] if row else "", "pinnedAt": row["pinned_at"] if row else "",
+            "total": total, "max": FEATURED_MAX,
+            "asset": {"id": asset["id"], "code": asset["code"] or "", "name": asset["name"] or "", **_photo(asset["id"], photo)}}
+
+
+def _pin(db, asset_id: int, body: dict, remove: bool):
+    actor = _actor(body)
+    asset = _visible_asset(db, asset_id)
+    db.execute("BEGIN IMMEDIATE")
+    current = db.execute("SELECT note FROM dashboard_featured WHERE asset_id=?", (asset_id,)).fetchone()
+    if remove:
+        if current is None:
+            raise DashboardError("รายการนี้ไม่ได้ปักหมุดไว้", 404)
+        db.execute("DELETE FROM dashboard_featured WHERE asset_id=?", (asset_id,))
+        _event(db, asset, actor, "เลิกปักหมุดอุปกรณ์เด่น", {"note": current["note"]})
+        return {**_featured_payload(db), "state": _pin_state(db, asset)}
+    note = str(body.get("note") or "").strip()
+    if len(note) > NOTE_MAX:
+        raise DashboardError(f"บันทึกย่อยาวได้ไม่เกิน {NOTE_MAX} ตัวอักษร")
+    if current is None:
+        if db.execute("SELECT COUNT(*) FROM dashboard_featured").fetchone()[0] >= FEATURED_MAX:
+            raise DashboardError(f"ปักหมุดได้สูงสุด {FEATURED_MAX} รายการ เลิกปักหมุดรายการเดิมก่อน", 409)
+        sort = db.execute("SELECT COALESCE(MAX(sort),0)+1 FROM dashboard_featured").fetchone()[0]
+        db.execute("INSERT INTO dashboard_featured(asset_id,sort,note,pinned_by,pinned_at) VALUES(?,?,?,?,?)",
+                   (asset_id, sort, note, actor, datetime.now(TZ).isoformat(timespec="seconds")))
+        _event(db, asset, actor, "ปักหมุดอุปกรณ์เด่น", {"note": note})
+        status = 201
+    else:
+        db.execute("UPDATE dashboard_featured SET note=? WHERE asset_id=?", (note, asset_id))
+        _event(db, asset, actor, "แก้บันทึกอุปกรณ์เด่น", {"note": note})
+        status = 200
+    return {**_featured_payload(db), "state": _pin_state(db, asset)}, status
+
+
+def _reorder(db, body: dict) -> dict:
+    _actor(body)
+    ids = body.get("assetIds")
+    if not isinstance(ids, list) or not ids or any(type(i) is not int for i in ids) or len(set(ids)) != len(ids):
+        raise DashboardError("ลำดับอุปกรณ์เด่นไม่ถูกต้อง")
+    db.execute("BEGIN IMMEDIATE")
+    marks = ",".join("?" * len(ids))
+    rows = db.execute(f"SELECT f.asset_id,f.sort FROM dashboard_featured f JOIN assets a ON a.id=f.asset_id "
+                      f"WHERE f.asset_id IN ({marks}) AND {access.scope_sql(db)}", ids).fetchall()
+    if len(rows) != len(ids):
+        raise DashboardError("มีรายการที่ไม่ได้ปักหมุดหรืออยู่นอกขอบเขตสิทธิ์", 404)
+    # Only the listed pins trade places; pins outside the caller's scope keep their slots.
+    slots = sorted(r["sort"] for r in rows)
+    if len(set(slots)) != len(slots):
+        base = db.execute("SELECT COALESCE(MAX(sort),0) FROM dashboard_featured").fetchone()[0]
+        slots = [base + i + 1 for i in range(len(ids))]
+    for asset_id, sort in zip(ids, slots):
+        db.execute("UPDATE dashboard_featured SET sort=? WHERE asset_id=?", (sort, asset_id))
+    return _featured_payload(db)
 
 
 class DashboardError(Exception):
@@ -225,9 +410,21 @@ class DashboardError(Exception):
         self.status = status
 
 
-def handle(db: sqlite3.Connection, method: str, path: str, query: dict):
-    if path != PATH:
+def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: dict | None = None):
+    body = body or {}
+    if path == PATH:
+        if method not in ("GET", "HEAD"):
+            raise DashboardError("ไม่รองรับคำสั่งนี้", 405)
+        return showcase(db, query)
+    if path == ORDER_PATH:
+        if method != "POST":
+            raise DashboardError("ไม่รองรับคำสั่งนี้", 405)
+        return _reorder(db, body)
+    match = FEATURED_PATH.fullmatch(path)
+    if not match:
         return None
-    if method not in ("GET", "HEAD"):
+    if method in ("GET", "HEAD") and not match[2]:
+        return _pin_state(db, _visible_asset(db, int(match[1])))
+    if method != "POST":
         raise DashboardError("ไม่รองรับคำสั่งนี้", 405)
-    return showcase(db, query)
+    return _pin(db, int(match[1]), body, remove=bool(match[2]))

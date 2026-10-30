@@ -39,7 +39,14 @@
     camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
     chevronL: '<path d="M15 5l-7 7 7 7"/>',
     chevronR: '<path d="M9 5l7 7-7 7"/>',
-    check: '<path d="M4 12.5l5 5L20 6.5"/>'
+    check: '<path d="M4 12.5l5 5L20 6.5"/>',
+    star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.9l-5.3 2.7 1-5.8-4.2-4.1 5.9-.9z"/>',
+    clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8.5 13l2.5 2.5 4.5-5"/>',
+    calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h3"/>',
+    alarm: '<circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 2M4 5l3-2M20 5l-3-2"/>',
+    pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>'
   };
   const svg = (name, cls = '') => `<svg class="dsc-ico ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name] || ICONS.box}</svg>`;
   const STATE_LABEL = { ready: 'ว่าง', loaned: 'ถูกยืม', issued: 'เบิกใช้', repair: 'ซ่อม', pending: 'รอตรวจ', other: 'อื่น ๆ' };
@@ -98,13 +105,33 @@
         <button type="button" class="dsc-action a-register" data-dsc-action="register"><span class="dsc-action-ico">${svg('book')}</span><span><b>เปิดทะเบียน</b><small>ค้นหา · ออก QR</small></span></button>
       </nav>
     </div>
+    <section class="dsc-today" aria-labelledby="dscTodayTitle">
+      <header class="dsc-today-head">
+        <div><h3 id="dscTodayTitle">งานวันนี้</h3><p id="dscTodaySub">กำลังโหลดงานที่รอดำเนินการ…</p></div>
+        <span class="dsc-role-pill" id="dscRolePill"></span>
+      </header>
+      <div class="dsc-today-grid" id="dscTodayGrid"></div>
+    </section>
+    <section class="dsc-panel dsc-featured" aria-labelledby="dscFeatTitle">
+      <header class="dsc-head">
+        <div><h3 id="dscFeatTitle"><span class="dsc-feat-mark" aria-hidden="true">${svg('star')}</span>อุปกรณ์เด่นของศูนย์</h3><p id="dscFeatSub">—</p></div>
+        <div class="dsc-head-tools">
+          <button type="button" class="dsc-add-btn" data-dsc-action="pin-add" hidden>${svg('plus')}<span>เพิ่มอุปกรณ์เด่น</span></button>
+          <div class="dsc-nav" data-nav-for="dscFeatTrack" hidden>
+            <button type="button" class="dsc-nav-btn" data-dsc-scroll="-1" data-dsc-target="dscFeatTrack" aria-label="เลื่อนดูอุปกรณ์เด่นก่อนหน้า">${svg('chevronL')}</button>
+            <button type="button" class="dsc-nav-btn" data-dsc-scroll="1" data-dsc-target="dscFeatTrack" aria-label="เลื่อนดูอุปกรณ์เด่นถัดไป">${svg('chevronR')}</button>
+          </div>
+        </div>
+      </header>
+      <div class="dsc-track dsc-feat-track" id="dscFeatTrack" role="list"></div>
+    </section>
     <div class="dsc-main">
       <section class="dsc-panel dsc-top" aria-labelledby="dscTopTitle">
         <header class="dsc-head">
           <div><h3 id="dscTopTitle">ยืมบ่อยที่สุด</h3><p id="dscTopSub">กำลังโหลดข้อมูล…</p></div>
-          <div class="dsc-nav" hidden>
-            <button type="button" class="dsc-nav-btn" data-dsc-scroll="-1" aria-label="เลื่อนดูรายการก่อนหน้า">${svg('chevronL')}</button>
-            <button type="button" class="dsc-nav-btn" data-dsc-scroll="1" aria-label="เลื่อนดูรายการถัดไป">${svg('chevronR')}</button>
+          <div class="dsc-nav" data-nav-for="dscTrack" hidden>
+            <button type="button" class="dsc-nav-btn" data-dsc-scroll="-1" data-dsc-target="dscTrack" aria-label="เลื่อนดูรายการก่อนหน้า">${svg('chevronL')}</button>
+            <button type="button" class="dsc-nav-btn" data-dsc-scroll="1" data-dsc-target="dscTrack" aria-label="เลื่อนดูรายการถัดไป">${svg('chevronR')}</button>
           </div>
         </header>
         <div class="dsc-track" id="dscTrack" role="list"></div>
@@ -156,6 +183,27 @@
       <div class="dsc-finder-results" id="dscFinderResults"></div>
     </div>`;
   document.body.append(finder);
+
+  const pinDialog = document.createElement('dialog');
+  pinDialog.className = 'dsc-finder dsc-pin';
+  pinDialog.setAttribute('aria-labelledby', 'dscPinTitle');
+  pinDialog.innerHTML = `
+    <form class="dsc-finder-box" id="dscPinForm">
+      <header><div><span class="dsc-finder-ico is-star">${svg('star')}</span><h3 id="dscPinTitle">ปักหมุดอุปกรณ์เด่น</h3></div><button type="button" class="dsc-x" data-dsc-close aria-label="ปิดหน้าต่าง">×</button></header>
+      <div class="dsc-pin-asset" id="dscPinAsset"></div>
+      <label class="dsc-pin-field" for="dscPinNote">บันทึกย่อ · ใช้ทำอะไร หรือใครใช้บ่อย
+        <textarea id="dscPinNote" rows="3" maxlength="200" placeholder="เช่น หุ่นฝึกใส่ท่อช่วยหายใจ ใช้สอนนักศึกษาแพทย์ปี 4–6"></textarea>
+        <small id="dscPinCount">0 / 200</small>
+      </label>
+      <p class="dsc-finder-status" id="dscPinStatus" role="status"></p>
+      <div class="dsc-pin-actions">
+        <button type="button" class="dsc-btn is-danger" id="dscPinRemove" hidden>เลิกปักหมุด</button>
+        <span class="dsc-pin-spacer"></span>
+        <button type="button" class="dsc-btn" data-dsc-close>ยกเลิก</button>
+        <button type="submit" class="dsc-btn is-primary" id="dscPinSave">ปักหมุด</button>
+      </div>
+    </form>`;
+  document.body.append(pinDialog);
 
   /* ---------- rendering ---------- */
   function card(item, index, mode) {
@@ -320,6 +368,153 @@
     }).join('');
   }
 
+  /* ---------- today's work ---------- */
+  const role = () => app.getRole?.() || '';
+  const isStaff = () => role() !== 'ผู้แจ้ง';
+  const ROLE_TILES = { 'ผู้อนุมัติ': ['approvals'], 'ช่าง': ['repairs', 'maintenance'], 'เจ้าหน้าที่พัสดุ': ['repairs', 'overdueLoans'], 'ผู้แจ้ง': ['repairs'] };
+  const ROLE_STATUSES = {
+    'ผู้อนุมัติ': ['รออนุมัติ', 'รออนุมัติค่าใช้จ่ายจริง'],
+    'ช่าง': ['กำลังซ่อม', 'รออะไหล่'],
+    'เจ้าหน้าที่พัสดุ': ['รับแจ้งใหม่', 'รอมอบหมาย', 'รอแก้ไขค่าใช้จ่าย'],
+    'ผู้แจ้ง': ['รอผู้แจ้งยืนยัน']
+  };
+  const TICKET_LABEL = { 'รับแจ้งใหม่': 'รอคัดกรอง', 'รอมอบหมาย': 'รอมอบหมาย', 'กำลังซ่อม': 'กำลังซ่อม', 'รออะไหล่': 'รออะไหล่', 'รอผู้แจ้งยืนยัน': 'รอตรวจรับ', 'รออนุมัติ': 'รออนุมัติ', 'รออนุมัติค่าใช้จ่ายจริง': 'อนุมัติยอดจริง', 'รอแก้ไขค่าใช้จ่าย': 'แก้ไขยอด' };
+  const age = days => (days == null ? '' : days <= 0 ? 'วันนี้' : `${num(days)} วัน`);
+
+  function job(item, type, mine) {
+    let meta = '';
+    let tag = '';
+    let cls = '';
+    let attrs = `data-dsc-job="${type}" data-id="${item.id}"`;
+    if (type === 'ticket') {
+      meta = `${esc(item.ticketNo)} · เปิดมา ${age(item.ageDays)}${item.assignedTo ? ` · ${esc(item.assignedTo)}` : ''}`;
+      tag = TICKET_LABEL[item.status] || item.status;
+      cls = item.status === 'รับแจ้งใหม่' ? 't-new' : ['รออนุมัติ', 'รออนุมัติค่าใช้จ่ายจริง'].includes(item.status) ? 't-approve' : 't-work';
+      if (/ด่วน|ฉุกเฉิน/.test(item.urgency || '')) cls += ' is-urgent';
+    } else if (type === 'asset') {
+      meta = `ขึ้นทะเบียนใหม่ · ${esc(item.code || 'ยังไม่มีเลข')}`;
+      tag = 'อนุมัติครุภัณฑ์';
+      cls = 't-approve';
+    } else if (type === 'work') {
+      meta = `${item.kind === 'pm' ? 'PM' : 'ตรวจนับ'} · ${esc(item.assignee || 'ยังไม่มอบหมาย')}`;
+      tag = item.daysLate > 0 ? `เกิน ${num(item.daysLate)} วัน` : 'ครบวันนี้';
+      cls = item.daysLate > 0 ? 't-late' : 't-soon';
+    } else {
+      meta = `${item.state === 'issued' ? 'เบิกโดย' : 'ยืมโดย'} ${esc(item.holder || 'ไม่ระบุ')}`;
+      tag = `เกิน ${num(item.daysLate)} วัน`;
+      cls = 't-late';
+      attrs = `data-smart-id="${item.assetId}" data-dsc-tab="custody"`;
+    }
+    return `<button type="button" class="dsc-job ${cls}${mine ? ' is-mine' : ''}" ${attrs}>
+      <span class="dsc-job-text"><b>${esc(item.title || 'ไม่ระบุชื่อ')}</b><small>${meta}</small></span>
+      <span class="dsc-job-tag">${esc(tag)}</span>
+    </button>`;
+  }
+
+  function renderToday() {
+    const work = data.todayWork;
+    const grid = $('#dscTodayGrid');
+    const current = role();
+    $('#dscRolePill').innerHTML = current ? `มุมมอง <b>${esc(current)}</b>` : '';
+    if (!work) { grid.innerHTML = ''; return; }
+    const mineTiles = ROLE_TILES[current] || [];
+    const mineStatus = ROLE_STATUSES[current] || [];
+    const repairs = work.repairs || { total: 0, byStatus: {}, items: [] };
+    const rank = item => (mineStatus.includes(item.status) ? 0 : 1);
+    const repairItems = [...repairs.items].sort((a, b) => rank(a) - rank(b));
+    const by = repairs.byStatus || {};
+    const tiles = [
+      { key: 'approvals', icon: 'clipboard', label: 'รออนุมัติ', total: work.approvals.total,
+        sub: `${num(work.approvals.tickets)} งานซ่อม · ${num(work.approvals.assets)} ครุภัณฑ์ใหม่`,
+        items: work.approvals.items.map(i => job(i, i.kind === 'asset' ? 'asset' : 'ticket', current === 'ผู้อนุมัติ')),
+        go: 'go-approvals', goLabel: 'เปิดศูนย์อนุมัติ' },
+      { key: 'repairs', icon: 'wrench', label: 'งานซ่อมค้าง', total: repairs.total,
+        sub: `${num(by['รับแจ้งใหม่'] || 0)} รอคัดกรอง · ${num((by['กำลังซ่อม'] || 0) + (by['รออะไหล่'] || 0))} กำลังซ่อม`,
+        items: repairItems.map(i => job(i, 'ticket', mineStatus.includes(i.status))),
+        go: 'go-repairs', goLabel: 'ดูงานซ่อมทั้งหมด' },
+      { key: 'maintenance', icon: 'calendar', label: 'PM / ตรวจนับ ครบกำหนด', total: work.maintenance.total,
+        sub: `${num(work.maintenance.overdue)} เกินกำหนด · ${num(work.maintenance.dueToday)} ครบวันนี้`,
+        items: work.maintenance.items.map(i => job(i, 'work', current === 'ช่าง')),
+        go: 'go-work', goLabel: 'เปิดงาน PM / ตรวจนับ' },
+      { key: 'overdueLoans', icon: 'alarm', label: 'เกินกำหนดคืน', total: work.overdueLoans.total,
+        sub: work.overdueLoans.total ? 'ติดตามผู้ยืมให้นำมาคืน' : 'ไม่มีรายการค้างคืน',
+        items: work.overdueLoans.items.map(i => job(i, 'loan', current === 'เจ้าหน้าที่พัสดุ')),
+        go: 'go-loans', goLabel: 'ดูวงจรยืม-คืน' }
+    ];
+    tiles.forEach(t => {
+      t.mine = !mineTiles.includes(t.key) ? 0
+        : t.key === 'repairs' ? mineStatus.reduce((sum, s) => sum + (by[s] || 0), 0)
+        : t.total;
+    });
+    const total = tiles.reduce((sum, t) => sum + t.total, 0);
+    const mine = tiles.reduce((sum, t) => sum + t.mine, 0);
+    $('#dscTodaySub').textContent = total
+      ? `${num(total)} รายการรอดำเนินการ${mine ? ` · ${num(mine)} รายการเป็นงานของ${current}` : ''}`
+      : 'อัปเดตจากงานซ่อม การอนุมัติ PM และการยืมคืนล่าสุด';
+    root.querySelector('.dsc-today').classList.toggle('is-clear', !total);
+    if (!total) {
+      grid.innerHTML = `<div class="dsc-today-clear"><span class="dsc-today-clear-ico">${svg('check')}</span>
+        <div><b>วันนี้ไม่มีงานค้าง</b><small>ไม่มีรายการรออนุมัติ งานซ่อม PM ที่ครบกำหนด หรือการคืนที่เกินกำหนด</small></div></div>`;
+      return;
+    }
+    grid.innerHTML = tiles.map((t, i) => `<section class="dsc-tile-work k-${t.key}${t.mine ? ' is-mine' : ''}${t.total ? '' : ' is-zero'}" style="--i:${i}" aria-label="${esc(`${t.label} ${t.total} รายการ${t.mine ? ` งานของบทบาทนี้ ${t.mine} รายการ` : ''}`)}">
+        <header><span class="dsc-tw-ico">${svg(t.icon)}</span><span class="dsc-tw-label"><b>${esc(t.label)}</b><small>${esc(t.sub)}</small></span>
+          <span class="dsc-tw-count" data-count="${t.total}" data-count-key="today-${t.key}">${num(t.total)}</span></header>
+        ${t.mine ? `<span class="dsc-tw-mine">งานของบทบาทนี้ · ${num(t.mine)}</span>` : ''}
+        <div class="dsc-tw-list">${t.total ? t.items.slice(0, 3).join('') : `<p class="dsc-tw-clear">${svg('check')} เรียบร้อย ไม่มีรายการค้าง</p>`}</div>
+        ${t.total ? `<button type="button" class="dsc-link-btn dsc-tw-more" data-dsc-action="${t.go}">${esc(t.goLabel)}${t.total > 3 ? ` (${num(t.total)})` : ''} →</button>` : ''}
+      </section>`).join('');
+  }
+
+  /* ---------- featured equipment ---------- */
+  function featureCard(item, index, count, staff) {
+    const key = remember(`feat:${item.id}`, { ...item, mode: 'feature' });
+    const live = item.state === 'loaned' || item.state === 'issued'
+      ? `${item.state === 'issued' ? 'เบิกใช้' : 'ยืมโดย'} ${item.holder || 'ไม่ระบุ'}${item.dueAt ? ` · ${dueInfo(item).text}` : ''}`
+      : item.state === 'repair' ? 'อยู่ระหว่างซ่อม' : item.state === 'ready' ? 'พร้อมให้ยืมใช้' : item.stateLabel;
+    const tools = staff ? `<div class="dsc-feat-tools" role="group" aria-label="${esc(`จัดการ ${item.name}`)}">
+        <button type="button" data-dsc-move="-1" data-id="${item.id}" aria-label="เลื่อนไปทางซ้าย" ${index === 0 ? 'disabled' : ''}>${svg('chevronL')}</button>
+        <button type="button" data-dsc-move="1" data-id="${item.id}" aria-label="เลื่อนไปทางขวา" ${index === count - 1 ? 'disabled' : ''}>${svg('chevronR')}</button>
+        <button type="button" data-dsc-edit-pin="${item.id}" aria-label="แก้บันทึกย่อ">${svg('pencil')}</button>
+        <button type="button" data-dsc-unpin="${item.id}" aria-label="เลิกปักหมุด">${svg('close')}</button>
+      </div>` : '';
+    return `<div class="dsc-card dsc-feat" role="listitem" data-dsc-key="${key}" data-dsc-tilt style="--i:${index}">
+      <button type="button" class="dsc-feat-open" data-smart-id="${item.id}" aria-label="${esc(`${item.name} สถานะ ${item.stateLabel}${item.note ? ` · ${item.note}` : ''}`)}">
+        <span class="dsc-card-media">${art(item)}${chip(item)}<span class="dsc-feat-star" aria-hidden="true">${svg('star')}</span></span>
+        <span class="dsc-card-body">
+          <span class="dsc-card-name">${esc(item.name)}</span>
+          <span class="dsc-card-code">${esc(item.code || 'ไม่ระบุเลข')}</span>
+          ${item.note ? `<span class="dsc-feat-note">${esc(item.note)}</span>` : ''}
+          <span class="dsc-feat-meta"><span class="dsc-feat-live s-${esc(item.overdue ? 'late' : item.state)}">${esc(live)}</span>${item.location ? `<span class="dsc-feat-loc">📍 ${esc(item.location)}</span>` : ''}</span>
+        </span>
+      </button>${tools}
+    </div>`;
+  }
+
+  function renderFeatured() {
+    const list = data.featured || [];
+    const max = data.featuredMax || 12;
+    const staff = isStaff();
+    $('[data-dsc-action="pin-add"]').hidden = !staff || list.length >= max;
+    $('#dscFeatSub').textContent = list.length
+      ? `${num(list.length)} / ${num(max)} รายการ · สถานะอัปเดตตามการยืมและงานซ่อมจริง`
+      : 'ปักหมุดหุ่นฝึกหัตถการ เครื่องจำลอง หรืออุปกรณ์ที่ศูนย์ใช้สอนบ่อย ให้ทุกคนเห็นทันที';
+    const track = $('#dscFeatTrack');
+    if (list.length) {
+      track.innerHTML = list.map((item, i) => featureCard(item, i, list.length, staff)).join('');
+    } else {
+      const examples = [['medical', 'หุ่นฝึกหัตถการ'], ['education', 'เครื่องจำลองสถานการณ์ทางคลินิก'], ['computer', 'ชุดฝึกทักษะการตรวจร่างกาย']];
+      track.innerHTML = `<div class="dsc-guide dsc-feat-guide" role="listitem"><b>ยังไม่มีอุปกรณ์เด่น</b>
+          <ol><li><span>1</span>${staff ? 'กด “เพิ่มอุปกรณ์เด่น” แล้วค้นหาครุภัณฑ์' : 'เจ้าหน้าที่ค้นหาครุภัณฑ์ที่ต้องการแสดง'}</li>
+          <li><span>2</span>หรือเปิดรายละเอียดครุภัณฑ์ › “☆ ปักหมุดอุปกรณ์เด่น”</li>
+          <li><span>3</span>เขียนบันทึกย่อว่าใช้ทำอะไร การ์ดจะขึ้นที่นี่พร้อมสถานะจริง</li></ol>
+          ${staff ? '<button type="button" class="dsc-link-btn" data-dsc-action="pin-add">＋ เพิ่มอุปกรณ์เด่นชิ้นแรก →</button>' : ''}</div>`
+        + examples.map(([kind, label], i) => `<div class="dsc-feat-ghost" role="listitem" aria-hidden="true" style="--i:${i + 1}">
+          <span class="dsc-glyph g-${kind}">${svg(kind)}</span><b>${label}</b><small>ตัวอย่าง</small></div>`).join('');
+    }
+    requestAnimationFrame(updateNav);
+  }
+
   function renderFocus() {
     const center = data?.center;
     const group = $('.dsc-focus');
@@ -349,12 +544,14 @@
   function renderAll() {
     items.clear();
     root.classList.remove('is-loading', 'is-error');
-    renderFocus(); renderTop(); renderLoans(); renderRing(); renderPhotos(); renderBubbles();
+    renderFocus(); renderToday(); renderFeatured(); renderTop(); renderLoans(); renderRing(); renderPhotos(); renderBubbles();
     animateCounts();
   }
 
   function renderLoading() {
     root.classList.add('is-loading');
+    $('#dscTodayGrid').innerHTML = [0, 1, 2, 3].map(i => `<div class="dsc-tile-work is-skel" style="--i:${i}" aria-hidden="true"><i></i><i></i><i></i></div>`).join('');
+    $('#dscFeatTrack').innerHTML = [0, 1, 2].map(i => `<div class="dsc-skel dsc-feat-skel" role="listitem" style="--i:${i}" aria-hidden="true"><span></span><i></i><i></i></div>`).join('');
     $('#dscTrack').innerHTML = [0, 1, 2, 3].map(i => `<div class="dsc-skel" role="listitem" style="--i:${i}" aria-hidden="true"><span></span><i></i><i></i></div>`).join('');
   }
 
@@ -384,8 +581,10 @@
 
   /* ---------- gallery scrolling ---------- */
   function updateNav() {
-    const track = $('#dscTrack');
-    $('.dsc-nav').hidden = track.scrollWidth <= track.clientWidth + 4;
+    root.querySelectorAll('.dsc-nav[data-nav-for]').forEach(nav => {
+      const track = root.querySelector(`#${nav.dataset.navFor}`);
+      nav.hidden = !track || track.scrollWidth <= track.clientWidth + 4;
+    });
   }
 
   /* ---------- tilt ---------- */
@@ -427,7 +626,9 @@
       ? `<img src="${esc(item.photoUrl || big)}" alt="" data-full="${esc(big)}">`
       : `<span class="dsc-glyph g-${glyphKind(item)}">${svg(glyphKind(item))}</span>`;
     const rows = [];
+    if (item.mode === 'feature' && item.note) rows.push(`<span class="dsc-preview-note">${esc(item.note)}</span>`);
     if (item.mode === 'top') rows.push(`<span><b>${num(item.borrowCount)}</b> ครั้งที่ยืม / เบิก${item.lastBorrowedAt ? ` · ล่าสุด ${esc(thaiDate(item.lastBorrowedAt))}` : ''}</span>`);
+    if (item.mode === 'feature') rows.push(`<span><b>${num(item.borrowCount)}</b> ครั้งที่ยืม / เบิก${item.pinnedBy ? ` · ปักหมุดโดย ${esc(item.pinnedBy)}` : ''}</span>`);
     if (item.state === 'loaned' || item.state === 'issued') rows.push(`<span class="${item.overdue ? 'is-late' : ''}">${esc(item.dueText || dueInfo(item).text)}${item.holder ? ` · ${esc(item.holder)}` : ''}</span>`);
     if (item.location) rows.push(`<span>📍 ${esc(item.location)}</span>`);
     if (item.category) rows.push(`<span>${esc(item.category)}</span>`);
@@ -516,7 +717,7 @@
     if (held && !held.contains(event.relatedTarget)) { held.classList.remove('is-held'); held.scrollLeft = 0; }
     if (!root.contains(event.relatedTarget)) hidePreview();
   });
-  document.addEventListener('scroll', () => { if (previewFor && document.activeElement !== previewFor) hidePreview(); else if (previewFor) placePreview(previewFor); }, true);
+  document.addEventListener('scroll', () => { if (previewFor && !previewFor.contains(document.activeElement)) hidePreview(); else if (previewFor) placePreview(previewFor); }, true);
   window.addEventListener('resize', () => { hidePreview(); updateNav(); });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && previewFor) hidePreview(); });
 
@@ -533,18 +734,27 @@
   }
   let finderTimer = 0;
   let finderRequest = 0;
+  let finderMode = 'loan';
+  const pinnedIds = () => new Set((data?.featured || []).map(item => item.id));
+  function resultButton(a) {
+    if (finderMode === 'pin') {
+      const pinned = pinnedIds().has(a.id);
+      return `<button type="button" class="dsc-result${pinned ? ' is-pinned' : ''}" data-dsc-pick-pin="${a.id}"><b>${pinned ? '★ ' : ''}${esc(a.name)}</b><small>${esc(a.code || '')}${a.location ? ` · ${esc(a.location)}` : ''}${pinned ? ' · ปักหมุดแล้ว แตะเพื่อแก้บันทึก' : ''}</small></button>`;
+    }
+    return `<button type="button" class="dsc-result" data-smart-id="${a.id}" data-dsc-tab="custody"><b>${esc(a.name)}</b><small>${esc(a.code || '')}${a.location ? ` · ${esc(a.location)}` : ''}</small></button>`;
+  }
   async function searchFinder() {
     const q = finder.querySelector('#dscFinderInput').value.trim();
     const status = finder.querySelector('#dscFinderStatus');
     const results = finder.querySelector('#dscFinderResults');
     const id = ++finderRequest;
-    if (!q) { status.textContent = ''; results.innerHTML = loanShortcuts(); return; }
+    if (!q) { status.textContent = ''; results.innerHTML = finderMode === 'loan' ? loanShortcuts() : ''; return; }
     status.textContent = 'กำลังค้นหา…';
     try {
       const found = await api(`/api/assets/search?q=${encodeURIComponent(q)}`);
       if (id !== finderRequest) return;
       status.textContent = found.items.length ? `พบ ${found.items.length}${found.hasMore ? '+' : ''} รายการ` : 'ไม่พบรายการ ลองพิมพ์เลขครุภัณฑ์บางส่วน';
-      results.innerHTML = found.items.map(a => `<button type="button" class="dsc-result" data-smart-id="${a.id}" data-dsc-tab="custody"><b>${esc(a.name)}</b><small>${esc(a.code || '')}${a.location ? ` · ${esc(a.location)}` : ''}</small></button>`).join('');
+      results.innerHTML = found.items.map(resultButton).join('');
     } catch (error) {
       if (id === finderRequest) status.textContent = error.message || 'ค้นหาไม่สำเร็จ';
     }
@@ -554,33 +764,172 @@
     if (!list.length) return '';
     return `<p class="dsc-finder-label">รอคืน</p>` + list.slice(0, 5).map(a => `<button type="button" class="dsc-result is-return" data-smart-id="${a.id}" data-dsc-tab="custody"><b>${esc(a.name)}</b><small>${esc(a.code || '')} · ${esc(dueInfo(a).text)}</small></button>`).join('');
   }
-  function openFinder() {
+  function openFinder(mode = 'loan') {
+    finderMode = mode;
+    const pin = mode === 'pin';
     const input = finder.querySelector('#dscFinderInput');
     input.value = '';
-    finder.querySelector('#dscFinderStatus').textContent = data?.borrowEnabled === false ? 'หมายเหตุ: บริการยืม-เบิก-คืนยังปิดอยู่ ผู้ดูแลเปิดได้ที่ ตั้งค่า › QR Smart' : '';
-    finder.querySelector('#dscFinderResults').innerHTML = loanShortcuts();
+    finder.querySelector('#dscFinderTitle').textContent = pin ? 'เพิ่มอุปกรณ์เด่นของศูนย์' : 'ยืม / เบิก / คืน ครุภัณฑ์';
+    finder.querySelector('.dsc-finder-ico').innerHTML = svg(pin ? 'star' : 'swap');
+    finder.querySelector('.dsc-finder-ico').classList.toggle('is-star', pin);
+    finder.querySelector('.dsc-finder-hint').textContent = pin
+      ? 'ค้นหาครุภัณฑ์ที่อยากให้ทุกคนเห็นบนหน้าภาพรวม เช่น หุ่นฝึกหัตถการ หรือเครื่องจำลอง แล้วเลือกเพื่อเขียนบันทึกย่อ'
+      : 'พิมพ์เลขครุภัณฑ์หรือชื่อ แล้วเลือกรายการ ระบบจะเปิดแท็บ “ยืม / เบิก / คืน” ให้ทันที';
+    finder.querySelector('#dscFinderStatus').textContent = !pin && data?.borrowEnabled === false ? 'หมายเหตุ: บริการยืม-เบิก-คืนยังปิดอยู่ ผู้ดูแลเปิดได้ที่ ตั้งค่า › QR Smart' : '';
+    finder.querySelector('#dscFinderResults').innerHTML = pin ? '' : loanShortcuts();
     finder.showModal();
     input.focus();
   }
   finder.querySelector('#dscFinderInput').addEventListener('input', () => { clearTimeout(finderTimer); finderTimer = setTimeout(searchFinder, 250); });
   finder.addEventListener('click', event => {
+    const pick = event.target.closest('[data-dsc-pick-pin]');
     if (event.target === finder || event.target.closest('[data-dsc-close]')) finder.close();
     else if (event.target.closest('[data-smart-id]')) finder.close();
+    else if (pick) { finder.close(); openPin(Number(pick.dataset.dscPickPin)); }
   });
+
+  /* ---------- pin dialog ---------- */
+  let pinAsset = null;
+  let pinSaving = false;
+  const pinEl = selector => pinDialog.querySelector(selector);
+  function syncPinButtons(state) {
+    document.querySelectorAll(`[data-dsc-pin="${state.assetId}"]`).forEach(button => {
+      button.classList.toggle('is-pinned', state.pinned);
+      button.textContent = state.pinned ? '★ อุปกรณ์เด่นแล้ว · แก้บันทึก' : '☆ ปักหมุดอุปกรณ์เด่น';
+    });
+  }
+  async function openPin(assetId) {
+    pinAsset = null;
+    pinEl('#dscPinAsset').innerHTML = '<p class="dsc-soft">กำลังโหลด…</p>';
+    pinEl('#dscPinStatus').textContent = '';
+    pinEl('#dscPinNote').value = '';
+    pinEl('#dscPinCount').textContent = '0 / 200';
+    pinEl('#dscPinRemove').hidden = true;
+    pinEl('#dscPinSave').disabled = true;
+    if (!pinDialog.open) pinDialog.showModal();
+    try {
+      const state = await api(`/api/assets/${assetId}/featured`);
+      pinAsset = state;
+      const a = state.asset;
+      pinEl('#dscPinTitle').textContent = state.pinned ? 'แก้ไขอุปกรณ์เด่น' : 'ปักหมุดอุปกรณ์เด่น';
+      pinEl('#dscPinAsset').innerHTML = `<span class="dsc-pin-art">${art({ ...a, category: '' })}</span><span><b>${esc(a.name)}</b><small>${esc(a.code || 'ไม่ระบุเลข')}</small><small>${state.pinned ? `ปักหมุดโดย ${esc(state.pinnedBy)} · ${esc(thaiDate(state.pinnedAt))}` : `ปักหมุดแล้ว ${num(state.total)} / ${num(state.max)} รายการ`}</small></span>`;
+      pinEl('#dscPinNote').value = state.note || '';
+      pinEl('#dscPinCount').textContent = `${(state.note || '').length} / 200`;
+      pinEl('#dscPinRemove').hidden = !state.pinned;
+      pinEl('#dscPinSave').textContent = state.pinned ? 'บันทึก' : 'ปักหมุด';
+      const full = !state.pinned && state.total >= state.max;
+      pinEl('#dscPinSave').disabled = full;
+      if (full) pinEl('#dscPinStatus').textContent = `ปักหมุดครบ ${state.max} รายการแล้ว เลิกปักหมุดรายการเดิมก่อน`;
+      syncPinButtons(state);
+      pinEl('#dscPinNote').focus();
+    } catch (error) {
+      pinEl('#dscPinAsset').innerHTML = '';
+      pinEl('#dscPinStatus').textContent = error.message || 'โหลดข้อมูลไม่สำเร็จ';
+    }
+  }
+  async function savePin(remove) {
+    if (!pinAsset || pinSaving) return;
+    pinSaving = true;
+    pinEl('#dscPinSave').disabled = true;
+    pinEl('#dscPinRemove').disabled = true;
+    try {
+      const path = `/api/assets/${pinAsset.assetId}/featured${remove ? '/remove' : ''}`;
+      const result = await app.api(path, { method: 'POST', body: JSON.stringify({ note: pinEl('#dscPinNote').value.trim(), actor: role() }) });
+      applyFeatured(result.items);
+      syncPinButtons(result.state);
+      pinDialog.close();
+      app.toast?.(remove ? 'เลิกปักหมุดอุปกรณ์เด่นแล้ว' : pinAsset.pinned ? 'บันทึกอุปกรณ์เด่นแล้ว' : 'ปักหมุดเป็นอุปกรณ์เด่นแล้ว');
+    } catch (error) {
+      pinEl('#dscPinStatus').textContent = error.message || 'บันทึกไม่สำเร็จ';
+    } finally {
+      pinSaving = false;
+      pinEl('#dscPinSave').disabled = false;
+      pinEl('#dscPinRemove').disabled = false;
+    }
+  }
+  function applyFeatured(list) {
+    if (!data) return;
+    data.featured = list;
+    items.forEach((_, key) => { if (key.startsWith('feat:')) items.delete(key); });
+    renderFeatured();
+  }
+  pinEl('#dscPinNote').addEventListener('input', event => { pinEl('#dscPinCount').textContent = `${event.target.value.length} / 200`; });
+  pinEl('#dscPinForm').addEventListener('submit', event => { event.preventDefault(); savePin(false); });
+  pinEl('#dscPinRemove').addEventListener('click', () => savePin(true));
+  pinDialog.addEventListener('click', event => { if (event.target === pinDialog || event.target.closest('[data-dsc-close]')) pinDialog.close(); });
+
+  async function unpinCard(id) {
+    const item = (data?.featured || []).find(i => i.id === id);
+    if (!item || !window.confirm(`เลิกปักหมุด “${item.name}” จากอุปกรณ์เด่น?`)) return;
+    try {
+      const result = await app.api(`/api/assets/${id}/featured/remove`, { method: 'POST', body: JSON.stringify({ actor: role() }) });
+      applyFeatured(result.items);
+      syncPinButtons(result.state);
+      app.toast?.('เลิกปักหมุดอุปกรณ์เด่นแล้ว');
+    } catch (error) { app.showError?.(error); }
+  }
+  async function moveCard(id, step) {
+    const list = [...(data?.featured || [])];
+    const from = list.findIndex(i => i.id === id);
+    const to = from + step;
+    if (from < 0 || to < 0 || to >= list.length) return;
+    const before = data.featured;
+    [list[from], list[to]] = [list[to], list[from]];
+    const refocus = keyboardMode;
+    applyFeatured(list);
+    if (refocus) $(`[data-dsc-move="${step}"][data-id="${id}"]`)?.focus();
+    try {
+      const result = await app.api('/api/assets/featured/order', { method: 'POST', body: JSON.stringify({ assetIds: list.map(i => i.id), actor: role() }) });
+      if (result.items.map(i => i.id).join() !== list.map(i => i.id).join()) applyFeatured(result.items);
+    } catch (error) {
+      applyFeatured(before);
+      app.showError?.(error);
+    }
+  }
+
+  const smartDialog = document.querySelector('dialog.smart-dialog:not(.qr-simulator-modal)');
+  if (smartDialog) {
+    new MutationObserver(() => {
+      const button = smartDialog.querySelector('[data-dsc-pin]:not([data-dsc-synced])');
+      if (!button) return;
+      button.dataset.dscSynced = '1';
+      api(`/api/assets/${button.dataset.dscPin}/featured`).then(syncPinButtons).catch(() => {});
+    }).observe(smartDialog, { childList: true, subtree: true });
+  }
 
   const actions = {
     scan: () => (app.openQrSimulator ? app.openQrSimulator(0) : window.open('/scan.html', '_blank', 'noopener')),
-    loan: openFinder,
+    loan: () => openFinder('loan'),
+    'pin-add': () => openFinder('pin'),
     repair: () => app.openRepairDialog?.(),
     register: () => app.switchView?.('assets'),
     flags: () => app.switchView?.('qr-smart'),
+    'go-approvals': () => app.switchView?.('approvals'),
+    'go-repairs': () => app.switchView?.('repairs'),
+    'go-work': () => app.switchView?.('work'),
+    'go-loans': () => app.switchView?.('qr-smart'),
     retry: load
   };
+  const jobs = {
+    ticket: id => app.openTicket?.(id),
+    asset: () => { app.switchView?.('approvals'); window.switchApprovalTab?.('assets'); },
+    work: id => (app.openWork ? app.openWork(id).catch(error => app.showError?.(error)) : app.switchView?.('work'))
+  };
   document.addEventListener('click', event => {
+    const pinButton = event.target.closest('[data-dsc-pin]');
+    if (pinButton) { openPin(Number(pinButton.dataset.dscPin)); return; }
     const tabTarget = event.target.closest('[data-dsc-tab]');
     if (tabTarget) openAssetTab(tabTarget.dataset.dscTab);
     if (!root.contains(event.target)) return;
-    if (event.target.closest('[data-smart-id]')) hidePreview();
+    if (event.target.closest('[data-smart-id], [data-dsc-job], .dsc-feat-tools')) hidePreview();
+    const jobButton = event.target.closest('[data-dsc-job]');
+    if (jobButton) jobs[jobButton.dataset.dscJob]?.(Number(jobButton.dataset.id));
+    const move = event.target.closest('[data-dsc-move]');
+    if (move) moveCard(Number(move.dataset.id), Number(move.dataset.dscMove));
+    const edit = event.target.closest('[data-dsc-edit-pin]');
+    if (edit) openPin(Number(edit.dataset.dscEditPin));
+    const unpin = event.target.closest('[data-dsc-unpin]');
+    if (unpin) unpinCard(Number(unpin.dataset.dscUnpin));
     const action = event.target.closest('[data-dsc-action]');
     if (action) actions[action.dataset.dscAction]?.();
     const focusButton = event.target.closest('[data-dsc-focus]');
@@ -592,7 +941,7 @@
     }
     const scroll = event.target.closest('[data-dsc-scroll]');
     if (scroll) {
-      const track = $('#dscTrack');
+      const track = root.querySelector(`#${scroll.dataset.dscTarget || 'dscTrack'}`);
       track.scrollBy({ left: Number(scroll.dataset.dscScroll) * track.clientWidth * 0.8, behavior: reduce.matches ? 'auto' : 'smooth' });
     }
   }, true);
@@ -612,6 +961,10 @@
   document.addEventListener('close', event => {
     if (event.target instanceof HTMLDialogElement && stale && isActive()) load();
   }, true);
+  document.addEventListener('govasset:role-changed', () => {
+    if (data) { renderToday(); renderFeatured(); }
+    if (isActive()) load(); else stale = true;
+  });
   reduce.addEventListener?.('change', () => data && renderAll());
   if (isActive()) load();
 })();

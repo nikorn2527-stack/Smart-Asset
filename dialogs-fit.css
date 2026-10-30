@@ -3,6 +3,9 @@
    Loaded last, so selectors mirror the !important rules in styles.css / layout-zones.css. */
 
 /* ---------- Shared ---------- */
+/* The forced display:flex on the asset workspace dialog must not keep it on screen after close(). */
+dialog:not([open]),
+.asset-dialog.smart-dialog:not([open]) { display: none !important; }
 dialog .dialog-close {
   display: inline-grid !important;
   place-items: center !important;

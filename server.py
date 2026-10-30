@@ -333,6 +333,7 @@ def initialize() -> None:
         seed_starter_catalog(db)
         initialize_qr_smart(db)
         asset_photos.ensure_schema(db)
+        dashboard_api.ensure_schema(db)
 
 
 def asset_dict(row: sqlite3.Row) -> dict:
@@ -423,7 +424,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError(str(exc), exc.status)
             if photos is not None: return photos
             try:
-                showcase = dashboard_api.handle(db, method, path, query)
+                showcase = dashboard_api.handle(db, method, path, query, body)
             except dashboard_api.DashboardError as exc:
                 raise ApiError(str(exc), exc.status)
             if showcase is not None: return showcase
