@@ -77,6 +77,43 @@
     </div>`;
   }
 
+  function money(value) {
+    const amount = Number(value);
+    return value == null || value === '' || Number.isNaN(amount) ? '—' : amount.toLocaleString('th-TH') + ' บาท';
+  }
+  function detailCell(label, value, wide = false) {
+    const text = value == null || String(value).trim() === '' ? '—' : value;
+    return `<div class="${wide ? 'full' : ''}"><dt>${esc(label)}</dt><dd>${esc(text)}</dd></div>`;
+  }
+  function detailSheet(a, data, reg, life, categoryName) {
+    const book = reg?.asset || {};
+    const events = data.events || [];
+    const tickets = data.tickets || [];
+    const custody = life?.history || [];
+    return `<h3>รายละเอียดครุภัณฑ์</h3><dl class="asset-detail-sheet">${[
+      detailCell('สถานะ', a.status),
+      detailCell('เลขครุภัณฑ์', a.code),
+      detailCell('รหัส FSN', a.fsnCode || book.fsnCode),
+      detailCell('หมวด', categoryName || book.group),
+      detailCell('ชนิด / รุ่น', [book.assetType, book.model].filter(Boolean).join(' · ')),
+      detailCell('Serial', a.serialNumber || book.serialNumber),
+      detailCell('สถานที่ตั้ง', a.location || book.location, true),
+      detailCell('หน่วยงาน', [book.organization, book.department, book.accountName, book.branchName].filter(Boolean).join(' · '), true),
+      detailCell('ผู้ดูแล', a.custodian),
+      detailCell('สิ้นสุดประกัน', app.fmtDate(a.warrantyEnd || book.warrantyEnd)),
+      detailCell('ราคาทุน', money(book.purchasePrice)),
+      detailCell('มูลค่าสุทธิ', money(book.netBookValue)),
+      detailCell('วันที่ได้มา', app.fmtDate(book.acquiredOn)),
+      detailCell('วิธีได้มา', book.acquisitionMethod),
+      detailCell('GFMIS / PO', [book.gfmisNo, book.poNo].filter(Boolean).join(' / ')),
+      detailCell('ผู้ขาย', book.vendor),
+      detailCell('รายละเอียด', a.detail || book.detail, true)
+    ].join('')}</dl>
+      <section class="asset-history-block"><h3>ประวัติการเปลี่ยนแปลงทะเบียน</h3><ol class="smart-history">${events.map(e => `<li><b>${esc(e.action)}</b><span>${esc(e.actor)} · ${esc(app.fmtDate(e.createdAt))}</span></li>`).join('') || '<li>ยังไม่มีการแก้ไขทะเบียน</li>'}</ol></section>
+      <section class="asset-history-block"><h3>ประวัติงานซ่อม</h3><div class="smart-ticket-list">${tickets.map(t => `<button type="button" data-smart-ticket="${t.id}"><span><b>${esc(t.ticketNo)}</b><small>${esc(t.issue)}</small><small>${esc(app.fmtDate(t.createdAt))} · ${esc(t.status)}</small></span></button>`).join('') || '<div class="smart-empty">ยังไม่มีประวัติซ่อมสำหรับครุภัณฑ์นี้</div>'}</div></section>
+      <section class="asset-history-block"><h3>ประวัติยืม เบิก คืน</h3><ol class="smart-history">${custody.map(e => `<li><b>${esc(e.kind)}</b><span>${esc(e.actor)} · ${esc(app.fmtDate(e.created_at))}${e.note ? ' · ' + esc(e.note) : ''}</span></li>`).join('') || '<li>ยังไม่มีประวัติยืม เบิก คืน</li>'}</ol></section>`;
+  }
+
   async function openAsset(id) {
     try {
       const [data, categories, accountContext, regData, life] = await Promise.all([
@@ -88,17 +125,20 @@
       ]);
       selected = data;
       const a = data.asset, canEdit = app.getRole() === 'เจ้าหน้าที่พัสดุ';
+      const categoryName = categories.find(c => Number(c.id) === Number(a.categoryId))?.name || '';
       const active = data.tickets.filter(t => !['ปิดงาน','ยกเลิก','ไม่อนุมัติ'].includes(t.status));
       dialog.innerHTML = `<div class="smart-dialog-head"><div><span class="eyebrow">ASSET WORKSPACE</span><h2>${esc(a.name)}</h2><span class="code-text">เลขประจำครุภัณฑ์ ${esc(a.code)}</span><p class="field-hint">รหัสจำแนก FSN: ${esc(a.fsnCode||'ยังไม่ได้ระบุแยก · คงเลขเดิมตามทะเบียน')}</p></div><button class="dialog-close" data-close-smart aria-label="ปิดรายละเอียด">×</button></div>
         <div class="smart-tabs" role="tablist">
-          <button role="tab" aria-selected="true" data-smart-tab="info">ข้อมูลครุภัณฑ์</button>
+          <button role="tab" aria-selected="true" data-smart-tab="detail">รายละเอียด</button>
+          <button role="tab" aria-selected="false" data-smart-tab="info">แก้ไขข้อมูล</button>
           <button role="tab" aria-selected="false" data-smart-tab="ledger">📋 ใบคุมทรัพย์สิน</button>
           <button role="tab" aria-selected="false" data-smart-tab="repairs">ประวัติซ่อม (${data.tickets.length})</button>
           <button role="tab" aria-selected="false" data-smart-tab="history">ประวัติทะเบียน</button>
           <button role="tab" aria-selected="false" data-smart-tab="custody">ยืม / เบิก / คืน</button>
         </div>
         <div class="smart-layout"><div>
-          <section data-smart-panel="info"><div class="smart-state"><span class="badge blue">${esc(a.status)}</span><span>${active.length ? `มีงานซ่อมที่กำลังดำเนินการ ${active.length} งาน` : 'ไม่มีงานซ่อมค้าง'}</span></div>
+          <section data-smart-panel="detail">${detailSheet(a, data, regData, life, categoryName)}</section>
+          <section data-smart-panel="info" hidden><div class="smart-state"><span class="badge blue">${esc(a.status)}</span><span>${active.length ? `มีงานซ่อมที่กำลังดำเนินการ ${active.length} งาน` : 'ไม่มีงานซ่อมค้าง'}</span></div>
           ${window.govAssetAccountContextMarkup?.(accountContext)||''}<form id="smartAssetForm" class="smart-form"><div class="form-grid"><label>ชื่อครุภัณฑ์<input name="name" required maxlength="300" value="${esc(a.name)}"></label><label>รหัสครุภัณฑ์<input name="code" required maxlength="80" value="${esc(a.code)}"></label></div><label>หมวดครุภัณฑ์<select name="categoryId" required><option value="">เลือกหมวดครุภัณฑ์</option>${categories.map(c => `<option value="${c.id}" ${Number(c.id) === Number(a.categoryId) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label><label>รายละเอียด<textarea name="detail" maxlength="1000" rows="3">${esc(a.detail)}</textarea></label><div class="form-grid"><label>สถานที่ตั้ง<input name="location" required maxlength="300" value="${esc(a.location)}"></label><label>หมายเลขเครื่อง / Serial<input name="serialNumber" maxlength="160" value="${esc(a.serialNumber)}"></label><label>ผู้ดูแลครุภัณฑ์<input name="custodian" maxlength="160" value="${esc(a.custodian)}"></label><label>สิ้นสุดประกัน<input name="warrantyEnd" type="date" value="${esc(a.warrantyEnd)}"></label></div><p class="field-hint">${canEdit ? 'การแก้ไขจะบันทึกประวัติ และแสดงข้อมูลใหม่ผ่าน QR เดิมทันที' : 'สำหรับเจ้าหน้าที่พัสดุที่มีสิทธิ์แก้ไขทะเบียนครุภัณฑ์'}</p><div class="dialog-actions"><button class="button outline" type="button" id="smartRegister">📋 เปิดใบคุมทรัพย์สินเต็มหน้า (A4)</button><button class="button outline" type="button" id="smartRepair">แจ้งซ่อมรายการนี้</button>${canEdit ? '<button class="button primary" type="submit">บันทึกข้อมูล</button>' : ''}</div><p id="smartSaveStatus" role="status"></p></form></section>
           <section data-smart-panel="ledger" hidden>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">

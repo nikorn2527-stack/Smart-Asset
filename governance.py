@@ -451,5 +451,4 @@ def apply_official_center_name(db_path):
 def initialize(db_path):
     _initialize_account_schema(db_path)
     initialize_manual_references(db_path)
-    rehome_split_register_to_hospital(db_path)
     apply_official_center_name(db_path)

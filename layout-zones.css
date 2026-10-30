@@ -371,6 +371,32 @@ main#main {
   -webkit-overflow-scrolling: touch !important;
 }
 
+/* The register view stays inside the screen, but the list must keep enough
+   height to show rows and the detail button when the window is short. */
+#view-assets {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+#view-assets .listing-panel {
+  min-height: 420px !important;
+}
+
+#view-assets .listing-panel > .table-wrap {
+  min-height: 220px !important;
+  height: auto !important;
+}
+
+#view-assets .smart-asset-table {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+#view-assets .smart-asset-table th,
+#view-assets .smart-asset-table td {
+  min-width: 0 !important;
+}
+
 /* Sticky Table Column Headers Across ALL Views */
 .table-wrap table thead th,
 .smart-asset-table thead th,
@@ -847,6 +873,54 @@ table thead th {
   border-radius: 12px !important;
   padding: 20px 22px !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+}
+
+.asset-detail-sheet {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px 18px !important;
+  margin: 0 0 8px !important;
+}
+
+.asset-detail-sheet > div {
+  min-width: 0 !important;
+}
+
+.asset-detail-sheet > .full {
+  grid-column: 1 / -1 !important;
+}
+
+.asset-detail-sheet dt {
+  font-size: 11px !important;
+  color: #64748b !important;
+  font-weight: 700 !important;
+}
+
+.asset-detail-sheet dd {
+  margin: 2px 0 0 !important;
+  font-size: 14px !important;
+  color: #0f172a !important;
+  overflow-wrap: anywhere !important;
+  white-space: pre-wrap !important;
+}
+
+.asset-history-block {
+  margin-top: 18px !important;
+  padding-top: 12px !important;
+  border-top: 1px solid #e2e9f0 !important;
+}
+
+.asset-history-block h3,
+.asset-dialog.smart-dialog [data-smart-panel="detail"] > h3 {
+  margin: 0 0 8px !important;
+  font-size: 15px !important;
+  color: #0f172a !important;
+}
+
+@media (max-width: 700px) {
+  .asset-detail-sheet {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-qr-card {
