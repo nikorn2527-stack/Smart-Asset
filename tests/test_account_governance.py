@@ -17,9 +17,26 @@ from pathlib import Path
 from urllib.parse import urlencode
 from test_smart_workflow import HTTPFixture,OFFICER,ROOT
 sys.path.insert(0,str(ROOT))
-from governance import CENTER_NAME, CENTER_NAME_EN, initialize,calculate,GovernanceError,rehome_split_register_to_hospital
+from governance import CENTER_NAME, CENTER_NAME_EN, initialize,calculate,GovernanceError,normalize_duplicate_smart_asset_app_name,rehome_split_register_to_hospital
 
 class AccountGovernance(HTTPFixture):
+    def test_duplicate_smart_asset_app_name_migration_preserves_custom_names(self):
+        cases = (
+            ('Smart Asset · ศูนย์แพทยศาสตรศึกษาชั้นคลินิก', 'Smart Asset'),
+            ('ชื่อแอปที่ผู้ใช้กำหนด', 'ชื่อแอปที่ผู้ใช้กำหนด'),
+        )
+        for app_name, expected in cases:
+            with self.subTest(app_name=app_name), tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / 'branding.sqlite3'
+                with closing(sqlite3.connect(path)) as db, db:
+                    db.executescript((ROOT / 'schema.sql').read_text(encoding='utf-8'))
+                    db.execute('UPDATE app_branding SET app_name=?,organization=? WHERE id=1',
+                               (app_name, 'ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์'))
+                normalize_duplicate_smart_asset_app_name(path)
+                with closing(sqlite3.connect(path)) as db:
+                    row = db.execute('SELECT app_name,organization FROM app_branding WHERE id=1').fetchone()
+                self.assertEqual(row, (expected, 'ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์'))
+
     def setUp(self):
         self.aid=self.post('accounts',name='หน่วยงานทดสอบ',code='TEST-'+uuid.uuid4().hex[:12])['id']
         self.cid=self.call('/api/catalog/categories')[0]['id']

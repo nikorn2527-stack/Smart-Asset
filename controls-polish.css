@@ -1,0 +1,592 @@
+:where(button:not(.nav-item):not(.user-pill):not(.text-button):not(.dialog-close):not(.icon-button)) {
+  border-radius: 9px;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease, transform .16s ease;
+}
+
+.sidebar .brand {
+  align-items: flex-start;
+  gap: 0 12px;
+  padding: 4px 6px 18px;
+}
+
+.sidebar .brand-mark {
+  width: 46px;
+  height: 46px;
+  margin-top: 2px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, .55);
+  border-radius: 12px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .14);
+}
+
+.sidebar .brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.sidebar .brand-copy {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sidebar .brand-copy strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.sidebar .brand-copy > span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  margin-top: 5px;
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.sidebar .brand-copy .team-credit {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 3px 7px;
+  border: 1px solid rgba(249, 115, 22, .3);
+  border-radius: 999px;
+  background: rgba(249, 115, 22, .1);
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.button,
+.scan-button {
+  border-radius: 10px !important;
+}
+
+.button:not(:disabled):hover,
+.scan-button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.button.outline:hover {
+  background: #edf7f6 !important;
+  border-color: #79aaa5 !important;
+  color: #116c68 !important;
+}
+
+#view-assets .fiscal-year-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid #cbd8df;
+  border-radius: 9px;
+  background: #fff;
+  color: #334e5c;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#view-assets .fiscal-year-trigger:hover,
+#view-assets .fiscal-year-trigger[aria-expanded="true"] {
+  border-color: #79aaa5;
+  background: #edf7f6;
+  color: #116c68;
+}
+
+#view-assets .fiscal-year-trigger span {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #edf2f5;
+  color: #506773;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+#view-assets .fiscal-year-trigger[aria-expanded="true"] span {
+  color: #116c68;
+}
+
+.fiscal-year-menu[popover] {
+  position: fixed;
+  inset: auto;
+  width: min(280px, calc(100vw - 16px));
+  max-height: min(360px, calc(100vh - 16px));
+  margin: 0;
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid #d5e1e6;
+  border-radius: 12px;
+  background: #fff;
+  color: #263f50;
+  box-shadow: 0 14px 36px rgba(18, 61, 86, .2);
+}
+
+.fiscal-year-search {
+  display: grid;
+  gap: 4px;
+  color: #516a78;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.fiscal-year-search input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid #d1dee4;
+  border-radius: 8px;
+  color: #263f50;
+  font: inherit;
+  font-size: 12px;
+}
+
+.fiscal-year-menu-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0 6px;
+}
+
+.fiscal-year-menu-actions button {
+  padding: 3px 6px;
+  border: 0;
+  background: transparent;
+  color: #147d78;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.fiscal-year-options {
+  display: grid;
+  max-height: 190px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid #edf1f3;
+  border-bottom: 1px solid #edf1f3;
+}
+
+.fiscal-year-option {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 5px;
+  border-bottom: 1px solid #f1f4f5;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.fiscal-year-option:last-child {
+  border-bottom: 0;
+}
+
+.fiscal-year-option:hover {
+  background: #f5faf9;
+}
+
+.fiscal-year-option input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #147d78;
+}
+
+.fiscal-year-option small {
+  color: #748792;
+  font-size: 10px;
+}
+
+.fiscal-year-option[hidden] {
+  display: none;
+}
+
+.fiscal-year-empty,
+.fiscal-year-hint {
+  margin: 7px 2px 0;
+  color: #71838e;
+  font-size: 10px;
+}
+
+.fiscal-year-empty {
+  padding: 8px;
+  text-align: center;
+}
+
+select:not([multiple]):not(#actorRole) {
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 9px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3 6 5 5 5-5' fill='none' stroke='%23566b77' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 9px center !important;
+  background-size: 12px !important;
+  padding-right: 28px !important;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+
+select:not([multiple]):not(#actorRole):hover:not(:disabled) {
+  border-color: #8caeae;
+  background-color: #fbfdfd;
+}
+
+select:not([multiple]):not(#actorRole):focus-visible {
+  border-color: #278b84;
+  box-shadow: 0 0 0 3px rgba(39, 139, 132, .14);
+}
+
+#view-assets #categoryFilter,
+#view-assets #statusFilter,
+#view-assets #buildingFilter,
+#view-assets #floorFilter,
+#view-assets #roomFilter,
+#view-assets #inventoryAccount,
+#view-assets #inventoryBranch {
+  display: none !important;
+}
+
+#view-assets .filter-loc-label {
+  display: none;
+}
+
+#view-assets .smart-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid #cbd8df;
+  border-radius: 11px;
+  background: #fff;
+  color: #284858;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#view-assets .smart-filter-trigger:hover,
+#view-assets .smart-filter-trigger[aria-expanded="true"],
+#view-assets .smart-filter-trigger.has-filters {
+  border-color: #79aaa5;
+  background: #edf7f6;
+  color: #116c68;
+}
+
+.smart-filter-count,
+.smart-filter-tabs button span {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e7f2f1;
+  color: #116c68;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.smart-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 2px 6px;
+}
+
+.smart-filter-chips[hidden] {
+  display: none;
+}
+
+.smart-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid #d5e7e5;
+  border-radius: 999px;
+  background: #f3f9f8;
+  color: #285d5b;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.smart-filter-chip span {
+  color: #668984;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.smart-filter-menu[popover] {
+  position: fixed;
+  inset: auto;
+  width: min(620px, calc(100vw - 20px));
+  max-height: min(620px, calc(100vh - 20px));
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #d5e1e6;
+  border-radius: 16px;
+  background: #fff;
+  color: #263f50;
+  box-shadow: 0 20px 60px rgba(18, 61, 86, .22);
+}
+
+.smart-filter-menu-head,
+.smart-filter-menu-foot,
+.smart-filter-option-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.smart-filter-menu-head {
+  padding: 15px 17px 11px;
+}
+
+.smart-filter-menu-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.smart-filter-menu-head strong {
+  color: #173c50;
+  font-size: 14px;
+}
+
+.smart-filter-menu-head small,
+.smart-filter-group-count {
+  color: #71838e;
+  font-size: 10px;
+}
+
+#closeSmartFilter {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 9px;
+  background: #f0f5f6;
+  color: #526875;
+  font-size: 19px;
+  cursor: pointer;
+}
+
+.smart-filter-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 10px;
+  padding: 0 10px;
+  border: 1px solid #d8e3e7;
+  border-radius: 10px;
+  color: #71838e;
+}
+
+.smart-filter-search:focus-within {
+  border-color: #278b84;
+  box-shadow: 0 0 0 3px rgba(39, 139, 132, .12);
+}
+
+.smart-filter-search input {
+  width: 100%;
+  min-height: 38px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #263f50;
+  font: inherit;
+  font-size: 12px;
+}
+
+.smart-filter-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 0 16px 9px;
+  overflow-x: auto;
+  border-bottom: 1px solid #edf1f3;
+}
+
+.smart-filter-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #5a707c;
+  font: inherit;
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.smart-filter-tabs button[aria-selected="true"] {
+  border-color: #d3e7e4;
+  background: #edf7f6;
+  color: #116c68;
+  font-weight: 700;
+}
+
+.smart-filter-option-tools {
+  min-height: 40px;
+  padding: 5px 16px;
+}
+
+.smart-filter-option-tools > div {
+  display: flex;
+  gap: 5px;
+}
+
+.smart-filter-option-tools button {
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #167772;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.smart-filter-option-tools button:hover {
+  background: #edf7f6;
+}
+
+.smart-filter-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: min(330px, 42vh);
+  padding: 0 12px 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.smart-filter-option {
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  margin: 2px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #344f5d;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.smart-filter-option:hover {
+  border-color: #e3eeed;
+  background: #f6faf9;
+}
+
+.smart-filter-option input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #147d78;
+}
+
+.smart-filter-option small {
+  color: #8797a0;
+  font-size: 9px;
+}
+
+.smart-filter-empty {
+  grid-column: 1 / -1;
+  padding: 14px;
+  color: #71838e;
+  font-size: 11px;
+  text-align: center;
+}
+
+.smart-filter-menu-foot {
+  padding: 11px 16px;
+  border-top: 1px solid #edf1f3;
+  background: #fbfdfd;
+}
+
+.smart-filter-menu-foot > span {
+  color: #71838e;
+  font-size: 10px;
+}
+
+#view-settings input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+#view-settings select,
+#view-settings textarea {
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid #d5e0e5;
+  border-radius: 10px;
+  background-color: #fff;
+  color: #263f50;
+  font: inherit;
+  font-size: 12px;
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+
+#view-settings textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+#view-settings input:focus-visible,
+#view-settings select:focus-visible,
+#view-settings textarea:focus-visible {
+  border-color: #278b84;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(39, 139, 132, .13);
+}
+
+#view-settings input::placeholder,
+#view-settings textarea::placeholder {
+  color: #93a2aa;
+}
+
+@media (max-width: 640px) {
+  .smart-filter-menu[popover] {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 14px;
+  }
+
+  .smart-filter-options {
+    grid-template-columns: 1fr;
+    max-height: min(42vh, 300px);
+  }
+
+  .smart-filter-menu-foot > span {
+    max-width: 52%;
+    line-height: 1.4;
+  }
+
+  .smart-filter-option-tools {
+    align-items: flex-start;
+  }
+
+  .smart-filter-option-tools > div {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}

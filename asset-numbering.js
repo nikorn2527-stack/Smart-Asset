@@ -40,6 +40,11 @@
   async function load(desiredCode='',desiredType=''){
     const request=++epoch;++detailEpoch;items=[];preview=null;$('#numberingEvidence').textContent='';
     loading=true;typeOptions=[];$('#assetTypeFilter').innerHTML='<option value="">กำลังโหลดชนิด…</option>';$('#assetTypeFilter').disabled=true;renderChoices('');renderPreview();
+    if(window.govAssetAccountRegistration?.scoped()){
+      loading=false;renderChoices('');
+      $('#numberingCoverage').textContent='ใช้บัญชีเลขของหน่วยงานที่เลือก ระบบจะแสดงชนิดและเลขตัวอย่างในส่วนบัญชีหน่วยงาน';
+      renderPreview();return;
+    }
     const categoryId=$('#assetCategoryId').value;
     if(!categoryId){loading=false;renderChoices('');$('#numberingCoverage').textContent='เลือกหมวด แล้วเลือกรายการที่ต้องการเพิ่ม';return;}
     try{
@@ -83,6 +88,10 @@
   }
   async function loadCatalog(){
     const categoryId=$('#numberingCatalogCategory').value,request=++catalogRequest;catalogItems=[];catalogTypes=[];catalogPage=0;$('#numberingCatalogType').innerHTML='<option value="">ทุกชนิด</option>';$('#starterUnresolvedTypes').hidden=true;renderCatalog();
+    if(window.govAssetAccess?.session?.required&&window.govAssetAccess.session.accountId){
+      $('#numberingCatalogStatus').textContent='บัญชีเลขหน่วยงานดูและจัดการได้ที่ ตั้งค่าระบบ → บัญชีและการออกเลขของหน่วยงาน';
+      return;
+    }
     if(!categoryId){$('#numberingCatalogStatus').textContent='เลือกหมวดเพื่อดูบัญชีที่สัมพันธ์กับข้อมูลในฐานนี้';return;}
     $('#numberingCatalogStatus').textContent='กำลังอ่านบัญชีของหมวด…';
     try{const data=await app.api('/api/catalog/numbering?'+new URLSearchParams({categoryId}));if(request!==catalogRequest)return;catalogItems=data.items;catalogTypes=data.types;const c=data.coverage;$('#numberingCatalogType').innerHTML='<option value="">ทุกชนิด</option>'+catalogTypes.map(row=>`<option value="${esc(row.name)}">${esc(row.name)}</option>`).join('');const unresolved=catalogTypes.filter(row=>!row.codes.length),review=$('#starterUnresolvedTypes');review.hidden=!unresolved.length;review.innerHTML=`<summary>ชนิดที่มีในต้นทาง แต่ต้องตรวจรหัส ${unresolved.length} รายการ</summary><ul>${unresolved.map(row=>`<li>${esc(row.name)} · ยังไม่มีรหัสครบสำหรับออกเลขอัตโนมัติ</li>`).join('')}</ul>`;$('#numberingCatalogStatus').textContent=`${data.types.length} ชนิด · ${data.total} รหัส · ทะเบียนในฐานนี้ ${c.registerRows} ชิ้น`;renderCatalog();document.dispatchEvent(new CustomEvent('govasset:numbering-catalog-loaded'));}catch(error){if(request===catalogRequest)$('#numberingCatalogStatus').textContent=error.message;}

@@ -16,6 +16,9 @@
     Department:'department', DepartmentCode:'departmentCode',
     Custodian:'custodian', CurrentAssignee:'custodian',
     Site:'orgName', OrgName:'orgName', orgName:'orgName',
+    CompanyAddress:'companyAddress', companyAddress:'companyAddress',
+    CompanyAddress2:'companyAddress2', companyAddress2:'companyAddress2',
+    CompanyPhone:'companyPhone', companyPhone:'companyPhone',
     Hotline:'hotline', hotline:'hotline',
     PurchasePrice:'purchasePrice', purchasePrice:'purchasePrice',
     AcquisitionDate:'acquiredOn', PurchaseDate:'acquiredOn', acquiredOn:'acquiredOn',
@@ -39,6 +42,29 @@
       vendor:'บริษัท พัสดุภัณฑ์ไทย จำกัด', warrantyEnd:'2028-09-30', usefulLife:5, status:'ใช้งานปกติ'
     };
   }
+  const FONT_OPTIONS = [
+    ['Sarabun', 'Sarabun (สารบรรณ — มาตรฐานใหม่)'],
+    ['TH SarabunPSK', 'TH SarabunPSK (สารบรรณราชการ)'],
+    ['Angsana New', 'Angsana New (อังสนา)'],
+    ['Cordia New', 'Cordia New (คอร์เดีย)'],
+    ['Prompt', 'Prompt (พร้อมท์ — ทันสมัย)'],
+    ['Kanit', 'Kanit (คณิต — หัวกลมอ่านง่าย)'],
+    ['Tahoma', 'Tahoma (คมชัดขนาดเล็ก)'],
+    ['Arial', 'Arial (มาตรฐานสากล)'],
+  ];
+  const FONT_CSS_MAP = {
+    'Sarabun': "'Sarabun', Tahoma, sans-serif",
+    'TH SarabunPSK': "'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif",
+    'Angsana New': "'Angsana New', 'AngsanaUPC', 'Sarabun', serif",
+    'Cordia New': "'Cordia New', 'CordiaUPC', 'Sarabun', sans-serif",
+    'Prompt': "'Prompt', 'Sarabun', sans-serif",
+    'Kanit': "'Kanit', 'Sarabun', sans-serif",
+    'Tahoma': "Tahoma, Arial, sans-serif",
+    'Arial': "Arial, Helvetica, sans-serif",
+  };
+  function fontFamilyCss(name) {
+    return FONT_CSS_MAP[name] || FONT_CSS_MAP['Sarabun'];
+  }
   function formatCleanDate(str) {
     if (!str) return '';
     const m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -47,7 +73,7 @@
     if (y < 1920) return '';
     const thM = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
     const thY = y < 2400 ? y + 543 : y;
-    return `${d} ${thM[mo-1]} ${thY}`;
+    return `${String(d).padStart(2, '0')}-${thM[mo-1]}-${thY}`;
   }
   function formatPreviewValue(field, val) {
     if (val === null || val === undefined || val === '') return '';
@@ -155,6 +181,20 @@
     if(type==='image')Object.assign(e,{content:'',source:'',width:24,height:18});
     state.template.elements.push(e); state.selectedElementId=e.id; renderElementList(); renderProperties(); renderPreview();
   }
+  function duplicateElement() {
+    if (!state.template || !state.selectedElementId) return;
+    const source=state.template.elements.find(element=>element.id===state.selectedElementId);
+    if (!source) return;
+    const canvasW=Number(state.template.canvas.width)||75.2, canvasH=Number(state.template.canvas.height)||36;
+    const duplicate=JSON.parse(JSON.stringify(source));
+    duplicate.id=`el-${Date.now()}-${state.template.elements.length}`;
+    duplicate.x=Math.min(Math.max(0,Number(source.x||0)+1),Math.max(0,canvasW-Number(source.width||1)));
+    duplicate.y=Math.min(Math.max(0,Number(source.y||0)+1),Math.max(0,canvasH-Number(source.height||1)));
+    duplicate.zIndex=Math.max(0,...state.template.elements.map(element=>Number(element.zIndex)||0))+1;
+    state.template.elements.push(duplicate);
+    state.selectedElementId=duplicate.id;
+    renderElementList(); renderProperties(); renderPreview();
+  }
   function renderProperties() {
     const root = $('#stickerElementProperties'), el = state.template?.elements?.find(item => item.id === state.selectedElementId);
     $('#stickerSelectedElementLabel').textContent = el ? elementName(el) : 'เลือกข้อความหรือวัตถุในตัวอย่าง';
@@ -208,7 +248,9 @@
       const fSize = Number(el.fontSize || 7);
       const fWeight = Number(el.fontWeight || 500);
       const fAlign = el.align || 'left';
+      const fFamily = el.fontFamily || 'Sarabun';
       const fColor = /^#[0-9a-f]{6}$/i.test(el.color || '') ? el.color : '#172b3a';
+      const letterSpacing = Math.max(-2, Math.min(2, Number(el.letterSpacing) || 0));
 
       html += `
         <div class="prop-section">
@@ -222,21 +264,31 @@
             <div class="chips-row">
               <button type="button" class="quick-chip" data-insert-var="{{AssetNo}}">＋ รหัสครุภัณฑ์</button>
               <button type="button" class="quick-chip" data-insert-var="{{AssetName}}">＋ ชื่อครุภัณฑ์</button>
+              <button type="button" class="quick-chip" data-insert-var="{{Category}}">＋ ประเภทครุภัณฑ์</button>
+              <button type="button" class="quick-chip" data-insert-var="{{AcquisitionDate}}">＋ วันที่ได้มา</button>
               <button type="button" class="quick-chip" data-insert-var="{{Location}}">＋ สถานที่ตั้ง</button>
               <button type="button" class="quick-chip" data-insert-var="{{Department}}">＋ แผนก</button>
               <button type="button" class="quick-chip" data-insert-var="{{Serial}}">＋ S/N</button>
-              <button type="button" class="quick-chip" data-insert-var="{{WarrantyEnd}}">＋ วันสิ้นสุดประกัน</button>
             </div>
           </div>
         </div>
 
         <div class="prop-section">
-          <div class="prop-section-title">🔤 รูปแบบตัวอักษร</div>
+          <div class="prop-section-title">🔤 รูปแบบตัวอักษร (Font &amp; ขนาด)</div>
+          <div style="margin-bottom:10px;">
+            <span class="prop-label" style="display:block;margin-bottom:4px;">แบบอักษร (Font Family)</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <select data-element-prop="fontFamily" style="flex:1;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;">
+                ${FONT_OPTIONS.map(([val, label]) => `<option value="${esc(val)}" ${fFamily === val ? 'selected' : ''}>${esc(label)}</option>`).join('')}
+              </select>
+              <button type="button" class="button outline mini-action" id="applyFontAllBtn" title="เปลี่ยนทุกข้อความในป้ายนี้ให้ใช้ฟอนต์เดียวกัน" style="white-space:nowrap;font-size:11.5px;padding:5px 8px;">ใช้ทั้งป้าย</button>
+            </div>
+          </div>
           <div class="format-control-row">
             <label class="prop-field-num flex-1">
               <span class="prop-label">ขนาดตัวอักษร (pt)</span>
               <div class="input-with-unit">
-                <input data-element-prop="fontSize" type="number" min="2" max="72" step="0.5" value="${fSize}">
+                <input data-element-prop="fontSize" type="number" min="2" max="120" step="0.5" value="${fSize}">
                 <small>pt</small>
               </div>
             </label>
@@ -247,6 +299,15 @@
               <button type="button" class="size-preset-btn ${fSize === 12 ? 'active' : ''}" data-set-size="12">12</button>
               <button type="button" class="size-preset-btn ${fSize === 14 ? 'active' : ''}" data-set-size="14">14</button>
             </div>
+          </div>
+          <div class="format-control-row">
+            <label class="prop-field-num flex-1">
+              <span class="prop-label">ระยะห่างตัวอักษร</span>
+              <div class="input-with-unit">
+                <input data-element-prop="letterSpacing" type="number" min="-2" max="2" step="0.1" value="${letterSpacing}">
+                <small>มม.</small>
+              </div>
+            </label>
           </div>
 
           <div class="format-toggle-group">
@@ -356,6 +417,14 @@
         const key = input.dataset.elementProp;
         let value = input.value;
         if (input.type === 'number') value = Number(value);
+        if (['x', 'y', 'width', 'height'].includes(key)) {
+          const numericValue = Number.isFinite(value) ? value : 0;
+          if (key === 'x') value = Math.min(Math.max(0, numericValue), Math.max(0, canvasW - Number(el.width || 0)));
+          if (key === 'y') value = Math.min(Math.max(0, numericValue), Math.max(0, canvasH - Number(el.height || 0)));
+          if (key === 'width') value = Math.min(Math.max(0.2, numericValue), Math.max(0.2, canvasW - Number(el.x || 0)));
+          if (key === 'height') value = Math.min(Math.max(0.2, numericValue), Math.max(0.2, canvasH - Number(el.y || 0)));
+          input.value = value;
+        }
         if (key === 'borderColor') el.border = `1px solid ${value}`;
         else el[key] = value;
         const hex = input.closest('.color-picker-box')?.querySelector('.color-hex');
@@ -430,6 +499,18 @@
       });
     });
 
+    const applyAllBtn = root.querySelector('#applyFontAllBtn');
+    if (applyAllBtn) {
+      applyAllBtn.addEventListener('click', () => {
+        const chosen = el.fontFamily || 'Sarabun';
+        (state.template?.elements || []).forEach(item => {
+          if (item.type === 'text') item.fontFamily = chosen;
+        });
+        renderPreview();
+        toast(`เปลี่ยนฟอนต์ทุกข้อความเป็น ${chosen} แล้ว`);
+      });
+    }
+
     root.querySelectorAll('[data-insert-var]').forEach(btn => {
       btn.addEventListener('click', () => {
         const v = btn.dataset.insertVar;
@@ -475,8 +556,10 @@
       const selectedClass = isSelected ? 'selected' : '';
       const handles = isSelected ? `
         <div class="sticker-resize-handle handle-se" data-resize-handle="se" title="ลากเพื่อขยาย/ย่อ"></div>
+        <div class="sticker-resize-handle handle-n" data-resize-handle="n" title="ลากเพื่อปรับขอบบน"></div>
         <div class="sticker-resize-handle handle-e" data-resize-handle="e" title="ลากเพื่อปรับความกว้าง"></div>
         <div class="sticker-resize-handle handle-s" data-resize-handle="s" title="ลากเพื่อปรับความสูง"></div>
+        <div class="sticker-resize-handle handle-w" data-resize-handle="w" title="ลากเพื่อปรับขอบซ้าย"></div>
       ` : '';
 
       if (el.type === 'rect') {
@@ -486,10 +569,13 @@
         return `<div class="sticker-preview-node sticker-preview-qr ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}"><span>QR Code</span>${handles}</div>`;
       }
       if (el.type === 'image') {
-        return `<div class="sticker-preview-node sticker-preview-image ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}"><img src="${/^https:\/\//.test(el.source || '') ? esc(el.source) : ''}" alt="">${handles}</div>`;
+        const validImg = /^(https:\/\/|data:image\/|\/assets\/)/.test(el.source || '');
+        return `<div class="sticker-preview-node sticker-preview-image ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}"><img src="${validImg ? esc(el.source) : ''}" alt="" style="width:100%;height:100%;object-fit:contain;">${handles}</div>`;
       }
       const size = Number(el.fontSize || 7) * scale * 25.4 / 72, align = el.align || 'left';
-      return `<div class="sticker-preview-node sticker-preview-text ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}font-size:${size}px;font-weight:${Number(el.fontWeight || 500)};color:${esc(el.color || '#172b3a')};text-align:${align};align-items:${el.valign === 'bottom' ? 'flex-end' : el.valign === 'center' ? 'center' : 'flex-start'};justify-content:${align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start'}">${esc(previewText(el.content || ''))}${handles}</div>`;
+      const ff = fontFamilyCss(el.fontFamily);
+      const letterSpacing = Math.max(-2, Math.min(2, Number(el.letterSpacing) || 0)) * scale;
+      return `<div class="sticker-preview-node sticker-preview-text ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}font-family:${esc(ff)};font-size:${size}px;font-weight:${Number(el.fontWeight || 500)};line-height:${Number(el.lineHeight || 1.12)};letter-spacing:${letterSpacing}px;color:${esc(el.color || '#172b3a')};text-align:${align};align-items:${el.valign === 'bottom' ? 'flex-end' : el.valign === 'center' ? 'center' : 'flex-start'};justify-content:${align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start'}">${esc(previewText(el.content || ''))}${handles}</div>`;
     }).join('');
 
     root.innerHTML = `<div class="sticker-preview-canvas" style="width:${pxW}px;height:${pxH}px;overflow:${state.template.overflow === 'visible' ? 'visible' : 'hidden'}">${nodes}</div>`;
@@ -521,21 +607,37 @@
     const move = e => {
       const dx = (e.clientX - sx) / scale;
       const dy = (e.clientY - sy) / scale;
+      const ox = Number(element.x || 0), oy = Number(element.y || 0);
+      const round = value => Math.round(value * 10) / 10;
       if (handle === 'se' || handle === 'e') {
-        const newW = Math.max(1, Math.round((ow + dx) * 10) / 10);
-        element.width = Math.min(newW, Math.round((canvasW - (element.x || 0)) * 10) / 10);
+        element.width = Math.max(1, Math.min(round(ow + dx), round(canvasW - ox)));
       }
       if (handle === 'se' || handle === 's') {
-        const newH = Math.max(1, Math.round((oh + dy) * 10) / 10);
-        element.height = Math.min(newH, Math.round((canvasH - (element.y || 0)) * 10) / 10);
+        element.height = Math.max(1, Math.min(round(oh + dy), round(canvasH - oy)));
+      }
+      if (handle === 'w') {
+        const right = ox + ow;
+        element.x = Math.max(0, Math.min(round(ox + dx), round(right - 1)));
+        element.width = round(right - element.x);
+      }
+      if (handle === 'n') {
+        const bottom = oy + oh;
+        element.y = Math.max(0, Math.min(round(oy + dy), round(bottom - 1)));
+        element.height = round(bottom - element.y);
       }
       const node = $(`[data-preview-id="${CSS.escape(id)}"]`);
       if (node) {
+        node.style.left = `${element.x * scale}px`;
+        node.style.top = `${element.y * scale}px`;
         node.style.width = `${element.width * scale}px`;
         node.style.height = `${element.height * scale}px`;
       }
+      const xInput = $('[data-element-prop="x"]');
+      const yInput = $('[data-element-prop="y"]');
       const wInput = $(`[data-element-prop="width"]`);
       const hInput = $(`[data-element-prop="height"]`);
+      if (xInput) xInput.value = element.x;
+      if (yInput) yInput.value = element.y;
       if (wInput) wInput.value = element.width;
       if (hInput) hInput.value = element.height;
     };
@@ -559,8 +661,8 @@
     state.selectedElementId = id;
     const sx = event.clientX, sy = event.clientY, ox = Number(element.x || 0), oy = Number(element.y || 0);
     const move = e => {
-      element.x = Math.round((ox + (e.clientX - sx) / scale) * 10) / 10;
-      element.y = Math.round((oy + (e.clientY - sy) / scale) * 10) / 10;
+      element.x = Math.min(Math.max(0, Math.round((ox + (e.clientX - sx) / scale) * 10) / 10), Math.max(0, canvasW - Number(element.width || 0)));
+      element.y = Math.min(Math.max(0, Math.round((oy + (e.clientY - sy) / scale) * 10) / 10), Math.max(0, canvasH - Number(element.height || 0)));
       const node = $(`[data-preview-id="${CSS.escape(id)}"]`);
       if (node) {
         node.style.left = `${element.x * scale}px`;
@@ -591,10 +693,19 @@
     if(!state.selected.size||!state.template)return;
     try {
       if(!await saveTemplate(false))return;
-      const result=await app.api('/api/sticker/bulk-render',{method:'POST',body:JSON.stringify({assetIds:[...state.selected.keys()],templateId:state.template.id||undefined,requestedBy:'ผู้ปฏิบัติงาน (ทดสอบ)'})});
+      const paperLayout=$('#stickerPaperLayout')?.value||'label';
+      const result=await app.api('/api/sticker/bulk-render',{method:'POST',body:JSON.stringify({assetIds:[...state.selected.keys()],templateId:state.template.id||undefined,paperLayout,requestedBy:'ผู้ปฏิบัติงาน (ทดสอบ)'})});
       const iframe=document.createElement('iframe');iframe.style.position='fixed';iframe.style.width='0';iframe.style.height='0';iframe.style.opacity='0';iframe.style.border='0';iframe.setAttribute('aria-hidden','true');document.body.appendChild(iframe);
       const doc=iframe.contentWindow.document;doc.open();doc.write(result.html);doc.close();
-      setTimeout(()=>{try{iframe.contentWindow.focus();iframe.contentWindow.print();toast(`เตรียมพิมพ์ ${result.count} ฉลากแล้ว · บันทึกงานพิมพ์ #${result.jobId}`);setTimeout(()=>iframe.remove(),1200);}catch(e){iframe.remove();app.showError(e);}},500);
+      Promise.all([...doc.images].map(image => image.decode().catch(() => undefined)))
+        .then(() => doc.fonts.ready)
+        .then(() => {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          toast(`เตรียมพิมพ์ ${result.count} ฉลากแล้ว · บันทึกงานพิมพ์ #${result.jobId}`);
+          setTimeout(() => iframe.remove(), 1200);
+        })
+        .catch(error => { iframe.remove(); app.showError(error); });
     } catch(error){app.showError(error);}
   }
   async function loadRegister(id) {
@@ -646,7 +757,7 @@
     return loadRegister(assetId);
   };
   async function saveStickerSettings() {
-    try {state.settings=await app.api('/api/sticker/settings',{method:'POST',body:JSON.stringify({orgName:$('#stickerOrgName').value,hotline:$('#stickerHotline').value})});renderPreview();toast('บันทึกข้อมูลที่แสดงบนฉลากแล้ว');}catch(error){app.showError(error);}
+    try {state.settings=await app.api('/api/sticker/settings',{method:'POST',body:JSON.stringify({orgName:$('#stickerOrgName').value,companyName:$('#stickerCompanyName').value,companyAddress:$('#stickerCompanyAddress').value,companyAddress2:$('#stickerCompanyAddress2').value,companyPhone:$('#stickerCompanyPhone').value,hotline:$('#stickerHotline').value})});renderPreview();toast('บันทึกข้อมูลที่แสดงบนฉลากแล้ว');}catch(error){app.showError(error);}
   }
   $('#stickerSearchForm').addEventListener('submit',event=>{event.preventDefault();loadStickerAssets(0).catch(app.showError);});
   $('#stickerSearchInput').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadStickerAssets(0).catch(app.showError),250);});
@@ -660,9 +771,11 @@
   ['stickerCanvasWidth','stickerCanvasHeight','stickerOverflowVisible'].forEach(id=>$('#'+id).addEventListener('input',updateCanvas));
   $('#stickerSaveTemplate').addEventListener('click',()=>saveTemplate(false));$('#stickerSetActive').addEventListener('click',()=>saveTemplate(true));
   $('#stickerAddText').addEventListener('click',()=>addElement('text'));$('#stickerAddQr').addEventListener('click',()=>addElement('qr'));$('#stickerAddRect').addEventListener('click',()=>addElement('rect'));$('#stickerAddImage').addEventListener('click',()=>addElement('image'));
+  $('#stickerDuplicateElement').addEventListener('click',duplicateElement);
   $('#stickerDeleteElement').addEventListener('click',()=>{if(!state.template||!state.selectedElementId)return;state.template.elements=state.template.elements.filter(e=>e.id!==state.selectedElementId);state.selectedElementId=state.template.elements[0]?.id||null;renderElementList();renderProperties();renderPreview();});
   $('#stickerVariableSelect').addEventListener('change',event=>{const value=event.target.value,el=state.template?.elements?.find(item=>item.id===state.selectedElementId);if(value&&el&&['text','qr'].includes(el.type)){el.content=(el.content||'')+value;renderProperties();renderElementList();renderPreview();}event.target.value='';});
   $('#printSelectedStickers').addEventListener('click',printSelected);
+  $('#stickerOpenLocationQr').addEventListener('click',()=>app.switchView('qr-smart'));
   $('#saveStickerSettings').addEventListener('click',saveStickerSettings);
-  Promise.all([loadStickerTemplates(),loadStickerAssets(0),app.api('/api/sticker/settings').then(data=>{state.settings=data;$('#stickerOrgName').value=data.orgName||'';$('#stickerHotline').value=data.hotline||'';renderPreview();}).catch(app.showError)]).catch(app.showError);
+  Promise.all([loadStickerTemplates(),loadStickerAssets(0),app.api('/api/sticker/settings').then(data=>{state.settings=data;$('#stickerOrgName').value=data.orgName||'';$('#stickerCompanyName').value=data.companyName||'';$('#stickerCompanyAddress').value=data.companyAddress||'';$('#stickerCompanyAddress2').value=data.companyAddress2||'';$('#stickerCompanyPhone').value=data.companyPhone||'';$('#stickerHotline').value=data.hotline||'';renderPreview();}).catch(app.showError)]).catch(app.showError);
 })();

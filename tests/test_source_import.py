@@ -37,7 +37,7 @@ class SourceImport(unittest.TestCase):
                 self.assertEqual(import_sources.pdf_extraction_method(), 'pypdf layout')
                 self.assertEqual(len(pages), 2)
                 with sqlite3.connect(':memory:') as db:
-                    db.executescript(import_sources.SCHEMA.read_text())
+                    db.executescript(import_sources.SCHEMA.read_text(encoding='utf-8'))
                     source = import_sources.add_source(db, path, title='test', kind='fsn_manual')
                     self.assertEqual(import_sources.parse_fsn_pages(pages, source, db), 1)
                     self.assertEqual(db.execute('SELECT source_page,canonical_fsn_code FROM fsn_catalog_items').fetchone(), (2, '7110-002-0001'))
@@ -61,7 +61,7 @@ class SourceImport(unittest.TestCase):
             with patch.object(server,'DB_PATH',dest):
                 server.initialize()
                 server.initialize()
-            with sqlite3.connect(dest) as db:
+            with contextlib.closing(sqlite3.connect(dest)) as db, db:
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM assets').fetchone()[0],1)
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM source_row_records WHERE record_kind='header'").fetchone()[0],1)
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM source_row_records').fetchone()[0],2)

@@ -86,7 +86,7 @@
   const colWidths = [7.2, 7.8, 14.0, 5.5, 8.5, 9.0, 5.5, 9.5, 8.5, 9.0, 9.0, 6.5];
   function render(){
     const rows=state.form.rows, pages=[];
-    const colgroupHtml = colWidths.map(w=>`<col style="width:${w}%">`).join('');
+    const colgroupHtml = colWidths.map(w=>`<col style="width:${(284.7*w/100).toFixed(4)}mm">`).join('');
     const theadHtml = `<thead><tr>${['วัน เดือน ปี','ที่เอกสาร','รายการ','จำนวน<br>หน่วย','ราคาต่อ<br>หน่วย','มูลค่ารวม','อายุ<br>ใช้งาน','อัตราค่าเสื่อมราคา<br>/ ประจำเดือน','ค่าเสื่อมราคา<br>ประจำปี','ค่าเสื่อมราคา<br>สะสม','มูลค่าสุทธิ','หมายเหตุ'].map(s=>`<th>${s}</th>`).join('')}</tr></thead>`;
     const pageSize = 8;
     for(let offset=0;offset<rows.length;offset+=pageSize){
@@ -168,7 +168,8 @@
   async function getRegisterCss() {
     if (!cachedRegisterCss) {
       try {
-        const res = await fetch('/register-form.css');
+        const href=document.querySelector('link[href*="register-form.css"]')?.href||'/register-form.css';
+        const res = await fetch(href);
         if (res.ok) cachedRegisterCss = await res.text();
       } catch (e) {}
     }
@@ -209,7 +210,6 @@ ${css}
       if (doc.fonts) await doc.fonts.ready;
     } catch(e) {}
 
-    fitText(doc);
     await new Promise(r => setTimeout(r, 120));
 
     frame.contentWindow.focus();

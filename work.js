@@ -41,7 +41,20 @@
       if($('#workTabBadgePlans'))$('#workTabBadgePlans').textContent=plans.length;
       $('#workRows').innerHTML=items.map(w=>`<tr><td><button class="link-button" data-smart-id="${w.asset_id}">${esc(w.asset_name)}</button><div class="item-meta">${esc(w.code)} · ${esc(w.plan_name)}</div></td><td><span class="badge ${w.kind==='pm'?'blue':'violet'}">${w.kind==='pm'?'PM':'ตรวจนับ'}</span></td><td>${esc(day(w.due_on))}${w.overdue?'<div class="work-overdue">เกินกำหนด</div>':''}</td><td>${esc(w.assignee)}</td><td><span class="badge ${w.status==='completed'?'green':'amber'}">${esc(status[w.status])}</span><div class="item-meta">${esc(results[w.result]||'')}</div></td><td><button class="button outline mini-action" data-work-id="${w.id}">${w.status==='completed'?'ดูผลตรวจ':'เปิดงาน'}</button>${w.repair_ticket_id?` <button class="link-button" data-work-ticket="${w.repair_ticket_id}">ใบแจ้งซ่อม ↗</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6" class="empty-cell">ยังไม่มีงาน สร้างแผนและเลือกครุภัณฑ์เพื่อเริ่มต้น</td></tr>';
       $('#workPlans').innerHTML=plans.map(p=>`<article><div><b>${esc(p.name)}</b><div class="item-meta">${p.kind==='pm'?'PM':'ตรวจนับ'} · ${p.assetIds.length} ครุภัณฑ์ · ${p.schedule_mode==='auto'?`อัตโนมัติทุก ${p.interval_count} ${{day:'วัน',week:'สัปดาห์',month:'เดือน'}[p.schedule_unit]} · รอบถัดไป ${esc(day(p.next_due))}`:'สร้างรอบเอง'} · ${p.assignment_mode==='auto'?'กระจายตามภาระงาน':'มอบหมายเอง'}: ${esc(p.assignees.join(', '))}</div><span class="badge ${p.is_active?'green':'amber'}">${p.is_active?'เปิดใช้งาน':'พักแผน'}</span></div><div class="work-plan-actions">${p.schedule_mode==='manual'&&p.is_active?`<label>กำหนดรอบ<input data-round-date="${p.id}" type="date" value="${today()}"></label><button class="button outline mini-action" data-generate-plan="${p.id}">สร้างรอบนี้</button>`:''}<button class="button outline mini-action" data-toggle-plan="${p.id}">${p.is_active?'พักแผน':'เปิดแผน'}</button></div></article>`).join('')||'<p class="field-hint">แผนอัตโนมัติสร้างงานแม้ไม่มีผู้เปิดหน้าเว็บ เมื่อเซิร์ฟเวอร์ทำงานอยู่ รอบที่พลาดระหว่างปิดเซิร์ฟเวอร์จะถูกสร้างเมื่อกลับมาเปิด ไม่สร้างงานซ้ำสำหรับครุภัณฑ์และวันเดียวกันในแผนเดียวกัน</p>';
-    }catch(error){app.showError(error);}
+    }catch(error){
+      if(epoch!==queryEpoch)return;
+      const message=error?.message||'ไม่สามารถเชื่อมต่อฐานข้อมูลได้';
+      $('#workScheduler').textContent=`โหลดข้อมูลไม่สำเร็จ: ${message} · กด “อัปเดต” เพื่อลองอีกครั้ง`;
+      $('#workScheduler').setAttribute('role','alert');
+      $('#workItemCount').textContent='โหลดข้อมูลไม่สำเร็จ';
+      $('#workTotals').textContent='';
+      $('#workTabBadgeRows').textContent='—';
+      $('#workTabBadgePlans').textContent='—';
+      $('#workRows').innerHTML=`<tr><td colspan="6" class="empty-cell">โหลดรายการงานไม่สำเร็จ: ${esc(message)} · กด “อัปเดต” เพื่อลองอีกครั้ง</td></tr>`;
+      $('#workSummary').innerHTML=`<tr><td colspan="8" class="empty-cell">โหลดสรุปไม่สำเร็จ: ${esc(message)}</td></tr>`;
+      $('#workPlans').innerHTML=`<p class="field-hint" role="alert">โหลดแผนงานไม่สำเร็จ: ${esc(message)}</p>`;
+      app.showError(error);
+    }
   }
   view.addEventListener('click',async e=>{
     const b=e.target.closest('button');if(!b)return;

@@ -375,15 +375,15 @@ main#main {
    height to show rows and the detail button when the window is short. */
 #view-assets {
   overflow-x: hidden !important;
-  overflow-y: auto !important;
+  overflow-y: hidden !important;
 }
 
 #view-assets .listing-panel {
-  min-height: 420px !important;
+  min-height: 0 !important;
 }
 
 #view-assets .listing-panel > .table-wrap {
-  min-height: 220px !important;
+  min-height: 0 !important;
   height: auto !important;
 }
 
@@ -2028,14 +2028,6 @@ table thead th {
   border-radius: 7px !important;
 }
 
-#view-dashboard .stats-grid {
-  display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  gap: 8px !important;
-  margin: 0 0 6px 0 !important;
-  flex: 0 0 auto !important;
-}
-
 #view-dashboard .stat-card {
   padding: 6px 10px !important;
   min-height: 52px !important;
@@ -2817,7 +2809,7 @@ table thead th {
   height: auto !important;
   overflow: hidden !important;
   display: grid !important;
-  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) !important;
+  grid-template-columns: minmax(180px, 200px) minmax(0, 1fr) !important;
   gap: 14px !important;
   margin-bottom: 6px !important;
   align-items: stretch !important;
@@ -2829,7 +2821,7 @@ table thead th {
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
-  padding: 14px !important;
+  padding: 12px !important;
   border-radius: 10px !important;
   border: 1px solid var(--line, #dce5ea) !important;
   background: #ffffff !important;
@@ -2865,6 +2857,43 @@ table thead th {
   box-sizing: border-box !important;
 }
 
+#view-supply .supply-grid-receipt {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-template-areas:
+    "receipt-date supplier receiver"
+    "po delivery location" !important;
+  align-items: start !important;
+}
+
+#view-supply .supply-grid-receipt > .supply-field,
+#view-supply .supply-grid-extra > .supply-field,
+#view-supply .supply-grid-issue > .supply-field {
+  display: flex !important;
+  grid-row: auto !important;
+  align-self: stretch !important;
+}
+
+#view-supply .supply-grid-receipt .supply-field-date { grid-area: receipt-date !important; }
+#view-supply .supply-grid-receipt .supply-field-poNo { grid-area: po !important; }
+#view-supply .supply-grid-receipt .supply-field-deliveryNo { grid-area: delivery !important; }
+#view-supply .supply-grid-receipt .supply-field-supplier { grid-area: supplier !important; }
+#view-supply .supply-grid-receipt .supply-field-location { grid-area: location !important; }
+#view-supply .supply-grid-receipt .supply-field-receiver { grid-area: receiver !important; }
+
+#view-supply .supply-grid-issue {
+  align-items: start !important;
+}
+
+@media (max-width: 1200px) and (min-width: 1101px) {
+  #view-supply .supply-grid-receipt {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-areas:
+      "receipt-date supplier"
+      "receiver po"
+      "delivery location" !important;
+  }
+}
+
 #view-supply .supply-detail h2 {
   font-size: 15px !important;
   font-weight: 700 !important;
@@ -2890,6 +2919,10 @@ table thead th {
   overflow-y: visible !important;
   border: 1px solid var(--line, #dce5ea) !important;
   border-radius: 6px !important;
+}
+
+#view-supply .supply-table-wrap {
+  overflow-x: auto !important;
 }
 
 #view-supply table th {
@@ -3655,14 +3688,6 @@ footer.footer {
   #view-assets .smart-asset-table td:nth-child(6) { width: 11% !important; }
   #view-assets .smart-asset-table th:nth-child(7),
   #view-assets .smart-asset-table td:nth-child(7) { width: 15% !important; }
-  #view-assets .table-action-group {
-    flex-wrap: wrap !important;
-    gap: 4px !important;
-  }
-  #view-assets .table-action-group .btn-dossier {
-    flex: 1 0 100% !important;
-    justify-content: center !important;
-  }
 
   /* PM filters: long plan / assignee names must not stretch the selects. */
   #view-work .work-filters select {
@@ -3929,6 +3954,15 @@ footer.footer {
   #view-supply .supply-grid-issue {
     grid-template-columns: minmax(0, 1fr) !important;
   }
+  #view-supply .supply-grid-receipt {
+    grid-template-areas:
+      "receipt-date"
+      "po"
+      "delivery"
+      "supplier"
+      "location"
+      "receiver" !important;
+  }
   #view-supply .supply-receipt-subbar,
   #view-supply .supply-issue-search-row,
   #view-supply .supply-bottom-bar,
@@ -3943,7 +3977,7 @@ footer.footer {
     overflow-x: auto !important;
   }
   #view-supply .supply-lines-table {
-    min-width: 560px !important;
+    min-width: 980px !important;
   }
 }
 

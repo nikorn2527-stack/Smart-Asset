@@ -323,15 +323,6 @@
   color: var(--gov-accent);
 }
 
-.fsn-pill {
-  display: block;
-  font-size: 10.5px;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  color: #0284c7;
-  margin-top: 3px;
-  font-weight: 600;
-}
-
 /* Asset Name & Meta - Typography Hierarchy (Bold vs Thin) */
 .asset-info-cell {
   display: flex;

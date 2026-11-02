@@ -39,10 +39,13 @@ def _int(query: dict, key: str, default: int, low: int, high: int) -> int:
 def _center_filter(db: sqlite3.Connection) -> tuple[str, list]:
     ids = [int(r[0]) for r in db.execute("SELECT id FROM org_units WHERE name LIKE ?", (CENTER["pattern"],))]
     parts = ["a.location LIKE ?"]
+    if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='asset_source_records'").fetchone():
+        parts.append("a.id IN (SELECT asset_id FROM asset_source_records WHERE source_key='medcenter_durable_xls')")
+    params: list = [CENTER["pattern"]]
     if ids:
         joined = ",".join(map(str, ids))
         parts += [f"a.department_unit_id IN ({joined})", f"a.responsible_unit_id IN ({joined})"]
-    return "(" + " OR ".join(parts) + ")", [CENTER["pattern"]]
+    return "(" + " OR ".join(parts) + ")", params
 
 
 def _photo(asset_id: int, photo_id) -> dict:
@@ -158,10 +161,11 @@ def _recent_photos(db, where, params, limit, today):
 
 def _categories(db, where, params) -> list[dict]:
     rows = db.execute(
-        "SELECT COALESCE(NULLIF(cat.category_name,''),NULLIF(a.group_name,''),'ไม่ระบุหมวด') AS label,COUNT(*) AS n "
-        f"FROM assets a LEFT JOIN asset_categories cat ON cat.id=a.category_id WHERE {where} GROUP BY label ORDER BY n DESC,label",
+        "SELECT a.category_id AS category_id,a.group_name AS group_name,COALESCE(NULLIF(cat.category_name,''),NULLIF(a.group_name,''),'ไม่ระบุหมวด') AS label,COUNT(*) AS n "
+        f"FROM assets a LEFT JOIN asset_categories cat ON cat.id=a.category_id WHERE {where} GROUP BY a.category_id,label ORDER BY n DESC,label",
         params).fetchall()
-    return [{"name": r["label"], "count": r["n"]} for r in rows]
+    return [{"id": r["category_id"] if r["category_id"] is not None else ("__unassigned__" if not r["group_name"] else None),
+             "name": r["label"], "count": r["n"]} for r in rows]
 
 
 def _cached(db, key: tuple, build):
@@ -206,6 +210,18 @@ def showcase(db: sqlite3.Connection, query: dict) -> dict:
 
     scan = _cached(db, (db_file, scope, focus), register_scan)
     center_total = scan["centerTotal"]
+    ctx = getattr(db, "access", None) or {}
+    acc_id = ctx.get("accountId")
+    active_account = None
+    if acc_id is not None:
+        acc_row = db.execute("SELECT id, code, name FROM asset_accounts WHERE id=?", (int(acc_id),)).fetchone()
+        if acc_row:
+            active_account = {"id": acc_row["id"], "code": acc_row["code"], "name": acc_row["name"]}
+    loc_qr_count = 0
+    try:
+        loc_qr_count = db.execute("SELECT COUNT(*) FROM service_locations WHERE is_active=1").fetchone()[0]
+    except sqlite3.Error:
+        pass
     return {
         "generatedAt": now.isoformat(timespec="seconds"),
         "today": today.isoformat(),
@@ -216,7 +232,12 @@ def showcase(db: sqlite3.Connection, query: dict) -> dict:
         "topBorrowed": _top_borrowed(db, where, params, since, _int(query, "limit", 8, 1, 24), today),
         "onLoan": _on_loan(db, where, params, 12, today),
         "recentPhotos": _recent_photos(db, where, params, _int(query, "photos", 12, 1, 30), today),
-        "center": {"name": CENTER["name"], "shortName": CENTER["shortName"], "total": center_total,
+        "center": {"name": active_account["name"] if active_account else CENTER["name"],
+                   "shortName": "รพ.สุรินทร์" if (active_account and active_account["code"] == "SURIN") else CENTER["shortName"],
+                   "total": center_total,
+                   "isScoped": active_account is not None,
+                   "accountCode": active_account["code"] if active_account else "",
+                   "locationQrCount": loc_qr_count,
                    "categoriesScope": "center" if scan["centerMatched"] else "all", "categories": scan["bubbles"]},
         "todayWork": _today_work(db, today),
         "featured": _featured(db, today),

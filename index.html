@@ -4,29 +4,30 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#123d56">
-  <meta name="description" content="GovAsset — ระบบบริหารจัดการทะเบียนครุภัณฑ์ ค่าเสื่อม และแจ้งซ่อม">
-  <title>GovAsset — ระบบบริหารจัดการทะเบียนครุภัณฑ์</title>
+  <meta name="description" content="Smart Asset — ระบบบริหารจัดการทะเบียนครุภัณฑ์ ค่าเสื่อม และแจ้งซ่อม">
+  <title>Smart Asset — ระบบบริหารจัดการทะเบียนครุภัณฑ์</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" href="assets/govasset-icon-optimized.png">
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=7">
   <link rel="stylesheet" href="stickers.css">
   <link rel="stylesheet" href="master-data.css">
-  <link rel="stylesheet" href="smart.css">
+  <link rel="stylesheet" href="smart.css?v=18">
   <link rel="stylesheet" href="work.css">
   <link rel="stylesheet" href="notifications.css">
-  <link rel="stylesheet" href="register-form.css?v=2">
+  <link rel="stylesheet" href="register-form.css?v=4">
     <link rel="stylesheet" href="governance.css">
   <link rel="stylesheet" href="simple-workspace.css">
-  <link rel="stylesheet" href="supply.css?v=3">
+  <link rel="stylesheet" href="supply.css?v=5">
   <link rel="stylesheet" href="access.css?v=4">
   <link rel="stylesheet" href="equipment.css">
   <link rel="stylesheet" href="action-buttons.css">
   <link rel="stylesheet" href="asset-register.css?v=5">
-  <link rel="stylesheet" href="layout-zones.css?v=11">
+  <link rel="stylesheet" href="layout-zones.css?v=15">
   <link rel="stylesheet" href="dialogs-fit.css?v=4">
   <link rel="stylesheet" href="dashboard-showcase.css?v=2">
+  <link rel="stylesheet" href="controls-polish.css">
 </head>
 <body>
   <a class="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
@@ -34,14 +35,14 @@
     <aside class="sidebar" aria-label="เมนูหลัก">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true"><img src="assets/govasset-mark-optimized.png" alt=""></div>
-        <div class="brand-copy"><strong>GovAsset</strong><span>ระบบจัดการทะเบียนครุภัณฑ์</span><small class="team-credit">POWER BY PNG TEAM</small></div>
+        <div class="brand-copy"><strong>Smart Asset</strong><span>ระบบจัดการทะเบียนครุภัณฑ์</span><small class="team-credit">POWER BY PNG TEAM</small></div>
       </div>
       <div class="nav-section-title">การจัดการครุภัณฑ์ (Asset Lifecycle)</div>
       <nav class="primary-nav">
         <button class="nav-item active" data-view="dashboard" aria-label="ภาพรวมระบบ" title="ภาพรวมระบบ"><span class="nav-icon">▦</span>ภาพรวมระบบ</button>
         <div class="nav-divider"></div>
         <button class="nav-item" data-view="supply" aria-label="1. รับเข้าและตรวจรับ"><span class="nav-icon">⇄</span>1. รับเข้าและตรวจรับ</button>
-        <button class="nav-item" data-view="assets" aria-label="2. ทะเบียนครุภัณฑ์"><span class="nav-icon">▤</span>2. ทะเบียนครุภัณฑ์ <span class="nav-badge-pill teal" id="navAssetBadge">66K</span></button>
+        <button class="nav-item" data-view="assets" aria-label="2. ทะเบียนครุภัณฑ์"><span class="nav-icon">▤</span>2. ทะเบียนครุภัณฑ์ <span class="nav-badge-pill teal" id="navAssetBadge">—</span></button>
         <button class="nav-item" data-view="work" aria-label="3. ตรวจนับและ PM"><span class="nav-icon">↻</span>3. ตรวจนับและ PM</button>
         <button class="nav-item" data-view="repairs" aria-label="4. แจ้งซ่อมและบริการ"><span class="nav-icon">⚒</span>4. แจ้งซ่อมและบริการ</button>
         <div class="nav-divider"></div>
@@ -61,12 +62,12 @@
           <button class="btn-topbar-back" id="globalBackBtn" type="button" title="ย้อนกลับไปหน้าก่อนหน้า" aria-label="ย้อนกลับ" hidden>
             <span class="back-arrow">‹</span> <span class="back-text">ย้อนกลับ</span>
           </button>
-          <div class="crumb"><span>หน่วยงานตัวอย่าง</span><span class="crumb-sep">/</span><b id="crumbCurrent">ภาพรวม</b></div>
+          <div class="crumb"><span>Smart Asset</span><span class="crumb-sep">/</span><b id="crumbCurrent">ภาพรวม</b></div>
         </div>
         <div class="top-actions">
           <span class="environment" id="dbIndicator"><i></i> ระบบฐานข้อมูลพร้อมใช้งาน</span>
           <div class="topbar-divider" aria-hidden="true"></div>
-          <div class="font-controls" role="group" aria-label="ปรับขนาดตัวอักษร"><button class="icon-button" id="fontDecrease" aria-label="ลดขนาดตัวอักษร">A−</button><span id="fontScaleLabel" aria-live="polite">120%</span><button class="icon-button" id="fontIncrease" aria-label="เพิ่มขนาดตัวอักษร">A+</button></div>
+          <div class="font-controls" role="group" aria-label="ปรับขนาดตัวอักษร"><button class="icon-button" id="fontDecrease" aria-label="ลดขนาดตัวอักษร">A−</button><span id="fontScaleLabel" aria-live="polite">100%</span><button class="icon-button" id="fontIncrease" aria-label="เพิ่มขนาดตัวอักษร">A+</button></div>
           <div class="topbar-divider" aria-hidden="true"></div>
           <label class="role-picker"><span>หน้าที่ปฏิบัติงาน</span><select id="actorRole" aria-label="เลือกหน้าที่ปฏิบัติงาน"><option>ผู้แจ้ง</option><option>เจ้าหน้าที่พัสดุ</option><option>ผู้อนุมัติ</option><option>ช่าง</option></select></label>
         </div>
@@ -86,7 +87,7 @@
               <div class="settings-sections" aria-label="หมวดการตั้งค่า"><button class="settings-link panel" type="button" data-go-view="numbering"><span class="settings-link-icon">№</span><strong>บัญชีเลขเดิม</strong><span>สำหรับรายการที่ยังไม่แยกบัญชีหน่วยงาน ตั้งชนิดและตรวจลำดับเดิม</span></button><button class="settings-link panel" type="button" data-go-view="codes"><span class="settings-link-icon">⌗</span><strong>หมวดและเอกสารอ้างอิง</strong><span>เพิ่มหมวดและเปิดบัญชีรหัสตามเอกสาร</span></button><button class="settings-link panel" type="button" data-go-view="depreciation"><span class="settings-link-icon">◴</span><strong>อายุใช้งานและหลักเกณฑ์ค่าเสื่อม</strong><span>กำหนดอายุ อัตรา และวิธีคำนวณของหน่วยงาน</span></button><button class="settings-link panel" type="button" data-go-view="stickers"><span class="settings-link-icon">▧</span><strong>แบบสติกเกอร์และฉลาก QR</strong><span>ตั้งค่าแบบหลัก ขนาดฉลาก และข้อมูลที่ใช้พิมพ์</span></button><button class="settings-link panel" type="button" data-go-view="qr-smart" data-settings-keywords="QR Location ยืม เบิก คืน flags"><span class="settings-link-icon">▣</span><strong>QR Smart</strong><span>เปิด-ปิดบริการ QR จุดบริการ และวงจรยืม-เบิก-คืน</span></button><a class="settings-link panel" href="/upload-db.html" style="text-decoration:none;"><span class="settings-link-icon">💾</span><strong>นำเข้าฐานข้อมูล (.sqlite3)</strong><span>อัปโหลดฐานข้อมูลขึ้นเซิร์ฟเวอร์ Railway</span></a></div>
             </div>
             <div class="settings-tab-pane" id="tabPaneBranding" role="tabpanel" hidden>
-              <form id="brandingForm" class="panel settings-panel"><div class="branding-preview"><img id="brandingPreview" src="assets/govasset-mark-optimized.png" alt="ตัวอย่างโลโก้"><div><h2 id="brandingPreviewName">GovAsset</h2><span class="team-credit">POWER BY PNG TEAM</span></div></div><label>ชื่อแอป<input name="appName" required maxlength="80"></label><label>ชื่อหน่วยงาน<input name="organization" required maxlength="160"></label><label>โลโก้หน่วยงาน<input id="brandingLogo" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG, JPEG หรือ WebP ไม่เกิน 8 MB ระบบย่อภาพและจัดเก็บไม่เกิน 500 KB</small></label><button id="removeBrandingLogo" class="button outline" type="button">ใช้โลโก้เริ่มต้น</button><label>ที่อยู่ระบบสำหรับ QR<input name="publicBaseUrl" type="url" placeholder="https://assets.example.go.th"><small>ใช้โดเมนถาวรที่โทรศัพท์เข้าถึงได้ ตั้งค่าก่อนพิมพ์ฉลากจริง หากเปลี่ยนโดเมนภายหลังต้องคงเส้นทางจากโดเมนเดิมไว้</small></label><div class="brand-dev"><span>ผู้พัฒนาระบบ</span><b class="team-credit">POWER BY PNG TEAM</b></div><p class="field-hint">ชื่อแอป โลโก้ และที่อยู่ QR เป็นการตั้งค่ากลาง ใช้สิทธิ์ผู้ดูแลระบบส่วนกลาง</p><button class="button primary" type="submit">บันทึกการตั้งค่า</button><p id="brandingStatus" role="status"></p></form>
+              <form id="brandingForm" class="panel settings-panel"><div class="branding-preview"><img id="brandingPreview" src="assets/govasset-mark-optimized.png" alt="ตัวอย่างโลโก้"><div><h2 id="brandingPreviewName">Smart Asset</h2><span class="team-credit">POWER BY PNG TEAM</span></div></div><label>ชื่อแอป<input name="appName" required maxlength="80"></label><label>ชื่อหน่วยงาน<input name="organization" required maxlength="160"></label><label>โลโก้หน่วยงาน<input id="brandingLogo" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG, JPEG หรือ WebP ไม่เกิน 8 MB ระบบย่อภาพและจัดเก็บไม่เกิน 500 KB</small></label><button id="removeBrandingLogo" class="button outline" type="button">ใช้โลโก้เริ่มต้น</button><label>ที่อยู่ระบบสำหรับ QR<input name="publicBaseUrl" type="url" placeholder="https://assets.example.go.th"><small>ใช้โดเมนถาวรที่โทรศัพท์เข้าถึงได้ ตั้งค่าก่อนพิมพ์ฉลากจริง หากเปลี่ยนโดเมนภายหลังต้องคงเส้นทางจากโดเมนเดิมไว้</small></label><div class="brand-dev"><span>ผู้พัฒนาระบบ</span><b class="team-credit">POWER BY PNG TEAM</b></div><p class="field-hint">ชื่อแอป โลโก้ และที่อยู่ QR เป็นการตั้งค่ากลาง ใช้สิทธิ์ผู้ดูแลระบบส่วนกลาง</p><button class="button primary" type="submit">บันทึกการตั้งค่า</button><p id="brandingStatus" role="status"></p></form>
             </div>
             <div class="settings-tab-pane" id="tabPaneWorkflow" role="tabpanel" hidden></div>
             <div class="settings-tab-pane" id="tabPaneLine" role="tabpanel" hidden></div>
@@ -96,63 +97,7 @@
             <div><div class="eyebrow">ระบบทะเบียนและจัดการสินทรัพย์ <span class="live-dot"></span> ข้อมูลล่าสุด</div><h1>ภาพรวมงานครุภัณฑ์</h1><p>ติดตามรายการสำรวจและการกำหนดรหัสในหน่วยงานของคุณ</p></div>
             <button class="button primary" id="newAssetTop"><span>＋</span> เพิ่มรายการครุภัณฑ์</button>
           </div>
-          <div class="stats-grid">
-            <article class="stat-card"><div class="stat-top"><span>รายการครุภัณฑ์</span><span class="stat-icon blue">▤</span></div><div class="stat-number" id="totalCount">—</div><div class="stat-foot">รายการในทะเบียนทั้งหมด</div></article>
-            <article class="stat-card"><div class="stat-top"><span>งานซ่อมที่ยังไม่ปิด</span><span class="stat-icon amber">◷</span></div><div class="stat-number" id="openRepairCount">—</div><div class="stat-foot">รับแจ้ง / ดำเนินการ / รอตรวจรับ</div></article>
-            <article class="stat-card"><div class="stat-top"><span>ค่าใช้จ่ายซ่อมจริง</span><span class="stat-icon teal">✓</span></div><div class="stat-number" id="actualRepairCost">—</div><div class="stat-foot">บาท · ไม่นับงานที่ยกเลิกหรือไม่อนุมัติ</div></article>
-            <article class="stat-card"><div class="stat-top"><span>กลุ่มครุภัณฑ์ที่ใช้งาน</span><span class="stat-icon violet">⌗</span></div><div class="stat-number" id="activeCategoryCount">—</div><div class="stat-foot">หมวดที่เปิดใช้งานในระบบ</div></article>
-          </div>
-
-          <div class="dashboard-scroll-body">
-            <div class="content-grid">
-              <section class="panel recent-panel">
-                <div class="panel-heading">
-                  <div>
-                    <h2><span class="panel-icon-title">▤</span> รายการครุภัณฑ์ล่าสุด</h2>
-                    <p>รายการที่บันทึกในทะเบียนและอัปเดตสถานะล่าสุด</p>
-                  </div>
-                  <button class="text-button" type="button" data-open-view="assets">ดูทะเบียนทั้งหมด <span>→</span></button>
-                </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>รายการ</th>
-                        <th>รหัส FSN</th>
-                        <th>กลุ่ม / ประเภท</th>
-                        <th>สถานะ</th>
-                      </tr>
-                    </thead>
-                    <tbody id="recentRows"></tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section class="panel recent-repairs-panel">
-                <div class="panel-heading">
-                  <div>
-                    <h2><span class="panel-icon-title">⚒️</span> รายการแจ้งซ่อมล่าสุด</h2>
-                    <p>Ticket แจ้งปัญหา งานซ่อมระหว่างดำเนินการ และรอตรวจรับ</p>
-                  </div>
-                  <button class="text-button" type="button" data-open-view="repairs">ดูงานซ่อมทั้งหมด <span>→</span></button>
-                </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>เลข Ticket</th>
-                        <th>รายการครุภัณฑ์ / ปัญหา</th>
-                        <th>ความเร่งด่วน</th>
-                        <th>สถานะ</th>
-                      </tr>
-                    </thead>
-                    <tbody id="dashboardRepairRows"></tbody>
-                  </table>
-                </div>
-              </section>
-            </div>
-        
-          </div></section>
+          </section>
 
         <section class="view" id="view-assets">
           <div class="page-heading">
@@ -174,7 +119,7 @@
               <span class="kpi-icon blue">▤</span>
               <div>
                 <small>ครุภัณฑ์ทั้งหมดในทะเบียน</small>
-                <b id="kpiTotalAssets">66,399</b>
+                <b id="kpiTotalAssets">—</b>
                 <span class="kpi-sub">รายการที่ลงบัญชีแล้ว</span>
               </div>
             </div>
@@ -209,8 +154,11 @@
               <div class="filter-primary-row">
                 <label class="search-field flex-search">
                   <span>⌕</span>
-                  <input id="assetSearch" type="search" placeholder="พิมพ์ค้นหา: เลขครุภัณฑ์, ชื่อรายการ, FSN, PO, GFMIS หรือ Serial No." aria-label="ค้นหารายการ">
+                  <input id="assetSearch" type="search" placeholder="พิมพ์ค้นหา: เลขครุภัณฑ์, ชื่อรายการ, ตึก/ชั้น/ห้อง, FSN, PO, GFMIS หรือ Serial No." aria-label="ค้นหารายการ">
                 </label>
+                <button class="smart-filter-trigger" type="button" id="smartFilterButton" popovertarget="smartFilterMenu" aria-controls="smartFilterMenu" aria-haspopup="dialog" aria-expanded="false">
+                  <span aria-hidden="true">⌄</span> ตัวกรอง <span class="smart-filter-count" id="smartFilterCount">0</span>
+                </button>
                 <div class="filter-select-group">
                   <select id="categoryFilter" aria-label="เลือกหมวดหมู่ครุภัณฑ์">
                     <option value="">ทุกหมวดหมู่ (19 หมวด)</option>
@@ -227,6 +175,34 @@
                   <button class="button outline" type="button" id="clearAssetFilter" title="ล้างตัวกรอง">ล้างตัวกรอง</button>
                   <button class="button outline" id="exportCsv" title="ดาวน์โหลดข้อมูลเป็น CSV">↓ ส่งออก CSV</button>
                 </div>
+              </div>
+              <div id="smartFilterChips" class="smart-filter-chips" aria-label="ตัวกรองที่เลือก"></div>
+              <div class="filter-location-row">
+                <span class="filter-loc-label">📍 ตำแหน่ง:</span>
+                <select id="buildingFilter" aria-label="กรองตามอาคาร">
+                  <option value="">ทุกอาคาร / ตึก</option>
+                </select>
+                <select id="floorFilter" aria-label="กรองตามชั้น">
+                  <option value="">ทุกชั้น</option>
+                </select>
+                <select id="roomFilter" aria-label="กรองตามห้องหรือหน่วยงานย่อย">
+                  <option value="">ทุกห้อง / จุดติดตั้ง / งานย่อย</option>
+                </select>
+                <button class="button outline" type="button" id="bulkLocationBtn" title="กำหนดตึก ชั้น ห้อง หรือหน่วยงานย่อยให้กับรายการในหน้านี้">📍 กำหนดตึก/ชั้น/ห้อง</button>
+              </div>
+              <div id="smartFilterMenu" class="smart-filter-menu" popover="auto" role="dialog" aria-label="ตัวกรองทะเบียนครุภัณฑ์">
+                <div class="smart-filter-menu-head">
+                  <div><strong>ตัวกรองทะเบียน</strong><small>เลือกหลายค่าในแต่ละหมวดได้</small></div>
+                  <button type="button" id="closeSmartFilter" aria-label="ปิดตัวกรอง">×</button>
+                </div>
+                <label class="smart-filter-search"><span aria-hidden="true">⌕</span><input id="smartFilterSearch" type="search" placeholder="ค้นหาปี หมวด สถานะ หรือสถานที่…" autocomplete="off"></label>
+                <div id="smartFilterTabs" class="smart-filter-tabs" role="tablist" aria-label="หมวดตัวกรอง"></div>
+                <div class="smart-filter-option-tools">
+                  <span id="smartFilterGroupCount"></span>
+                  <div><button type="button" id="selectVisibleFilters">เลือกที่แสดง</button><button type="button" id="clearCurrentFilter">ล้างหมวดนี้</button><button type="button" id="clearAllSmartFilters">ล้างทั้งหมด</button></div>
+                </div>
+                <div id="smartFilterOptions" class="smart-filter-options" role="group" aria-label="ตัวเลือกตัวกรอง"></div>
+                <div class="smart-filter-menu-foot"><span>ค่าในหมวดเดียวกันใช้เงื่อนไข “อย่างใดอย่างหนึ่ง”</span><button type="button" id="applySmartFilters" class="button primary">แสดงผล</button></div>
               </div>
             </div>
 
@@ -249,7 +225,7 @@
 
             <div class="panel-foot">
               <span id="resultCount">กำลังโหลดข้อมูล...</span>
-              <span>ฐานข้อมูล 66,399 รายการ · ระบบทะเบียนและประวัติครุภัณฑ์</span>
+              <span id="assetFooterScope">ระบบทะเบียนและประวัติครุภัณฑ์</span>
             </div>
           </section>
         </section>
@@ -260,10 +236,11 @@
               <div class="panel-heading">
                 <div>
                   <h2>ค้นหาและเลือกครุภัณฑ์</h2>
-                  <p>พิมพ์ฉลากติดตัวเครื่อง หนึ่งเครื่องหนึ่งฉลาก Location QR พิมพ์จากตั้งค่า QR Smart</p>
+                  <p>แบบครุภัณฑ์ตามตัวอย่าง · พิมพ์สติกเกอร์ Location QR แยกจาก QR Smart</p>
                 </div>
                 <span id="stickerSelectionCount" class="sheet-count">0 รายการ</span>
               </div>
+              <button type="button" class="button outline full" id="stickerOpenLocationQr">📍 ไปพิมพ์ Location QR</button>
               <form id="stickerSearchForm" class="sticker-search-row">
                 <input id="stickerSearchInput" type="search" placeholder="พิมพ์รหัสหรือชื่อครุภัณฑ์" aria-label="ค้นหาครุภัณฑ์สำหรับสติกเกอร์">
                 <button class="button outline" type="submit">ค้นหา</button>
@@ -283,6 +260,16 @@
                 <div id="stickerSelectedList" class="sticker-selected-list">ยังไม่ได้เลือก</div>
               </div>
               <div class="sticker-asset-print-action">
+                <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:6px;">
+                  📄 รูปแบบกระดาษ / ขนาดพิมพ์:
+                  <select id="stickerPaperLayout" style="width:100%;margin-top:4px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">
+                    <option value="label">ฉลาก 70 × 36 มม. · 1 ดวง/หน้า</option>
+                    <option value="a4-grid">หลายดวง · A4</option>
+                    <option value="a6-full">ป้าย A6 · 105 × 148 มม.</option>
+                    <option value="a5-full">ป้าย A5 · 148 × 210 มม.</option>
+                    <option value="a4-full">ป้าย A4 · 210 × 297 มม.</option>
+                  </select>
+                </label>
                 <button type="button" class="button primary full" id="printSelectedStickers">
                   🖨️ สั่งพิมพ์สติกเกอร์ที่เลือก
                 </button>
@@ -291,8 +278,12 @@
               <details class="sticker-settings-compact">
                 <summary>⚙️ ตั้งค่าข้อความส่วนกลางบนฉลาก</summary>
                 <div class="sticker-settings">
-                  <label>ชื่อหน่วยงาน<input id="stickerOrgName" type="text" maxlength="120" placeholder="หน่วยงานตัวอย่าง"></label>
-                  <label>เบอร์ติดต่อ<input id="stickerHotline" type="text" maxlength="120" placeholder="เบอร์ภายใน/ศูนย์บริการ"></label>
+                  <label>ชื่อหน่วยงาน<input id="stickerOrgName" type="text" maxlength="120" placeholder="ชื่อหน่วยงานบนฉลาก"></label>
+                  <label>ชื่อหน่วยงานภาษาอังกฤษ<input id="stickerCompanyName" type="text" maxlength="160" placeholder="ชื่อหน่วยงานภาษาอังกฤษ"></label>
+                  <label>ที่อยู่บรรทัดที่ 1<input id="stickerCompanyAddress" type="text" maxlength="180" placeholder="ที่อยู่หน่วยงาน"></label>
+                  <label>ที่อยู่บรรทัดที่ 2<input id="stickerCompanyAddress2" type="text" maxlength="180" placeholder="จังหวัด / รหัสไปรษณีย์"></label>
+                  <label>โทรศัพท์หน่วยงาน<input id="stickerCompanyPhone" type="text" maxlength="120" placeholder="หมายเลขโทรศัพท์"></label>
+                  <label>เบอร์แจ้งครุภัณฑ์ขัดข้อง<input id="stickerHotline" type="text" maxlength="120" placeholder="เบอร์ภายใน/ศูนย์บริการ"></label>
                   <button type="button" class="button outline full" id="saveStickerSettings">บันทึกข้อมูลฉลาก</button>
                 </div>
               </details>
@@ -330,7 +321,7 @@
                   <div class="sticker-subheading">
                     <div>
                       <b>ตัวอย่างฉลากจำลอง</b>
-                      <small>ลากเพื่อย้ายตำแหน่ง · ลากจุดมุมเพื่อขยาย/ย่อขนาด</small>
+                      <small>ลากเพื่อย้ายตำแหน่ง · ลากจุดด้านหรือมุมเพื่อปรับขนาด</small>
                     </div>
                     <span id="stickerCanvasSizeLabel" class="code-text">75.2 × 36 มม.</span>
                   </div>
@@ -340,6 +331,7 @@
                     <button type="button" class="button outline" id="stickerAddQr">＋ QR Code</button>
                     <button type="button" class="button outline" id="stickerAddRect">＋ กรอบ / แถบสี</button>
                     <button type="button" class="button outline" id="stickerAddImage">＋ ภาพ</button>
+                    <button type="button" class="button outline" id="stickerDuplicateElement">⧉ ทำซ้ำองค์ประกอบ</button>
                     <button type="button" class="button outline reject" id="stickerDeleteElement">🗑️ ลบองค์ประกอบ</button>
                   </div>
                   <div class="sticker-element-strip">
@@ -375,6 +367,9 @@
                       </optgroup>
                       <optgroup label="🏢 สถานที่และผู้รับผิดชอบ">
                         <option value="{{Location}}">สถานที่ตั้ง / ห้อง ({{Location}})</option>
+                        <option value="{{Building}}">อาคาร ({{Building}})</option>
+                        <option value="{{Floor}}">ชั้น ({{Floor}})</option>
+                        <option value="{{Room}}">ห้อง ({{Room}})</option>
                         <option value="{{Department}}">หน่วยงาน / แผนก ({{Department}})</option>
                         <option value="{{Custodian}}">ผู้ดูแลรับผิดชอบ ({{Custodian}})</option>
                         <option value="{{OrgName}}">ชื่อหน่วยงานส่วนราชการ ({{OrgName}})</option>
@@ -404,7 +399,7 @@
         </section>
 
         <section class="view" id="view-repairs">
-          <div class="page-heading"><div><div class="eyebrow">SERVICE DESK <span class="live-dot"></span> SQLite · Ticket workflow</div><h1>แจ้งซ่อมและติดตาม Ticket</h1><p>ออก Ticket ค้นหา ตรวจสอบเหตุการณ์ และดำเนินงานซ่อมครบลำดับ</p></div><div class="heading-actions"><label class="print-size-picker"><span>ขนาดใบแจ้งซ่อม</span><select id="repairPrintSize" aria-label="เลือกขนาดกระดาษสำหรับใบแจ้งซ่อม"><option value="a4">A4</option><option value="a5">A5</option><option value="80mm">ใบเสร็จ 80 มม.</option><option value="58mm">ใบเสร็จ 58 มม.</option></select></label><button class="button primary" id="newRepairButton"><span>＋</span> เปิด Ticket</button></div></div>
+          <div class="page-heading"><div><div class="eyebrow">SERVICE DESK <span class="live-dot"></span> SQLite · Ticket workflow</div><h1>แจ้งซ่อมและติดตาม Ticket</h1><p>ออก Ticket ค้นหา ตรวจสอบเหตุการณ์ และดำเนินงานซ่อมครบลำดับ</p></div><div class="heading-actions"><button class="button primary" id="newRepairButton"><span>＋</span> เปิด Ticket</button></div></div>
           <div class="notice"><span class="notice-icon">i</span><div><b>ขั้นตอนการดำเนินงานและการอนุมัติงานซ่อมบำรุง</b><p>ผู้ใช้แจ้งผ่าน QR ได้ สถานะเริ่มที่รับแจ้งใหม่ แล้วยังต้องตรวจว่าเป็นปัญหาจริงหรือไม่ ถ้าจริงจึงคัดกรองเข้างานซ่อม ถ้าไม่จริงให้ปิดใบ · จากนั้นอนุมัติ (ถ้าเข้าเกณฑ์) → มอบหมายช่าง → ซ่อม → ผู้แจ้งตรวจรับ · วงเงิน <span id="thresholdAmount">5,000</span> บาท</p></div></div>
           <div class="repair-summary"><article class="stat-card"><div class="stat-top"><span>Ticket ทั้งหมด</span><span class="stat-icon blue">▤</span></div><div class="stat-number" id="repairTotal">0</div><div class="stat-foot">รวมทุกรายการใน SQLite</div></article><article class="stat-card"><div class="stat-top"><span>รับแจ้งใหม่</span><span class="stat-icon amber">◷</span></div><div class="stat-number" id="repairWaiting">0</div><div class="stat-foot">รอเจ้าหน้าที่คัดกรอง</div></article><article class="stat-card"><div class="stat-top"><span>รออนุมัติ</span><span class="stat-icon violet">✓</span></div><div class="stat-number" id="repairPendingApproval">0</div><div class="stat-foot">อนุมัติก่อนมอบหมาย</div></article><article class="stat-card"><div class="stat-top"><span>กำลังดำเนินการ</span><span class="stat-icon teal">⚒</span></div><div class="stat-number" id="repairActive">0</div><div class="stat-foot">รวมรออะไหล่และรอยืนยัน</div></article></div>
           <section class="panel listing-panel"><div class="filter-row"><label class="search-field"><span>⌕</span><input id="repairSearch" type="search" placeholder="ค้น Ticket, ครุภัณฑ์, ผู้แจ้ง, สถานที่ หรืออาการ" aria-label="ค้นหา Ticket"></label><select id="repairStatusFilter" aria-label="กรองสถานะ Ticket"><option value="all">ทุกสถานะ</option><option>รับแจ้งใหม่</option><option>รออนุมัติ</option><option>รอมอบหมาย</option><option>กำลังซ่อม</option><option>รออะไหล่</option><option>รอผู้แจ้งยืนยัน</option><option>รออนุมัติค่าใช้จ่ายจริง</option><option>รอแก้ไขค่าใช้จ่าย</option><option>ปิดงาน</option><option>ไม่อนุมัติ</option><option>ยกเลิก</option></select></div><div class="table-wrap"><table><thead><tr><th>Ticket / วันที่</th><th>ครุภัณฑ์ / อาการ</th><th>สถานที่</th><th>เร่งด่วน</th><th>สถานะ</th><th>ผู้รับผิดชอบ</th><th>จัดการ</th></tr></thead><tbody id="repairRows"></tbody></table></div><div class="panel-foot"><span id="repairResultCount"></span><span>ข้อมูลและประวัติบันทึกในระบบ</span></div></section>
@@ -431,7 +426,7 @@
             </article>
             <article class="stat-card">
               <div class="stat-top"><span>สถานะศูนย์อนุมัติ</span><span class="stat-icon violet">⚙</span></div>
-              <div class="stat-number" style="font-size:18px;margin-top:12px;">พร้อมทำงาน</div>
+              <div class="stat-number" id="approvalSystemStatus" style="font-size:15px;">พร้อมทำงาน</div>
               <div class="stat-foot">ระบบบันทึก Timeline ตรวจสอบได้</div>
             </article>
           </div>
@@ -583,7 +578,7 @@
           </section>
         </section>
       </main>
-      <footer class="footer"><span>GovAsset · ระบบบริหารจัดการทะเบียนครุภัณฑ์</span><span><b class="team-credit">POWER BY PNG TEAM</b> · ระบบจัดการข้อมูลครุภัณฑ์และสินทรัพย์</span></footer>
+      <footer class="footer"><span>Smart Asset · ระบบบริหารจัดการทะเบียนครุภัณฑ์</span><span><b class="team-credit">POWER BY PNG TEAM</b> · ระบบจัดการข้อมูลครุภัณฑ์และสินทรัพย์</span></footer>
     </div>
   </div>
 
@@ -628,6 +623,10 @@
       </div>
       <label for="repairReporterNote">หมายเหตุเพิ่มเติม / ที่ตั้งปัจจุบัน <span id="repairNoteRequired" class="required" hidden>*</span></label>
       <textarea id="repairReporterNote" name="reporterNote" rows="2" maxlength="2000" placeholder="เช่น ย้ายไปใช้งานชั่วคราวที่อาคาร 1 ชั้น 2"></textarea>
+      <label for="repairPhotos">รูปถ่ายประกอบการแจ้งซ่อม</label>
+      <input id="repairPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+      <p class="field-hint">แนบได้ไม่เกิน 5 รูป · JPG, PNG หรือ WebP ระบบจะย่อรูปก่อนส่ง</p>
+      <div id="repairPhotoPreviews" class="repair-photo-previews" aria-live="polite"></div>
       <p id="repairFormError" role="alert" aria-live="polite"></p>
     </div>
     <div class="dialog-actions">
@@ -635,8 +634,9 @@
       <button class="button primary" type="submit">ส่งคำขอแจ้งซ่อม</button>
     </div>
   </form></dialog>
-  <dialog id="manualDialog" class="asset-dialog manual-dialog" aria-labelledby="manualTitle"><div class="ticket-dialog-inner"><div class="dialog-head"><div><div class="eyebrow">คู่มือการปฏิบัติงาน</div><h2 id="manualTitle">ขั้นตอนการปฏิบัติงานและการอนุมัติงาน</h2></div><button class="dialog-close" id="closeManual" aria-label="ปิดคู่มือ">×</button></div><div class="manual-content"><section><h3>วงจรแจ้งซ่อม</h3><p>ผู้แจ้งเปิด Ticket → เจ้าหน้าที่คัดกรอง → (ถ้าเข้าเงื่อนไข) ผู้อนุมัติพิจารณา → เจ้าหน้าที่มอบหมาย → ช่างบันทึกซ่อม → ผู้แจ้งตรวจรับและปิดงาน หรือส่งกลับแก้ไข</p></section><section><h3>งานที่เสนอให้มีจุดอนุมัติ</h3><ul><li>ครุภัณฑ์ใหม่ก่อนขึ้นทะเบียน</li><li>งานซ่อมที่ถึงวงเงินทดลอง หรือมีการซื้ออะไหล่ จ้างภายนอก หรือพิจารณาทดแทน</li><li>ยอดซ่อมจริงเกินวงเงิน/ยอดอนุมัติ: ผู้อนุมัติตรวจเพิ่มหรือขอแก้ไขก่อนผู้แจ้งตรวจรับ</li><li>ตรวจรับผลซ่อมก่อนปิดงาน และบันทึก timeline ทุกการตัดสินใจ</li></ul><p>เกณฑ์วงเงินอนุมัติเริ่มต้น 5,000 บาท สามารถกำหนดค่าได้ที่ ตั้งค่า → เกณฑ์การส่งอนุมัติและวงเงิน</p></section><section><h3>ค้นหา ติดตาม และพิมพ์</h3><p>ค้นจาก Ticket, ครุภัณฑ์, อาการ, สถานที่, ผู้แจ้ง หรือสถานะ กดติดตามเพื่อดูประวัติ เลือกพิมพ์ A4, A5, 80 มม. หรือ 58 มม. แล้วตรวจหน้าต่างพิมพ์ก่อนยืนยัน</p><p>ปุ่ม A−/A+ ปรับขนาดหน้าจอ 95–140%</p></section><section class="manual-warning"><h3>ข้อจำกัดสำคัญ</h3><p>การปฏิบัติงานในระบบนี้อ้างอิงตามบทบาทหน้าที่และสิทธิ์การเข้าถึงที่ได้รับมอบหมายของหน่วยงาน</p><p>ดูคู่มือฉบับเต็ม: <a href="MANUAL.md" target="_blank" rel="noopener">MANUAL.md</a></p></section></div></div></dialog>
+  <dialog id="manualDialog" class="asset-dialog manual-dialog" aria-labelledby="manualTitle"><div class="ticket-dialog-inner"><div class="dialog-head"><div><div class="eyebrow">คู่มือการปฏิบัติงาน</div><h2 id="manualTitle">ขั้นตอนการปฏิบัติงานและการอนุมัติงาน</h2></div><button class="dialog-close" id="closeManual" aria-label="ปิดคู่มือ">×</button></div><div class="manual-content"><section><h3>วงจรแจ้งซ่อม</h3><p>ผู้แจ้งเปิด Ticket → เจ้าหน้าที่คัดกรอง → (ถ้าเข้าเงื่อนไข) ผู้อนุมัติพิจารณา → เจ้าหน้าที่มอบหมาย → ช่างบันทึกซ่อม → ผู้แจ้งตรวจรับและปิดงาน หรือส่งกลับแก้ไข</p></section><section><h3>งานที่เสนอให้มีจุดอนุมัติ</h3><ul><li>ครุภัณฑ์ใหม่ก่อนขึ้นทะเบียน</li><li>งานซ่อมที่ถึงวงเงินทดลอง หรือมีการซื้ออะไหล่ จ้างภายนอก หรือพิจารณาทดแทน</li><li>ยอดซ่อมจริงเกินวงเงิน/ยอดอนุมัติ: ผู้อนุมัติตรวจเพิ่มหรือขอแก้ไขก่อนผู้แจ้งตรวจรับ</li><li>ตรวจรับผลซ่อมก่อนปิดงาน และบันทึก timeline ทุกการตัดสินใจ</li></ul><p>เกณฑ์วงเงินอนุมัติเริ่มต้น 5,000 บาท สามารถกำหนดค่าได้ที่ ตั้งค่า → เกณฑ์การส่งอนุมัติและวงเงิน</p></section><section><h3>ค้นหา ติดตาม และพิมพ์</h3><p>ค้นจาก Ticket, ครุภัณฑ์, อาการ, สถานที่, ผู้แจ้ง หรือสถานะ เลือกพิมพ์ใบงาน A4 ที่มีรายละเอียด/ประวัติการซ่อม หรือสลิปสรุปข้อมูลขนาด 80/58 มม. จะพิมพ์แยกหรือเลือกพิมพ์ทั้งสองแบบก็ได้</p><p>ปุ่ม A−/A+ ปรับขนาดหน้าจอ 95–140%</p></section><section class="manual-warning"><h3>ข้อจำกัดสำคัญ</h3><p>การปฏิบัติงานในระบบนี้อ้างอิงตามบทบาทหน้าที่และสิทธิ์การเข้าถึงที่ได้รับมอบหมายของหน่วยงาน</p><p>ดูคู่มือฉบับเต็ม: <a href="MANUAL.md" target="_blank" rel="noopener">MANUAL.md</a></p></section></div></div></dialog>
   <dialog id="ticketDialog" class="asset-dialog ticket-dialog" aria-labelledby="ticketDialogTitle"><div id="ticketDialogContent"></div></dialog>
+  <dialog id="repairPrintDialog" class="asset-dialog repair-print-dialog" aria-labelledby="repairPrintTitle"><form id="repairPrintForm"><div class="dialog-head"><div><div class="eyebrow">เอกสารงานซ่อม</div><h2 id="repairPrintTitle">พิมพ์เอกสาร</h2></div><button type="button" class="dialog-close" id="closeRepairPrintDialog" aria-label="ปิด">×</button></div><div class="dialog-content-scroll"><p id="repairPrintTicketInfo" class="dialog-help"></p><fieldset class="repair-print-options"><legend>รูปแบบเอกสาร</legend><label class="repair-print-option"><input type="radio" name="printFormat" value="work-order" checked><span><b>ใบงาน A4</b><small>รายละเอียดงานและผลซ่อม</small></span></label><label class="repair-print-option"><input type="radio" name="printFormat" value="slip"><span><b>สลิป</b><small>สรุปข้อมูลสำหรับติดตามงาน</small></span></label><label class="repair-print-option"><input type="radio" name="printFormat" value="both"><span><b>ใบงานและสลิป</b><small>พิมพ์เอกสารทั้งสองรูปแบบ</small></span></label></fieldset><label id="repairSlipSizeField" class="repair-slip-size-field" hidden>ขนาดสลิป<select name="slipSize"><option value="80mm">80 มม.</option><option value="58mm">58 มม.</option></select></label></div><div class="dialog-actions"><button type="button" class="button outline" id="cancelRepairPrint">ยกเลิก</button><button type="submit" class="button primary">พิมพ์</button></div></form></dialog>
   <dialog id="categoryDialog" class="asset-dialog master-data-dialog" aria-labelledby="categoryDialogTitle"><form id="categoryForm" class="master-data-form"><input type="hidden" name="id"><input type="hidden" name="isActive" value="true"><div class="dialog-head"><div><div class="eyebrow">ข้อมูลหลักพัสดุและครุภัณฑ์</div><h2 id="categoryDialogTitle">เพิ่มหมวดครุภัณฑ์</h2></div><button type="button" class="dialog-close" id="closeCategoryDialog" aria-label="ปิด">×</button></div><div class="dialog-content-scroll"><p id="categorySourceNote" class="dialog-help">บันทึกข้อมูลหมวดครุภัณฑ์ในฐานข้อมูลกลางของหน่วยงาน</p><div class="dialog-grid-2"><div><label for="categoryName">ชื่อหมวด <span class="required">*</span></label><input id="categoryName" name="name" required maxlength="300" placeholder="เช่น ครุภัณฑ์สำนักงาน"></div><div><label for="categoryParent">หมวดแม่ (ถ้ามี)</label><select id="categoryParent" name="parentCategoryId"><option value="">ไม่มีหมวดแม่</option></select></div></div><details class="category-form-help"><summary>ก่อนสร้างหมวดใหม่ ควรตรวจอะไร?</summary><p>ค้นหมวดเดิมและหมวดที่ปิดใช้งานก่อน อุปกรณ์ต่างยี่ห้อหรือรุ่นใช้หมวดเดิมได้เมื่อชนิด/หน้าที่เหมือนกัน หากจำเป็นต้องเพิ่ม ให้ตรวจบัญชีหน่วยงานและเลือกหมวดแม่ แล้วเชื่อมหลักเกณฑ์ค่าเสื่อมแยกต่างหาก</p></details><label for="categoryNotes">แนวทางจัดหมวด / หมายเหตุ</label><textarea id="categoryNotes" name="notes" rows="3" maxlength="1000" placeholder="ระบุว่าใช้อุปกรณ์แบบใด รวม/ไม่รวมอะไร พร้อมตัวอย่างและเอกสารอ้างอิง"></textarea><button class="button outline" type="button" id="categoryGuideTemplate">ใช้แม่แบบคำอธิบายหมวด</button><p class="field-hint">ข้อความนี้จะแสดงใน “คู่มือหมวด” ให้เจ้าหน้าที่ใช้เลือกหมวดเมื่อมีอุปกรณ์ใหม่เข้ามา</p><p class="disclaimer">การลบจะปิดใช้งานแทนการลบถาวร เพื่อรักษารายการครุภัณฑ์และประวัติที่เชื่อมอยู่</p></div><div class="dialog-actions"><button class="button outline" type="button" id="cancelCategoryDialog">ยกเลิก</button><button class="button primary" type="submit">บันทึกหมวด</button></div></form></dialog>
   <dialog id="depreciationDialog" class="asset-dialog master-data-dialog" aria-labelledby="policyDialogTitle"><form id="depreciationForm" class="master-data-form"><input type="hidden" name="id"><input type="hidden" name="isActive" value="true"><div class="dialog-head"><div><div class="eyebrow">หลักเกณฑ์ค่าเสื่อมราคาสินทรัพย์</div><h2 id="policyDialogTitle">เพิ่มหลักเกณฑ์ค่าเสื่อม</h2></div><button type="button" class="dialog-close" id="closePolicyDialog" aria-label="ปิด">×</button></div><div class="dialog-content-scroll"><p id="policySourceNote" class="dialog-help">กำหนดอายุ วิธีคิด อัตราร้อยละ และหมวดที่ใช้ได้เอง</p><div class="dialog-grid-2"><div><label for="policyRuleNo">รหัส/ลำดับ <span class="required">*</span></label><input id="policyRuleNo" name="ruleNo" required maxlength="80" placeholder="เช่น 3.1 หรือ หน่วยงาน-01"></div><div><label for="policyCategoryName">ประเภททรัพย์สิน <span class="required">*</span></label><input id="policyCategoryName" name="categoryName" required maxlength="300" placeholder="ชื่อประเภทตามหลักเกณฑ์"></div></div><label for="policyCalculationMethod">วิธีคำนวณ <span class="required">*</span></label><select id="policyCalculationMethod" name="calculationMethod"><option value="annual_rate">ใช้อัตราค่าเสื่อมต่อปีที่กำหนด</option><option value="useful_life">คำนวณเส้นตรงตามอายุใช้งาน</option><option value="case_by_case">พิจารณาเป็นรายกรณี (ไม่คำนวณอัตโนมัติ)</option></select><div class="dialog-grid-3"><div><label for="policyYears">อายุการใช้งาน (ปี)</label><input id="policyYears" name="years" type="number" min="0.01" max="300" step="0.01" placeholder="เช่น 5"></div><div><label for="policyAnnualRate">อัตราต่อปี (%)</label><input id="policyAnnualRate" name="annualRate" type="number" min="0" max="100" step="0.01" placeholder="เช่น 20"></div><div><label for="policyResidual">มูลค่าคงเหลือ (%)</label><input id="policyResidual" name="residualValuePercent" type="number" min="0" max="100" step="0.01" value="0"></div></div><div class="dialog-grid-2"><div><label for="policyCategoryIds">หมวดครุภัณฑ์ที่เชื่อม (เลือกได้หลายหมวด)</label><select id="policyCategoryIds" name="categoryIds" multiple size="4" aria-describedby="policyCategoryHelp"></select><small id="policyCategoryHelp" class="field-hint">ความสัมพันธ์จะบันทึกในตาราง asset_category_policy_links</small></div><div><label for="policyScope">ขอบเขตการใช้</label><input id="policyScope" name="scope" maxlength="300" placeholder="หน่วยงาน/ช่วงเวลาที่ใช้หลักเกณฑ์นี้"><label for="policyNote">หมายเหตุ / ที่มา</label><textarea id="policyNote" name="note" rows="2" maxlength="1200"></textarea></div></div><div class="calculation-preview"><label for="policyBaseCost">คำนวณตัวอย่างจากราคาทุน (บาท)<input id="policyBaseCost" type="number" min="0" step="100" value="100000"></label><p id="policyCalculationPreview" aria-live="polite">กำหนดวิธีคำนวณและอัตราเพื่อดูตัวอย่าง</p></div><p class="disclaimer">การคำนวณค่าเสื่อมราคาเป็นไปตามวิธีเส้นตรงและอัตราร้อยละตามแนวทางที่กำหนด</p></div><div class="dialog-actions"><button class="button outline" type="button" id="cancelPolicyDialog">ยกเลิก</button><button class="button primary" type="submit">บันทึกหลักเกณฑ์</button></div></form></dialog>
   <div id="repairPrintArea" aria-hidden="true"></div>
@@ -716,9 +716,9 @@
   </form></dialog>
   <div id="toast" role="status" aria-live="polite" class="toast"></div>
   <script src="access.js?v=4"></script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=13"></script>
   <script src="action-buttons.js"></script>
-  <script src="register-form.js?v=4"></script>
+  <script src="register-form.js?v=7"></script>
   <script src="asset-tools.js?v=2"></script>
   <script src="master-data.js"></script>
   <script src="smart.js?v=8"></script>
@@ -732,9 +732,32 @@
   <script src="simple-workspace.js"></script>
   <script src="inventory-workspace.js"></script>
   <script src="operational-master.js"></script>
-  <script src="supply.js"></script>
+  <script src="supply.js?v=2"></script>
   <script src="equipment-workspace.js"></script>
-  <script src="qr-smart.js"></script>
-  <script src="dashboard-showcase.js?v=2"></script>
+  <script src="qr-smart.js?v=2"></script>
+  <script src="dashboard-showcase.js?v=3"></script>
+
+  <!-- Loading Overlay (แสดงเมื่อเรียก API) -->
+  <div id="app-loading">
+    <div class="loading-center">
+      <div class="loading-spinner"></div>
+      <b>กำลังโหลดข้อมูล…</b>
+      <small>กรุณารอสักครู่</small>
+    </div>
+  </div>
+
+  <!-- Confirm Dialog (ยืนยันก่อนลบ / ยกเลิก) -->
+  <dialog id="confirm-dialog">
+    <div class="dialog-head">
+      <div><h2 id="confirm-title">ยืนยันการดำเนินการ</h2></div>
+      <button class="dialog-close" onclick="window.closeConfirmDialog()">✕</button>
+    </div>
+    <div class="dialog-body" id="confirm-message">คุณแน่ใจหรือไม่ที่จะดำเนินการนี้?</div>
+    <div class="dialog-actions">
+      <button class="button outline" data-action-tone="cancel" onclick="window.closeConfirmDialog(false)">ยกเลิก</button>
+      <button class="button primary" data-action-tone="danger" id="confirm-ok" onclick="window.confirmDialogResult(true)">ยืนยัน</button>
+    </div>
+  </dialog>
+
   </body>
 </html>

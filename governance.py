@@ -403,7 +403,8 @@ def rehome_split_register_to_hospital(db_path):
             return
         hospital = db.execute("SELECT id FROM asset_accounts WHERE code='SURIN'").fetchone()
         center = db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER'").fetchone()
-        if not hospital or not center:
+        columns = {r['name'] for r in db.execute('PRAGMA table_info(assets)')}
+        if not hospital or not center or 'created_by' not in columns or 'organization_id' not in columns:
             db.execute('INSERT INTO schema_migrations(name) VALUES(?)', (name,))
             return
         hid, cid = hospital['id'], center['id']
@@ -450,7 +451,58 @@ def apply_official_center_name(db_path):
         db.execute('INSERT INTO schema_migrations(name) VALUES(?)', (migration,))
 
 
+def normalize_duplicate_smart_asset_app_name(db_path):
+    """Keep the product name separate from the organization shown below it."""
+    migration = 'neutral-smart-asset-app-name-v1'
+    old_name = 'Smart Asset · ศูนย์แพทยศาสตรศึกษาชั้นคลินิก'
+    with closing(sqlite3.connect(db_path)) as db, db:
+        if db.execute('SELECT 1 FROM schema_migrations WHERE name=?', (migration,)).fetchone():
+            return
+        db.execute(
+            'UPDATE app_branding SET app_name=? WHERE id=1 AND app_name=?',
+            ('Smart Asset', old_name),
+        )
+        db.execute('INSERT INTO schema_migrations(name) VALUES(?)', (migration,))
+
+
+def ensure_medcenter_inventory_profile(db_path):
+    """Ensure MEDCENTER has a 4-3-4-4 inventory profile bound for items received from Surin Hospital."""
+    migration = 'medcenter-inventory-profile-v1'
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.row_factory = sqlite3.Row
+        if db.execute('SELECT 1 FROM schema_migrations WHERE name=?', (migration,)).fetchone():
+            return
+        center = db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER'").fetchone()
+        if center:
+            cid = center['id']
+            existing = db.execute(
+                "SELECT id FROM number_profiles WHERE account_id=? AND pattern='{group:4}-{type:3}-{detail:4}-{seq:4}' AND number_kind='inventory'",
+                (cid,),
+            ).fetchone()
+            if existing:
+                pid = existing['id']
+            else:
+                pid = db.execute(
+                    'INSERT INTO number_profiles(account_id,name,pattern,number_kind,source) VALUES(?,?,?,?,?)',
+                    (
+                        cid,
+                        'ทะเบียน 4–3–4–4 (รับมอบจาก รพ.สุรินทร์)',
+                        '{group:4}-{type:3}-{detail:4}-{seq:4}',
+                        'inventory',
+                        'ทะเบียน DurableGoodList.xls ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์',
+                    ),
+                ).lastrowid
+            db.execute(
+                "INSERT OR IGNORE INTO account_bindings(account_id,profile_id,effective_from,notes) VALUES(?,?,'2020-01-01','ใช้รูปแบบ 4-3-4-4 สำหรับครุภัณฑ์ที่รับมาจาก รพ.สุรินทร์')",
+                (cid, pid),
+            )
+        db.execute('INSERT INTO schema_migrations(name) VALUES(?)', (migration,))
+
+
 def initialize(db_path):
     _initialize_account_schema(db_path)
     initialize_manual_references(db_path)
+    rehome_split_register_to_hospital(db_path)
     apply_official_center_name(db_path)
+    normalize_duplicate_smart_asset_app_name(db_path)
+    ensure_medcenter_inventory_profile(db_path)

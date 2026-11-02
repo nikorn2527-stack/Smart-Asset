@@ -32,6 +32,21 @@ def _one(query: dict, key: str, default: str = "") -> str:
     return str(value[0] if isinstance(value, list) and value else value)
 
 
+def _many(query: dict, key: str) -> list[str]:
+    value = query.get(key, [])
+    values = value if isinstance(value, list) else [value]
+    return [str(item).strip() for item in values if str(item).strip()][:50]
+
+
+def _fiscal_year_expression() -> str:
+    return """COALESCE(
+        NULLIF((SELECT x.fiscal_year_th FROM asset_acquisitions x WHERE x.asset_id=a.id ORDER BY x.id DESC LIMIT 1),''),
+        NULLIF(a.fiscal_year_th,''),
+        CAST(a.acquired_year AS TEXT),
+        ''
+    )"""
+
+
 def _safe_limit(query: dict, default: int = 50) -> int:
     try:
         return max(1, min(MAX_PAGE_SIZE, int(_one(query, "limit", str(default)))))
@@ -55,8 +70,62 @@ def _template_dict(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
+_LOCATION_BLD_FLR_SLASH = re.compile(r"(?:อาคาร|ตึก|อ\.?)\s*(\d+)\s*/\s*(\d+)")
+_LOCATION_BLD = re.compile(r"(?:อาคาร|ตึก|อ\.)\s*([0-9]+(?:\s*ปี)?|ศูนย์แพทย[^\s,()]*|เฉลิมพระเกียรติ|อุบัติเหตุ|ผู้ป่วยนอก|อำนวยการ)")
+_LOCATION_FLR = re.compile(r"ชั้น(?:ที่)?\s*([0-9]+|ใต้ดิน|ดาดฟ้า|ลอย|G|M)")
+_LOCATION_ROOM = re.compile(r"(ห้อง[^\s,()]+(?:\s+[0-9A-Za-z/-]+)?)")
+
+
+def _extract_location_parts(loc: str, detail: str = "") -> tuple[str, str, str, str]:
+    text_src = (loc or "").strip()
+    building = floor = room = sub_unit = ""
+    slash = _LOCATION_BLD_FLR_SLASH.search(text_src)
+    if slash:
+        building = f"อาคาร {slash.group(1)}"
+        floor = f"ชั้น {slash.group(2)}"
+    else:
+        bm = _LOCATION_BLD.search(text_src) or _LOCATION_BLD.search(detail or "")
+        if bm:
+            val = bm.group(1).strip()
+            building = f"อาคาร{val}" if val.startswith("ศูนย์") else f"อาคาร {val}"
+        fm = _LOCATION_FLR.search(text_src) or _LOCATION_FLR.search(detail or "")
+        if fm:
+            floor = f"ชั้น {fm.group(1).strip()}"
+    rm = _LOCATION_ROOM.search(text_src) or _LOCATION_ROOM.search(detail or "")
+    if rm:
+        room = rm.group(1).strip()
+    cleaned = text_src
+    for rx in (_LOCATION_BLD_FLR_SLASH, _LOCATION_BLD, _LOCATION_FLR):
+        cleaned = rx.sub("", cleaned)
+    cleaned = re.sub(r"[\s,·/-]+", " ", cleaned).strip()
+    if cleaned:
+        sub_unit = cleaned[:120]
+    return building, floor, room, sub_unit
+
+
+def ensure_location_hierarchy(db: sqlite3.Connection) -> None:
+    cols = {r[1] for r in db.execute("PRAGMA table_info(assets)")}
+    for col in ("building", "floor", "room", "sub_unit"):
+        if col not in cols:
+            db.execute(f"ALTER TABLE assets ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_assets_location_hierarchy ON assets(numbering_account_id,building,floor,room,sub_unit)")
+    has_mig = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'").fetchone()
+    if has_mig and db.execute("SELECT 1 FROM schema_migrations WHERE name='asset-location-hierarchy-v1'").fetchone():
+        return
+    rows = db.execute("SELECT id,location,detail FROM assets WHERE building='' AND floor='' AND room='' AND sub_unit='' AND (location<>'' OR detail<>'')").fetchall()
+    updates = []
+    for r in rows:
+        b, f, rm, su = _extract_location_parts(r[1] or "", r[2] or "")
+        if b or f or rm or su:
+            updates.append((b, f, rm, su, r[0]))
+    if updates:
+        db.executemany("UPDATE assets SET building=?,floor=?,room=?,sub_unit=? WHERE id=?", updates)
+    if has_mig:
+        db.execute("INSERT OR IGNORE INTO schema_migrations(name) VALUES('asset-location-hierarchy-v1')")
+
+
 def _inventory_select() -> str:
-    return """SELECT a.id,a.name,a.detail,a.code,a.group_name,a.location,a.acquired_year,a.status,a.icon,a.created_at,a.created_by,a.category_id,
+    return """SELECT a.id,a.name,a.detail,a.code,a.group_name,a.location,a.building,a.floor,a.room,a.sub_unit,a.acquired_year,a.status,a.icon,a.created_at,a.created_by,a.category_id,
         a.fsn_code,a.old_asset_code,a.maintenance_status,a.asset_status_source,a.asset_type,a.fiscal_year_th,a.acquisition_date,a.delivery_date,
         a.acquisition_method,a.purchase_price,a.gfmis_no,a.po_no,a.model,a.serial_number,a.useful_life_years,a.depreciation_policy_id,
         a.depreciation_value,a.accumulated_depreciation,a.net_book_value,a.valuation_date,a.remaining_days,a.is_loaned,a.loan_price,
@@ -99,9 +168,15 @@ def _inventory_select() -> str:
 def _inventory_item(row: sqlite3.Row) -> dict[str, Any]:
     location = row["location"] or row["register_location"] or row["responsible_unit"] or row["department_name"] or ""
     name = row["name"] or row["register_description"] or row["detail"] or ""
+    keys = row.keys()
+    building = row["building"] if "building" in keys else ""
+    floor = row["floor"] if "floor" in keys else ""
+    room = row["room"] if "room" in keys else ""
+    sub_unit = row["sub_unit"] if "sub_unit" in keys else ""
     item = {
         "id": row["id"], "name": name, "detail": row["detail"] or row["register_description"] or "",
         "code": row["code"], "group": row["category_name"] or row["group_name"], "location": location,
+        "building": building, "floor": floor, "room": room, "subUnit": sub_unit,
         "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"],
         "accountName": row["account_name"], "branchName": row["branch_name"], "accountId": row["numbering_account_id"], "branchId": row["branch_id"], "profileId": row["numbering_profile_id"], "categoryId": row["category_id"], "fsnCode": row["fsn_code"], "assetType": row["register_asset_type"] or row["asset_type"],
         "organization": row["organization_name"] or "", "department": row["department_name"] or "",
@@ -143,10 +218,29 @@ def _where(query: dict) -> tuple[str, list[Any]]:
     if branch:
         try: values.append(int(branch)); terms.append("a.branch_id=?")
         except ValueError: terms.append("0")
+    for key, column in (("building", "a.building"), ("floor", "a.floor")):
+        selected = _many(query, key)
+        if selected:
+            values_for_filter = [value for value in selected if value != "__unassigned__"]
+            options = [f"{column} IN ({','.join('?' for _ in values_for_filter)})"] if values_for_filter else []
+            values.extend(values_for_filter)
+            if "__unassigned__" in selected:
+                options.append(f"{column}=''")
+            terms.append("(" + " OR ".join(options) + ")")
+    rooms = _many(query, "room")
+    if rooms:
+        room_terms = []
+        for room in rooms:
+            if room == "__unassigned__":
+                room_terms.append("(a.room='' AND a.sub_unit='')")
+            else:
+                room_terms.append("(a.room=? OR a.sub_unit=? OR a.location=?)")
+                values.extend([room, room, room])
+        terms.append("(" + " OR ".join(room_terms) + ")")
     text = _one(query, "q").strip()
     if text:
         like = f"%{text}%"
-        searchable = ["a.fsn_code", "a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name", "account.name", "branch.name", "category_label.name"]
+        searchable = ["a.fsn_code", "a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.building", "a.floor", "a.room", "a.sub_unit", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name", "account.name", "branch.name", "category_label.name"]
         searchable_terms = [f"COALESCE({column},'') LIKE ?" for column in searchable]
         searchable_terms.append("EXISTS(SELECT 1 FROM asset_register_details rr WHERE rr.asset_id=a.id AND (rr.vendor_name LIKE ? OR rr.description LIKE ?))")
         values.extend([like] * len(searchable))
@@ -155,24 +249,45 @@ def _where(query: dict) -> tuple[str, list[Any]]:
             searchable_terms.append("a.id IN (SELECT sr.asset_id FROM source_row_search fts JOIN source_row_records sr ON sr.id=fts.rowid WHERE fts.raw_data_json LIKE ?)")
             values.append(like)
         terms.append("(" + " OR ".join(searchable_terms) + ")")
-    status = _one(query, "status")
-    if status and status != "all":
-        terms.append("a.status=?")
-        values.append(status)
-    category = _one(query, "category")
-    if category:
-        try:
-            terms.append("a.category_id=?")
-            values.append(int(category))
-        except ValueError:
-            terms.append("c.category_name LIKE ?")
-            values.append(f"%{category}%")
+    statuses = [value for value in _many(query, "status") if value != "all"]
+    if statuses:
+        terms.append(f"a.status IN ({','.join('?' for _ in statuses)})")
+        values.extend(statuses)
+    categories = _many(query, "category")
+    if categories:
+        category_terms = []
+        category_ids = []
+        for category in categories:
+            if category == "__unassigned__":
+                category_terms.append("(a.category_id IS NULL AND COALESCE(a.group_name,'')='')")
+                continue
+            try:
+                category_ids.append(int(category))
+            except ValueError:
+                category_terms.append("COALESCE(category_label.name,c.category_name,a.group_name) LIKE ?")
+                values.append(f"%{category}%")
+        if category_ids:
+            category_terms.append(f"a.category_id IN ({','.join('?' for _ in category_ids)})")
+            values.extend(category_ids)
+        terms.append("(" + " OR ".join(category_terms) + ")")
+    fiscal_years = _many(query, "fiscalYear")
+    if fiscal_years:
+        fiscal_year = _fiscal_year_expression()
+        selected_years = [year for year in fiscal_years if year != "__unassigned__"]
+        fiscal_terms = []
+        if selected_years:
+            fiscal_terms.append(f"{fiscal_year} IN ({','.join('?' for _ in selected_years)})")
+            values.extend(selected_years)
+        if "__unassigned__" in fiscal_years:
+            fiscal_terms.append(f"{fiscal_year}=''")
+        terms.append("(" + " OR ".join(fiscal_terms) + ")")
     if _one(query,"hasRegister").lower() in {"1","true","yes"}:
         terms.append("EXISTS(SELECT 1 FROM asset_register_details rr WHERE rr.asset_id=a.id)")
     return (" WHERE " + " AND ".join(terms) if terms else ""), values
 
 
 def inventory(db: sqlite3.Connection, query: dict) -> dict[str, Any]:
+    ensure_location_hierarchy(db)
     where, values = _where(query)
     total = int(db.execute("SELECT COUNT(*) FROM assets a LEFT JOIN asset_categories c ON c.id=a.category_id LEFT JOIN asset_accounts account ON account.id=a.numbering_account_id LEFT JOIN account_branches branch ON branch.id=a.branch_id LEFT JOIN account_category_labels category_label ON category_label.account_id=a.numbering_account_id AND category_label.category_id=a.category_id LEFT JOIN organizations org ON org.id=a.organization_id LEFT JOIN org_units dept ON dept.id=a.department_unit_id LEFT JOIN org_units responsible ON responsible.id=a.responsible_unit_id" + where, values).fetchone()[0])
     limit, offset = _safe_limit(query), _safe_offset(query)
@@ -180,7 +295,66 @@ def inventory(db: sqlite3.Connection, query: dict) -> dict[str, Any]:
     return {"items": [_inventory_item(row) for row in rows], "total": total, "limit": limit, "offset": offset}
 
 
+def inventory_facets(db: sqlite3.Connection, query: dict) -> dict[str, Any]:
+    ensure_location_hierarchy(db)
+    scope = scope_sql(db, "a")
+    account = _one(query, "accountId")
+    args: list[Any] = []
+    if account == "legacy":
+        scope += " AND a.numbering_account_id IS NULL"
+    elif account:
+        try:
+            args.append(int(account))
+            scope += " AND a.numbering_account_id=?"
+        except ValueError:
+            scope += " AND 0"
+    branch = _one(query, "branchId")
+    if branch:
+        try:
+            args.append(int(branch))
+            scope += " AND a.branch_id=?"
+        except ValueError:
+            scope += " AND 0"
+    buildings = [{"name": r[0] or "__unassigned__", "count": r[1]} for r in db.execute(f"SELECT NULLIF(a.building,'') AS building, COUNT(*) AS cnt FROM assets a WHERE {scope} GROUP BY building ORDER BY cnt DESC, building LIMIT 100", args)]
+    floors = [{"name": r[0] or "__unassigned__", "count": r[1]} for r in db.execute(f"SELECT NULLIF(a.floor,'') AS floor, COUNT(*) AS cnt FROM assets a WHERE {scope} GROUP BY floor ORDER BY cnt DESC, floor LIMIT 50", args)]
+    rooms = [{"name": r[0] or "__unassigned__", "count": r[1]} for r in db.execute(f"SELECT COALESCE(NULLIF(a.room,''), NULLIF(a.sub_unit,'')) AS rm, COUNT(*) AS cnt FROM assets a WHERE {scope} GROUP BY rm ORDER BY cnt DESC, rm LIMIT 150", args)]
+    fiscal_year = _fiscal_year_expression()
+    fiscal_years = [{"value": r[0] or "__unassigned__", "count": r[1]} for r in db.execute(f"SELECT {fiscal_year} AS fiscal_year, COUNT(*) AS cnt FROM assets a WHERE {scope} GROUP BY fiscal_year ORDER BY CASE WHEN fiscal_year GLOB '[0-9]*' THEN CAST(fiscal_year AS INTEGER) END DESC, fiscal_year DESC LIMIT 50", args)]
+    categories = [{"value": str(r[0]), "label": r[1], "count": r[2]} for r in db.execute(f"""SELECT a.category_id,COALESCE(label.name,c.category_name,a.group_name) AS category,COUNT(*) AS cnt
+        FROM assets a LEFT JOIN asset_categories c ON c.id=a.category_id
+        LEFT JOIN account_category_labels label ON label.category_id=a.category_id AND label.account_id=a.numbering_account_id
+        WHERE {scope} GROUP BY a.category_id,category ORDER BY cnt DESC,category LIMIT 200""", args) if r[0] is not None]
+    statuses = [{"value": r[0], "count": r[1]} for r in db.execute(f"SELECT a.status,COUNT(*) AS cnt FROM assets a WHERE {scope} GROUP BY a.status ORDER BY cnt DESC,a.status", args) if r[0]]
+    return {"buildings": buildings, "floors": floors, "rooms": rooms, "fiscalYears": fiscal_years, "categories": categories, "statuses": statuses}
+
+
+def bulk_update_location(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tuple[dict[str, str], int]:
+    ensure_location_hierarchy(db)
+    raw_ids = body.get("assetIds") or []
+    if not isinstance(raw_ids, list) or not raw_ids or len(raw_ids) > 500:
+        return {"error": "กรุณาเลือกครุภัณฑ์ 1–500 รายการ"}, 400
+    try:
+        ids = [int(x) for x in raw_ids]
+    except (TypeError, ValueError):
+        return {"error": "รหัสครุภัณฑ์ไม่ถูกต้อง"}, 400
+    building = str(body.get("building") or "").strip()[:120]
+    floor = str(body.get("floor") or "").strip()[:60]
+    room = str(body.get("room") or "").strip()[:120]
+    sub_unit = str(body.get("subUnit") or "").strip()[:120]
+    update_display = bool(body.get("updateLocationText", True))
+    parts = [p for p in (building, floor, room, sub_unit) if p]
+    composed_loc = " · ".join(parts)
+    placeholders = ",".join("?" for _ in ids)
+    scope = scope_sql(db, "assets")
+    if update_display and composed_loc:
+        cur = db.execute(f"UPDATE assets SET building=?,floor=?,room=?,sub_unit=?,location=?,updated_at=CURRENT_TIMESTAMP WHERE id IN ({placeholders}) AND {scope}", [building, floor, room, sub_unit, composed_loc, *ids])
+    else:
+        cur = db.execute(f"UPDATE assets SET building=?,floor=?,room=?,sub_unit=?,updated_at=CURRENT_TIMESTAMP WHERE id IN ({placeholders}) AND {scope}", [building, floor, room, sub_unit, *ids])
+    return {"updated": cur.rowcount, "building": building, "floor": floor, "room": room, "subUnit": sub_unit}
+
+
 def asset_detail(db: sqlite3.Connection, asset_id: int) -> dict[str, Any] | None:
+    ensure_location_hierarchy(db)
     row = db.execute(_inventory_select() + " WHERE a.id=?", (asset_id,)).fetchone()
     return _inventory_item(row) if row else None
 
@@ -202,53 +376,426 @@ def asset_register(db: sqlite3.Connection, asset_id: int) -> dict[str, Any] | No
     return {"asset": item, "register": dict(register) if register else None, "acquisitions": acquisitions, "depreciationSnapshots": depreciation, "sourceRows": source_rows, "fsnMatches":fsn_matches}
 
 
+ALLOWED_FONTS = {
+    "Sarabun": "'Sarabun', Tahoma, sans-serif",
+    "TH SarabunPSK": "'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif",
+    "Angsana New": "'Angsana New', 'AngsanaUPC', 'Sarabun', serif",
+    "Cordia New": "'Cordia New', 'CordiaUPC', 'Sarabun', sans-serif",
+    "Prompt": "'Prompt', 'Sarabun', sans-serif",
+    "Kanit": "'Kanit', 'Sarabun', sans-serif",
+    "Tahoma": "Tahoma, Arial, sans-serif",
+    "Arial": "Arial, Helvetica, sans-serif",
+}
+_TH_MONTHS = ("ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.")
+
+
+def _format_thai_short_date(raw: Any) -> str:
+    s = str(raw or "").strip()
+    if not s or s.startswith(("1899-12-3", "1900-01-0")):
+        return ""
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
+    if not m:
+        return s
+    y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if y < 1920 or not (1 <= mo <= 12):
+        return ""
+    th_y = y + 543 if y < 2400 else y
+    return f"{d:02d}-{_TH_MONTHS[mo - 1]}-{th_y}"
+
+
 def _read_template(db: sqlite3.Connection, template_id: str | None = None) -> sqlite3.Row | None:
     if template_id:
         return db.execute("SELECT * FROM sticker_templates WHERE id=?", (template_id,)).fetchone()
     return db.execute("SELECT * FROM sticker_templates ORDER BY is_active DESC,is_default DESC,created_at,id LIMIT 1").fetchone()
 
 
+def _default_70x36_template() -> dict[str, Any]:
+    return {
+        "id": "gov-asset-default-70x36",
+        "name": "ฉลากครุภัณฑ์ 70 × 36 มม.",
+        "isDefault": True,
+        "canvas": {"width": 70.0, "height": 36.0, "unit": "mm"},
+        "overflow": "clip",
+        "elements": [
+            {"id": "default-logo", "type": "image", "x": 3.4, "y": 2.0, "width": 14.0, "height": 14.0, "source": "/assets/medcenter-logo.png", "zIndex": 2},
+            {"id": "default-org-th", "type": "text", "x": 18.8, "y": 1.8, "width": 48.5, "height": 3.6, "content": "ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์", "fontSize": 6.2, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
+            {"id": "default-org-en", "type": "text", "x": 18.8, "y": 5.5, "width": 48.5, "height": 3.1, "content": "MEDICAL EDUCATION CENTER OF SURIN HOSPITAL", "fontSize": 5.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
+            {"id": "default-address", "type": "text", "x": 18.8, "y": 9.0, "width": 48.5, "height": 2.3, "content": "ที่อยู่: 68 ถ.หลักเมือง ต.ในเมือง อ.เมืองสุรินทร์ จ.สุรินทร์ 32000 โทร 044-518-937", "fontSize": 4.0, "fontWeight": 600, "fontFamily": "Sarabun", "color": "#222222", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
+            {"id": "default-header-rule", "type": "rect", "x": 18.8, "y": 8.75, "width": 48.5, "height": 0.2, "background": "#111111", "zIndex": 1},
+            {"id": "default-category-label", "type": "text", "x": 19.0, "y": 12.0, "width": 20.0, "height": 3.4, "content": "ประเภทครุภัณฑ์ :", "fontSize": 6.6, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 3},
+            {"id": "default-category", "type": "text", "x": 44.0, "y": 12.0, "width": 24.0, "height": 3.4, "content": "{{Category}}", "fontSize": 6.6, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 3},
+            {"id": "default-code-label", "type": "text", "x": 19.0, "y": 16.2, "width": 20.0, "height": 3.8, "content": "เลขครุภัณฑ์ :", "fontSize": 6.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
+            {"id": "default-code", "type": "text", "x": 41.0, "y": 16.2, "width": 27.0, "height": 3.8, "content": "{{AssetNo}}", "fontSize": 6.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "letterSpacing": 0.2, "zIndex": 2},
+            {"id": "default-name-label", "type": "text", "x": 2.4, "y": 20.3, "width": 14.0, "height": 3.4, "content": "ชื่อครุภัณฑ์ :", "fontSize": 6.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
+            {"id": "default-name", "type": "text", "x": 16.4, "y": 20.3, "width": 39.5, "height": 8.4, "content": "{{AssetName}}", "fontSize": 5.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "top", "lineHeight": 1.35, "zIndex": 2},
+            {"id": "default-date-label", "type": "text", "x": 2.4, "y": 29.0, "width": 14.0, "height": 3.6, "content": "วันที่ได้มา :", "fontSize": 6.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
+            {"id": "default-date", "type": "text", "x": 16.4, "y": 29.0, "width": 39.5, "height": 3.6, "content": "{{AcquisitionDate}}", "fontSize": 6.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
+            {"id": "default-footer", "type": "text", "x": 16.0, "y": 32.8, "width": 36.0, "height": 2.8, "content": "{{footerNote}} {{hotline}}", "fontSize": 5.4, "fontWeight": 600, "fontFamily": "Sarabun", "color": "#111111", "align": "center", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
+            {"id": "default-qr", "type": "qr", "x": 57.4, "y": 21.3, "width": 11.5, "height": 11.5, "content": "{{QrUrl}}", "zIndex": 3},
+        ],
+    }
+
+
 def _default_template() -> dict[str, Any]:
-    return {"id":"gov-asset-default-75x36","name":"ฉลากครุภัณฑ์มาตรฐาน 75.2 × 36 มม.","isDefault":True,"canvas":{"width":75.2,"height":36,"unit":"mm"},"overflow":"clip","elements":[
+    return {"id":"gov-asset-default-75x36","name":"ฉลากมาตรฐาน 75 × 36 มม.","isDefault":False,"canvas":{"width":75.2,"height":36,"unit":"mm"},"overflow":"clip","elements":[
         {"id":"e1","type":"rect","x":0,"y":0,"width":75.2,"height":5,"background":"#123d56","zIndex":0},
-        {"id":"e2","type":"text","x":2,"y":1,"width":71,"height":3,"content":"{{orgName}}","fontSize":7,"fontWeight":700,"color":"#ffffff","align":"left","zIndex":1},
-        {"id":"e3","type":"text","x":2,"y":7,"width":48,"height":4,"content":"{{AssetNo}}","fontSize":11,"fontWeight":800,"color":"#123d56","align":"left","zIndex":1},
-        {"id":"e4","type":"text","x":2,"y":12,"width":48,"height":7,"content":"{{AssetName}}","fontSize":7,"fontWeight":600,"color":"#243746","align":"left","zIndex":1},
-        {"id":"e5","type":"text","x":2,"y":21,"width":48,"height":4,"content":"{{Location}}","fontSize":6,"fontWeight":500,"color":"#526574","align":"left","zIndex":1},
+        {"id":"e2","type":"text","x":2,"y":1,"width":71,"height":3,"content":"{{orgName}}","fontSize":7,"fontWeight":700,"fontFamily":"Sarabun","color":"#ffffff","align":"left","zIndex":1},
+        {"id":"e3","type":"text","x":2,"y":7,"width":48,"height":4,"content":"{{AssetNo}}","fontSize":11,"fontWeight":800,"fontFamily":"Sarabun","color":"#123d56","align":"left","zIndex":1},
+        {"id":"e4","type":"text","x":2,"y":12,"width":48,"height":7,"content":"{{AssetName}}","fontSize":7,"fontWeight":600,"fontFamily":"Sarabun","color":"#243746","align":"left","zIndex":1},
+        {"id":"e5","type":"text","x":2,"y":21,"width":48,"height":4,"content":"{{Location}}","fontSize":6,"fontWeight":500,"fontFamily":"Sarabun","color":"#526574","align":"left","zIndex":1},
         {"id":"e6","type":"qr","x":54,"y":8,"width":18,"height":18,"content":"{{QrUrl}}","zIndex":2}]}
 
 
-def ensure_default_template(db: sqlite3.Connection) -> None:
-    if db.execute("SELECT COUNT(*) FROM sticker_templates").fetchone()[0]:
+def _migrate_default_70x36_template(db: sqlite3.Connection) -> None:
+    row = db.execute(
+        "SELECT is_default,elements_json FROM sticker_templates WHERE id=?",
+        ("gov-asset-default-70x36",),
+    ).fetchone()
+    if not row or not row["is_default"]:
         return
-    tpl = _default_template()
-    db.execute("INSERT OR IGNORE INTO sticker_templates(id,name,is_default,canvas_width_mm,canvas_height_mm,overflow,elements_json,is_active) VALUES(?,?,?,?,?,?,?,1)", (tpl["id"],tpl["name"],1,tpl["canvas"]["width"],tpl["canvas"]["height"],tpl["overflow"],json.dumps(tpl["elements"],ensure_ascii=False)))
+
+    elements = json.loads(row["elements_json"])
+    by_id = {element["id"]: element for element in elements}
+    changed = False
+
+    def update_legacy_element(
+        element_id: str,
+        expected: dict[str, Any],
+        updates: dict[str, Any],
+    ) -> None:
+        nonlocal changed
+        element = by_id.get(element_id)
+        if element and all(element.get(key) == value for key, value in expected.items()):
+            element.update(updates)
+            changed = True
+
+    address = by_id.get("default-address")
+    address_is_legacy = address and all(
+        address.get(key) == value
+        for key, value in {
+            "content": "{{companyAddress}}",
+            "y": 8.4,
+            "height": 2.0,
+            "fontSize": 5.8,
+        }.items()
+    )
+    if address_is_legacy:
+        update_legacy_element(
+            "default-address",
+            {"content": "{{companyAddress}}"},
+            {
+                "content": "ที่อยู่: {{companyAddress}} {{companyAddress2}} โทร {{companyPhone}}",
+                "height": 2.0,
+                "fontSize": 4.0,
+            },
+        )
+    address_2 = by_id.get("default-address-2")
+    if address_is_legacy and address_2 and all(address_2.get(key) == value for key, value in {
+        "content": "{{companyAddress2}} โทร {{companyPhone}}",
+        "y": 10.4,
+        "height": 1.8,
+        "fontSize": 5.8,
+    }.items()):
+        elements.remove(address_2)
+        changed = True
+
+    legacy_geometry_updates = {
+        "default-category-label": ({"y": 14.0}, {"x": 19.0, "y": 11.6, "width": 20.0}),
+        "default-category": ({"x": 36.0, "y": 14.0}, {"x": 44.0, "y": 11.6, "width": 24.0}),
+        "default-code-label": ({"x": 2.4, "y": 17.8}, {"x": 19.0, "y": 16.2, "width": 20.0}),
+        "default-code": ({"x": 16.4, "y": 17.8}, {"x": 41.0, "y": 16.2, "width": 27.0}),
+        "default-name-label": ({"y": 21.9, "height": 3.8}, {"y": 20.3, "height": 3.0}),
+        "default-name": (
+            {"x": 16.4, "y": 21.9, "width": 32.5, "height": 7.2, "fontSize": 6.8},
+            {"y": 20.3, "width": 39.5, "height": 8.4, "fontSize": 5.2, "valign": "top"},
+        ),
+        "default-date-label": ({"y": 29.4}, {"y": 29.0}),
+        "default-date": ({"y": 29.4, "width": 32.5}, {"y": 29.0, "width": 39.5}),
+        "default-footer": ({"y": 33.2}, {"y": 32.3, "height": 2.5}),
+    }
+    for element_id, (expected, values) in legacy_geometry_updates.items():
+        update_legacy_element(element_id, expected, values)
+
+    updates = {
+        "default-org-th": (
+            {"content": "{{orgName}}", "height": 3.4, "fontSize": 7.2},
+            {"height": 3.6, "fontSize": 6.2},
+        ),
+        "default-org-en": (
+            {"content": "{{companyName}}", "y": 5.2, "height": 2.8, "fontSize": 6.2},
+            {"y": 5.5, "height": 3.1, "fontSize": 5.8},
+        ),
+        "default-address": (
+            {
+                "content": "ที่อยู่: {{companyAddress}} {{companyAddress2}} โทร {{companyPhone}}",
+                "y": 8.4,
+                "height": 2.0,
+            },
+            {"y": 9.0, "height": 2.3},
+        ),
+        "default-header-rule": ({"y": 8.15}, {"y": 8.75}),
+        "default-category-label": ({"y": 11.6}, {"y": 12.0}),
+        "default-category": ({"y": 11.6}, {"y": 12.0}),
+        "default-name-label": ({"height": 3.0}, {"height": 3.4}),
+        "default-footer": ({"y": 32.3, "height": 2.5}, {"y": 32.8, "height": 2.8}),
+    }
+    for element_id, (expected, values) in updates.items():
+        update_legacy_element(element_id, expected, values)
+
+    static_header_geometry_updates = {
+        "default-org-th": (
+            {
+                "content": "ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์",
+                "height": 3.4,
+                "fontSize": 7.2,
+            },
+            {"height": 3.6, "fontSize": 6.2},
+        ),
+        "default-org-en": (
+            {
+                "content": "MEDICAL EDUCATION CENTER OF SURIN HOSPITAL",
+                "y": 5.2,
+                "height": 2.8,
+                "fontSize": 6.2,
+            },
+            {"y": 5.5, "height": 3.1, "fontSize": 5.8},
+        ),
+        "default-address": (
+            {
+                "content": "ที่อยู่: 68 ถ.หลักเมือง ต.ในเมือง อ.เมืองสุรินทร์ จ.สุรินทร์ 32000 โทร 044-518-937",
+                "y": 8.4,
+                "height": 2.0,
+            },
+            {"y": 9.0, "height": 2.3},
+        ),
+    }
+    for element_id, (expected, values) in static_header_geometry_updates.items():
+        update_legacy_element(element_id, expected, values)
+
+    fixed_header_text = {
+        "default-org-th": (
+            {"{{orgName}}"},
+            "ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์",
+        ),
+        "default-org-en": (
+            {"{{companyName}}"},
+            "MEDICAL EDUCATION CENTER OF SURIN HOSPITAL",
+        ),
+        "default-address": (
+            {
+                "{{companyAddress}}",
+                "ที่อยู่: {{companyAddress}} {{companyAddress2}} โทร {{companyPhone}}",
+            },
+            "ที่อยู่: 68 ถ.หลักเมือง ต.ในเมือง อ.เมืองสุรินทร์ จ.สุรินทร์ 32000 โทร 044-518-937",
+        ),
+    }
+    for element_id, (legacy_content, fixed_content) in fixed_header_text.items():
+        element = by_id.get(element_id)
+        if element and element.get("content") in legacy_content:
+            element["content"] = fixed_content
+            changed = True
+
+    code = by_id.get("default-code")
+    if (
+        code
+        and code.get("content") == "{{AssetNo}}"
+        and code.get("x") == 41.0
+        and code.get("y") == 16.2
+        and code.get("width") == 27.0
+        and code.get("fontSize") == 6.8
+        and "letterSpacing" not in code
+    ):
+        code["letterSpacing"] = 0.2
+        changed = True
+
+    thai_text_elements = {
+        "default-org-th": "ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์",
+        "default-org-en": "MEDICAL EDUCATION CENTER OF SURIN HOSPITAL",
+        "default-address": "ที่อยู่: 68 ถ.หลักเมือง ต.ในเมือง อ.เมืองสุรินทร์ จ.สุรินทร์ 32000 โทร 044-518-937",
+        "default-category-label": "ประเภทครุภัณฑ์ :",
+        "default-category": "{{Category}}",
+        "default-code-label": "เลขครุภัณฑ์ :",
+        "default-code": "{{AssetNo}}",
+        "default-name-label": "ชื่อครุภัณฑ์ :",
+        "default-name": "{{AssetName}}",
+        "default-date-label": "วันที่ได้มา :",
+        "default-date": "{{AcquisitionDate}}",
+        "default-footer": "{{footerNote}} {{hotline}}",
+    }
+    for element_id, content in thai_text_elements.items():
+        element = by_id.get(element_id)
+        if element and element.get("content") == content and element.get("lineHeight", 1.12) == 1.12:
+            element["lineHeight"] = 1.35
+            changed = True
+
+    name = by_id.get("default-name")
+    if name and all(
+        name.get(key) == value
+        for key, value in {
+            "content": "{{AssetName}}",
+            "x": 16.4,
+            "y": 20.3,
+            "width": 39.5,
+            "height": 8.4,
+            "fontSize": 5.2,
+            "lineHeight": 1.35,
+        }.items()
+    ):
+        name["fontSize"] = 5.8
+        changed = True
+
+    if changed:
+        db.execute(
+            "UPDATE sticker_templates SET elements_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            (json.dumps(elements, ensure_ascii=False), "gov-asset-default-70x36"),
+        )
+
+
+def _preset_large_templates() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "medcenter-qr-wall-a6",
+            "name": "ป้าย QR A6 · 105 × 148 มม.",
+            "isDefault": False,
+            "canvas": {"width": 105.0, "height": 148.0, "unit": "mm"},
+            "overflow": "clip",
+            "elements": [
+                {"id": "a6-border", "type": "rect", "x": 3, "y": 3, "width": 99, "height": 142, "background": "#ffffff", "border": "1.5px solid #123d56", "borderRadius": 3, "zIndex": 0},
+                {"id": "a6-logo", "type": "image", "x": 8, "y": 7, "width": 18, "height": 18, "source": "/assets/medcenter-logo.png", "zIndex": 2},
+                {"id": "a6-org", "type": "text", "x": 28, "y": 8, "width": 70, "height": 10, "content": "ศูนย์แพทยศาสตรศึกษาชั้นคลินิก\nโรงพยาบาลสุรินทร์", "fontSize": 10, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#123d56", "align": "left", "zIndex": 2},
+                {"id": "a6-qr", "type": "qr", "x": 20, "y": 30, "width": 65, "height": 65, "content": "{{QrUrl}}", "zIndex": 3},
+                {"id": "a6-code", "type": "text", "x": 8, "y": 98, "width": 89, "height": 8, "content": "{{AssetNo}}", "fontSize": 14, "fontWeight": 800, "fontFamily": "Sarabun", "color": "#123d56", "align": "center", "zIndex": 2},
+                {"id": "a6-name", "type": "text", "x": 8, "y": 107, "width": 89, "height": 12, "content": "{{AssetName}}", "fontSize": 11, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#172b3a", "align": "center", "zIndex": 2},
+                {"id": "a6-loc", "type": "text", "x": 8, "y": 120, "width": 89, "height": 8, "content": "สถานที่ตั้ง: {{Location}}", "fontSize": 9, "fontWeight": 600, "fontFamily": "Sarabun", "color": "#475569", "align": "center", "zIndex": 2},
+                {"id": "a6-hot", "type": "text", "x": 8, "y": 131, "width": 89, "height": 9, "content": "สแกน QR เพื่อตรวจสถานะ / แจ้งซ่อม (โทร 21202)", "fontSize": 9, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#0f6f6b", "align": "center", "zIndex": 2},
+            ],
+        },
+        {
+            "id": "medcenter-qr-poster-a4",
+            "name": "ป้าย QR A4 · 210 × 297 มม.",
+            "isDefault": False,
+            "canvas": {"width": 210.0, "height": 297.0, "unit": "mm"},
+            "overflow": "clip",
+            "elements": [
+                {"id": "a4-border", "type": "rect", "x": 8, "y": 8, "width": 194, "height": 281, "background": "#ffffff", "border": "2px solid #123d56", "borderRadius": 5, "zIndex": 0},
+                {"id": "a4-head-bg", "type": "rect", "x": 8, "y": 8, "width": 194, "height": 38, "background": "#f0f9f8", "border": "none", "borderRadius": 5, "zIndex": 1},
+                {"id": "a4-logo", "type": "image", "x": 16, "y": 12, "width": 28, "height": 28, "source": "/assets/medcenter-logo.png", "zIndex": 2},
+                {"id": "a4-th", "type": "text", "x": 48, "y": 14, "width": 148, "height": 10, "content": "ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์", "fontSize": 16, "fontWeight": 800, "fontFamily": "Sarabun", "color": "#123d56", "align": "left", "zIndex": 2},
+                {"id": "a4-en", "type": "text", "x": 48, "y": 25, "width": 148, "height": 8, "content": "Medical Education Center, Surin Hospital · โทร 044-518-937", "fontSize": 12, "fontWeight": 600, "fontFamily": "Sarabun", "color": "#334155", "align": "left", "zIndex": 2},
+                {"id": "a4-qr", "type": "qr", "x": 40, "y": 54, "width": 130, "height": 130, "content": "{{QrUrl}}", "zIndex": 3},
+                {"id": "a4-code", "type": "text", "x": 16, "y": 190, "width": 178, "height": 16, "content": "เลขครุภัณฑ์: {{AssetNo}}", "fontSize": 22, "fontWeight": 800, "fontFamily": "Sarabun", "color": "#123d56", "align": "center", "zIndex": 2},
+                {"id": "a4-name", "type": "text", "x": 16, "y": 208, "width": 178, "height": 22, "content": "{{AssetName}}", "fontSize": 18, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111827", "align": "center", "zIndex": 2},
+                {"id": "a4-cat", "type": "text", "x": 16, "y": 232, "width": 178, "height": 12, "content": "ประเภท: {{Category}} · วันที่ได้มา: {{AcquisitionDate}}", "fontSize": 13, "fontWeight": 600, "fontFamily": "Sarabun", "color": "#334155", "align": "center", "zIndex": 2},
+                {"id": "a4-loc", "type": "text", "x": 16, "y": 246, "width": 178, "height": 12, "content": "จุดติดตั้ง / สถานที่ตั้ง: {{Location}}", "fontSize": 13, "fontWeight": 600, "fontFamily": "Sarabun", "color": "#334155", "align": "center", "zIndex": 2},
+                {"id": "a4-hot", "type": "text", "x": 16, "y": 264, "width": 178, "height": 16, "content": "📱 สแกน QR Code เพื่อตรวจสอบสถานะหรือแจ้งครุภัณฑ์ขัดข้อง (โทร 21202)", "fontSize": 14, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#0f6f6b", "align": "center", "zIndex": 2},
+            ],
+        },
+    ]
+
+
+def ensure_default_template(db: sqlite3.Connection) -> None:
+    count = db.execute("SELECT COUNT(*) FROM sticker_templates").fetchone()[0]
+    default_tpl = _default_70x36_template()
+    if count == 0:
+        db.execute(
+            "INSERT OR IGNORE INTO sticker_templates(id,name,is_default,canvas_width_mm,canvas_height_mm,overflow,elements_json,is_active) VALUES(?,?,?,?,?,?,?,1)",
+            (default_tpl["id"], default_tpl["name"], 1, default_tpl["canvas"]["width"], default_tpl["canvas"]["height"], default_tpl["overflow"], json.dumps(default_tpl["elements"], ensure_ascii=False)),
+        )
+        std_tpl = _default_template()
+        db.execute(
+            "INSERT OR IGNORE INTO sticker_templates(id,name,is_default,canvas_width_mm,canvas_height_mm,overflow,elements_json,is_active) VALUES(?,?,?,?,?,?,?,0)",
+            (std_tpl["id"], std_tpl["name"], 0, std_tpl["canvas"]["width"], std_tpl["canvas"]["height"], std_tpl["overflow"], json.dumps(std_tpl["elements"], ensure_ascii=False)),
+        )
+    elif not db.execute("SELECT 1 FROM sticker_templates WHERE id=?", (default_tpl["id"],)).fetchone():
+        active = db.execute("SELECT id FROM sticker_templates WHERE is_active=1 ORDER BY updated_at DESC,id LIMIT 1").fetchone()
+        activate_default = active is None or active["id"] in {"medcenter-brother-36mm-70x36", "gov-asset-default-75x36"}
+        db.execute("UPDATE sticker_templates SET is_default=0")
+        if activate_default:
+            db.execute("UPDATE sticker_templates SET is_active=0")
+        db.execute(
+            "INSERT OR IGNORE INTO sticker_templates(id,name,is_default,canvas_width_mm,canvas_height_mm,overflow,elements_json,is_active) VALUES(?,?,?,?,?,?,?,?)",
+            (default_tpl["id"], default_tpl["name"], 1, default_tpl["canvas"]["width"], default_tpl["canvas"]["height"], default_tpl["overflow"], json.dumps(default_tpl["elements"], ensure_ascii=False), int(activate_default)),
+        )
+    db.execute(
+        "UPDATE sticker_templates SET name=? WHERE id=? AND name=?",
+        ("ฉลากเดิม 70 × 36 มม.", "medcenter-brother-36mm-70x36",
+         "ฉลากครุภัณฑ์ ศูนย์แพทยศาสตรศึกษาชั้นคลินิกฯ (Brother 36mm — 70 × 36 มม.)"),
+    )
+    db.execute(
+        "UPDATE sticker_templates SET name=? WHERE id=? AND name=?",
+        ("ฉลากเดิม 70 × 36 มม.", "medcenter-brother-36mm-70x36",
+         "ฉลากครุภัณฑ์รุ่นก่อน (70 × 36 มม.)"),
+    )
+    concise_names = {
+        "gov-asset-default-70x36": (
+            "ฉลากครุภัณฑ์มาตรฐาน (70 × 36 มม.)",
+            default_tpl["name"],
+        ),
+        "gov-asset-default-75x36": (
+            "ฉลากครุภัณฑ์มาตรฐาน 75.2 × 36 มม.",
+            "ฉลากมาตรฐาน 75 × 36 มม.",
+        ),
+        "medcenter-qr-wall-a6": (
+            "ป้าย QR Smart ติดจุดสังเกต / ผนังห้อง (A6 — 105 × 148 มม.)",
+            "ป้าย QR A6 · 105 × 148 มม.",
+        ),
+        "medcenter-qr-poster-a4": (
+            "ป้าย QR Smart เต็มแผ่น A4 — อุปกรณ์บนฝ้า/เพดาน/สแกนระยะไกล (210 × 297 มม.)",
+            "ป้าย QR A4 · 210 × 297 มม.",
+        ),
+    }
+    for template_id, (old_name, new_name) in concise_names.items():
+        db.execute(
+            "UPDATE sticker_templates SET name=? WHERE id=? AND name=?",
+            (new_name, template_id, old_name),
+        )
+    _migrate_default_70x36_template(db)
+    for preset in _preset_large_templates():
+        if not db.execute("SELECT 1 FROM sticker_templates WHERE id=?", (preset["id"],)).fetchone():
+            db.execute(
+                "INSERT OR IGNORE INTO sticker_templates(id,name,is_default,canvas_width_mm,canvas_height_mm,overflow,elements_json,is_active) VALUES(?,?,?,?,?,?,?,0)",
+                (preset["id"], preset["name"], 0, preset["canvas"]["width"], preset["canvas"]["height"], preset["overflow"], json.dumps(preset["elements"], ensure_ascii=False)),
+            )
 
 
 def sticker_settings(db: sqlite3.Connection) -> dict[str, str]:
     stored = {row["key"]: row["value"] for row in db.execute("SELECT key,value FROM sticker_settings")}
-    org = db.execute("SELECT name FROM organizations ORDER BY id LIMIT 1").fetchone()
+    organization_name = stored.get("orgName", "")
+    if not organization_name:
+        organization_name = branding(db)["organization"]
+    if organization_name == "หน่วยงานตัวอย่าง":
+        organization_name = "ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์"
     return {
-        "companyName": stored.get("companyName", "หน่วยงานภาครัฐ"),
-        "orgName": stored.get("orgName", branding(db)["organization"]),
+        "companyName": stored.get("companyName", "MEDICAL EDUCATION CENTER OF SURIN HOSPITAL"),
+        "orgName": organization_name,
+        "companyAddress": stored.get("companyAddress", "68 ถ.หลักเมือง ต.ในเมือง อ.เมืองสุรินทร์"),
+        "companyAddress2": stored.get("companyAddress2", "จ.สุรินทร์ 32000"),
+        "companyPhone": stored.get("companyPhone", "044-518-937"),
         "AssetTerminology": stored.get("AssetTerminology", "ครุภัณฑ์"),
-        "footerNote": stored.get("footerNote", "เอกสารต้นแบบเพื่อทดลอง"),
-        "hotline": stored.get("hotline", ""), "lineOA": stored.get("lineOA", ""),
+        "footerNote": stored.get("footerNote", "**แจ้งครุภัณฑ์ขัดข้อง"),
+        "hotline": stored.get("hotline", "21202**"), "lineOA": stored.get("lineOA", ""),
     }
 
 
 def _asset_for_sticker(db: sqlite3.Connection, asset_id: int, origin: str = "") -> dict[str, Any] | None:
+    ensure_location_hierarchy(db)
     row = db.execute(_inventory_select() + " WHERE a.id=?", (asset_id,)).fetchone()
     if not row:
         return None
     item = _inventory_item(row)
+    acq_formatted = _format_thai_short_date(row["linked_acquired_on"])
+    warranty_formatted = _format_thai_short_date(row["warranty_end"])
     item.update({"AssetNo": row["code"], "AssetName": item["name"], "AssetSiteCode": row["code"],
+                 "Category": item["group"] or row["group_name"] or "", "Group": item["group"] or row["group_name"] or "",
                  "Serial": row["linked_serial_number"] or "", "Type": row["register_asset_type"] or row["asset_type"] or row["category_name"] or "",
-                 "Brand":"", "Model":row["linked_model"] or "", "Building":"", "Floor":"", "Room":"",
+                 "Brand":"", "Model":row["linked_model"] or "",
+                 "Building": item.get("building") or "", "Floor": item.get("floor") or "", "Room": item.get("room") or "",
                  "Department":row["department_name"] or row["responsible_unit"] or "", "DepartmentCode":"",
                  "Location":item["location"], "Site":row["organization_name"] or "", "ContractNo":row["linked_po_no"] or "",
                  "Vendor":row["vendor_name"] or "", "DeviceStatus":row["status"], "CurrentAssignee":"",
-                 "WarrantyEnd":row["warranty_end"] or "", "PurchaseDate":row["linked_acquired_on"] or "",
+                 "WarrantyEnd": warranty_formatted or (row["warranty_end"] or ""),
+                 "AcquisitionDate": acq_formatted or (row["linked_acquired_on"] or ""),
+                 "PurchaseDate": acq_formatted or (row["linked_acquired_on"] or ""),
                  "PurchasePrice":row["linked_purchase_price"] or "", "Ip":"", "Mac":"", "QrUrl":qr_url(db, asset_id, origin),
                  "LicenseCount":"", "LicenseList":""})
     return item
@@ -277,62 +824,78 @@ def _style_num(value: Any, default: float = 0) -> float:
         return default
 
 
-def render_sticker(template: dict[str, Any], asset: dict[str, Any], settings: dict[str, str]) -> str:
+def render_sticker(template: dict[str, Any], asset: dict[str, Any], settings: dict[str, str], scale: float = 1.0) -> str:
     canvas = template["canvas"]
-    width, height = _style_num(canvas.get("width"),75.2), _style_num(canvas.get("height"),36)
+    width = _style_num(canvas.get("width"), 75.2) * scale
+    height = _style_num(canvas.get("height"), 36) * scale
     overflow = "visible" if template.get("overflow") == "visible" else "hidden"
-    values = {**settings, **asset, "AssetTerminology":settings.get("AssetTerminology","ครุภัณฑ์")}
+    values = {**settings, **asset, "AssetTerminology": settings.get("AssetTerminology", "ครุภัณฑ์")}
     nodes: list[str] = []
-    for element in sorted(template.get("elements",[]), key=lambda el: _style_num(el.get("zIndex"),0)):
+    for element in sorted(template.get("elements", []), key=lambda el: _style_num(el.get("zIndex"), 0)):
         kind = element.get("type")
         if kind not in ELEMENT_TYPES:
             continue
-        x,y,w,h = (_style_num(element.get(key),0) for key in ("x","y","width","height"))
-        opacity = max(0,min(1,_style_num(element.get("opacity"),1)))
-        rotate = _style_num(element.get("rotation"),0)
-        styles = [f"position:absolute",f"left:{x:g}mm",f"top:{y:g}mm",f"width:{w:g}mm",f"height:{h:g}mm",f"z-index:{int(_style_num(element.get('zIndex'),0))}",f"opacity:{opacity:g}","box-sizing:border-box",f"transform:rotate({rotate:g}deg)","transform-origin:center center"]
+        x, y, w, h = (_style_num(element.get(key), 0) * scale for key in ("x", "y", "width", "height"))
+        opacity = max(0, min(1, _style_num(element.get("opacity"), 1)))
+        rotate = _style_num(element.get("rotation"), 0)
+        styles = [f"position:absolute", f"left:{x:g}mm", f"top:{y:g}mm", f"width:{w:g}mm", f"height:{h:g}mm", f"z-index:{int(_style_num(element.get('zIndex'),0))}", f"opacity:{opacity:g}", "box-sizing:border-box", f"transform:rotate({rotate:g}deg)", "transform-origin:center center"]
         if kind == "rect":
             background = str(element.get("background") or "transparent")
             border = str(element.get("border") or "none")
-            radius = max(0,_style_num(element.get("borderRadius"),0))
-            styles += [f"background:{background}",f"border:{border}",f"border-radius:{radius:g}mm"]
+            radius = max(0, _style_num(element.get("borderRadius"), 0) * scale)
+            styles += [f"background:{background}", f"border:{border}", f"border-radius:{radius:g}mm"]
             nodes.append(f'<div class="sticker-node sticker-rect" style="{html.escape(";".join(styles),quote=True)}"></div>')
         elif kind == "qr":
             content = str(element.get("content") or "{{QrUrl}}")
-            # A QR that names {{QrUrl}} must encode only the scan link. Text glued around it
-            # (for example "{{FsnCode}}{{QrUrl}}") makes phones show plain text instead of opening the page.
             if re.search(r"\{\{\s*[Qq]rUrl\s*\}\}", content) and values.get("QrUrl"):
                 qr_text = str(values["QrUrl"])
             else:
                 qr_text = _substitute(content, values) or str(asset.get("code") or "")
             src = _qr_data_uri(qr_text)
-            styles += ["display:flex","align-items:center","justify-content:center","background:#fff"]
+            styles += ["display:flex", "align-items:center", "justify-content:center", "background:#fff"]
             nodes.append(f'<div class="sticker-node sticker-qr" style="{html.escape(";".join(styles),quote=True)}"><img alt="QR" src="{html.escape(src,quote=True)}" style="width:100%;height:100%;object-fit:contain"></div>')
         elif kind == "image":
             src = str(element.get("source") or element.get("content") or "")
-            src = _substitute(src,values)
-            if not (src.startswith("https://") or src.startswith("data:image/")):
+            src = _substitute(src, values)
+            if not (src.startswith("https://") or src.startswith("data:image/") or src.startswith("/assets/")):
                 src = ""
             styles += ["object-fit:contain"]
             nodes.append(f'<img class="sticker-node" alt="" src="{html.escape(src,quote=True)}" style="{html.escape(";".join(styles),quote=True)}">')
         else:
             text = _substitute(str(element.get("content") or ""), values)
-            font_size = max(1,min(72,_style_num(element.get("fontSize"),7)))
-            font_weight = int(max(100,min(900,_style_num(element.get("fontWeight"),500))))
+            font_size = max(1, min(180, _style_num(element.get("fontSize"), 7) * scale))
+            font_weight = int(max(100, min(900, _style_num(element.get("fontWeight"), 500))))
+            font_family_key = str(element.get("fontFamily") or "Sarabun")
+            font_family_css = ALLOWED_FONTS.get(font_family_key, ALLOWED_FONTS["Sarabun"])
             color = str(element.get("color") or "#172b3a")
-            align = element.get("align") if element.get("align") in {"left","center","right"} else "left"
-            valign = element.get("valign") if element.get("valign") in {"top","center","bottom"} else "top"
-            styles += ["display:flex",f"align-items:{'flex-start' if valign=='top' else 'center' if valign=='center' else 'flex-end'}",f"justify-content:{'flex-start' if align=='left' else 'center' if align=='center' else 'flex-end'}",f"text-align:{align}",f"font-size:{font_size:g}pt",f"font-weight:{font_weight}",f"color:{color}","font-family:Tahoma,Arial,sans-serif","line-height:1.12","white-space:pre-wrap","word-break:break-word","overflow:hidden"]
+            align = element.get("align") if element.get("align") in {"left", "center", "right"} else "left"
+            valign = element.get("valign") if element.get("valign") in {"top", "center", "bottom"} else "top"
+            line_height = max(1.0, min(2.0, _style_num(element.get("lineHeight"), 1.12)))
+            letter_spacing = max(-2.0, min(2.0, _style_num(element.get("letterSpacing"), 0)))
+            styles += ["display:flex", f"align-items:{'flex-start' if valign=='top' else 'center' if valign=='center' else 'flex-end'}", f"justify-content:{'flex-start' if align=='left' else 'center' if align=='center' else 'flex-end'}", f"text-align:{align}", f"font-size:{font_size:g}pt", f"font-weight:{font_weight}", f"color:{color}", f"font-family:{font_family_css}", f"line-height:{line_height:g}", f"letter-spacing:{letter_spacing:g}mm", "white-space:pre-wrap", "word-break:break-word", "overflow:hidden"]
             nodes.append(f'<div class="sticker-node sticker-text" style="{html.escape(";".join(styles),quote=True)}">{html.escape(text)}</div>')
     return f'<div class="sticker-page" style="width:{width:g}mm;height:{height:g}mm;position:relative;overflow:{overflow};background:#fff;print-color-adjust:exact;-webkit-print-color-adjust:exact">{"".join(nodes)}</div>'
 
 
-def print_document(labels: list[str], template: dict[str, Any]) -> str:
-    width = _style_num(template["canvas"].get("width"),75.2)
-    height = _style_num(template["canvas"].get("height"),36)
+def print_document(labels: list[str], template: dict[str, Any], paper_layout: str = "label") -> str:
+    width = _style_num(template["canvas"].get("width"), 75.2)
+    height = _style_num(template["canvas"].get("height"), 36)
+    font_links = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;700&family=Prompt:wght@400;600;700&family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">'
+    if paper_layout == "a4-grid":
+        cols = max(1, int(200 // max(10, width)))
+        rows_per_page = max(1, int(285 // max(10, height)))
+        per_page = max(1, cols * rows_per_page)
+        sheets = []
+        for i in range(0, len(labels), per_page):
+            chunk = labels[i : i + per_page]
+            cells = "".join(f'<div class="sticker-grid-cell">{lbl}</div>' for lbl in chunk)
+            sheets.append(f'<section class="sticker-a4-sheet">{cells}</section>')
+        return f'''<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>พิมพ์สติกเกอร์ครุภัณฑ์ (เรียงบน A4)</title>{font_links}<style>
+@page{{size:210mm 297mm;margin:5mm}}*{{box-sizing:border-box}}html,body{{margin:0;padding:0;background:#fff;color:#111;font-family:'Sarabun',Tahoma,Arial,sans-serif}}.sticker-a4-sheet{{width:200mm;min-height:285mm;display:flex;flex-wrap:wrap;align-content:flex-start;gap:2mm;break-after:page;page-break-after:always}}.sticker-a4-sheet:last-child{{break-after:auto;page-break-after:auto}}.sticker-grid-cell{{border:0.25mm dashed #cbd5e1;break-inside:avoid;page-break-inside:avoid}}@media screen{{body{{padding:16px;background:#eef2f4}}.sticker-a4-sheet{{margin:0 auto 16px;padding:5mm;background:#fff;box-shadow:0 1px 8px #0002}}}}
+</style></head><body>{"".join(sheets)}</body></html>'''
     pages = "".join(f'<section class="sticker-sheet">{label}</section>' for label in labels)
-    return f'''<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>พิมพ์สติกเกอร์ครุภัณฑ์</title><style>
-@page{{size:{width:g}mm {height:g}mm;margin:0}}*{{box-sizing:border-box}}html,body{{margin:0;padding:0;background:#fff;color:#111;font-family:Tahoma,Arial,sans-serif}}.sticker-sheet{{width:{width:g}mm;height:{height:g}mm;break-after:page;page-break-after:always;overflow:hidden}}.sticker-sheet:last-child{{break-after:auto;page-break-after:auto}}.sticker-page{{break-inside:avoid;page-break-inside:avoid}}@media screen{{body{{padding:16px;background:#eef2f4}}.sticker-sheet{{margin:0 auto 16px;box-shadow:0 1px 8px #0002}}}}@media print{{html,body{{width:{width:g}mm;margin:0;padding:0}}}}
+    return f'''<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>พิมพ์สติกเกอร์ครุภัณฑ์</title>{font_links}<style>
+@page{{size:{width:g}mm {height:g}mm;margin:0}}*{{box-sizing:border-box}}html,body{{margin:0;padding:0;background:#fff;color:#111;font-family:'Sarabun',Tahoma,Arial,sans-serif}}.sticker-sheet{{width:{width:g}mm;height:{height:g}mm;break-after:page;page-break-after:always;overflow:hidden}}.sticker-sheet:last-child{{break-after:auto;page-break-after:auto}}.sticker-page{{break-inside:avoid;page-break-inside:avoid}}@media screen{{body{{padding:16px;background:#eef2f4}}.sticker-sheet{{margin:0 auto 16px;box-shadow:0 1px 8px #0002}}}}@media print{{html,body{{width:{width:g}mm;margin:0;padding:0}}}}
 </style></head><body>{pages}</body></html>'''
 
 
@@ -352,6 +915,12 @@ def save_template(db: sqlite3.Connection, body: dict) -> dict[str, Any]:
         normalized.append({**el,"id":str(el.get("id") or f"el-{time.time_ns()}-{idx}"),"x":_style_num(el.get("x")),"y":_style_num(el.get("y")),"width":max(.2,_style_num(el.get("width"),5)),"height":max(.2,_style_num(el.get("height"),5))})
     template_id = str(tpl.get("id") or f"tpl-{time.time_ns()}")[:100]
     name = str(tpl.get("name") or "เทมเพลตใหม่").strip()[:120] or "เทมเพลตใหม่"
+    duplicate = db.execute(
+        "SELECT 1 FROM sticker_templates WHERE id != ? AND name = ? COLLATE NOCASE LIMIT 1",
+        (template_id, name),
+    ).fetchone()
+    if duplicate:
+        return {"error": "มีชื่อเทมเพลตนี้แล้ว กรุณาตั้งชื่อให้ต่างกัน"}, 409
     overflow = "visible" if tpl.get("overflow")=="visible" else "clip"
     active = bool(body.get("isActive",tpl.get("isActive",False)))
     if active:
@@ -378,13 +947,23 @@ def _make_print_job(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tupl
         ids=[int(value) for value in ids]
     except (ValueError,TypeError):
         return {"error":"รายการครุภัณฑ์ไม่ถูกต้อง"},400
+    ensure_default_template(db)
     template_row=_read_template(db,str(body.get("templateId") or body.get("template_id") or "") or None)
     if not template_row:
-        ensure_default_template(db)
         template_row=_read_template(db)
     template=_template_dict(template_row)
+    paper_layout = str(body.get("paperLayout") or "label")
+    scale = 1.0
+    width, height = float(template["canvas"]["width"]), float(template["canvas"]["height"])
+    target_dims = {"a4-full": (210.0, 297.0), "a5-full": (148.0, 210.0), "a6-full": (105.0, 148.0)}.get(paper_layout)
+    if target_dims:
+        tw, th = target_dims
+        if width > height:
+            tw, th = max(tw, th), min(tw, th)
+        scale = min(tw / max(1.0, width), th / max(1.0, height))
+        template = {**template, "canvas": {"width": round(width * scale, 1), "height": round(height * scale, 1), "unit": "mm"}}
+        width, height = template["canvas"]["width"], template["canvas"]["height"]
     settings=sticker_settings(db)
-    width,height=template["canvas"]["width"],template["canvas"]["height"]
     actor=str(body.get("requestedBy") or body.get("actor") or "ผู้ปฏิบัติงาน")[:120]
     selected=[]
     for asset_id in ids:
@@ -398,8 +977,8 @@ def _make_print_job(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tupl
     rendered=[]
     for order,(asset_id,item) in enumerate(selected,1):
         db.execute("INSERT INTO sticker_print_job_items(print_job_id,asset_id,label_order) VALUES(?,?,?)",(job_id,asset_id,order))
-        rendered.append(render_sticker(template,item,settings))
-    return {"jobId":job_id,"count":len(rendered),"template":template,"html":print_document(rendered,template)}
+        rendered.append(render_sticker(template,item,settings,scale=scale))
+    return {"jobId":job_id,"count":len(rendered),"template":template,"html":print_document(rendered,template,paper_layout=paper_layout)}
 
 
 def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: dict):
@@ -415,6 +994,10 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
         return wording
     if method=="GET" and path=="/api/inventory":
         return inventory(db,query)
+    if method=="GET" and path=="/api/inventory/facets":
+        return inventory_facets(db,query)
+    if method=="POST" and path=="/api/inventory/bulk-location":
+        return bulk_update_location(db,body)
     if method=="GET" and path=="/api/register/featured":
         row=db.execute("SELECT r.asset_id FROM asset_register_details r JOIN assets a ON a.id=r.asset_id WHERE "+scope_sql(db)+" ORDER BY r.id DESC LIMIT 1").fetchone()
         if not row:
@@ -520,7 +1103,7 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
     if method=="GET" and path=="/api/sticker/settings":
         return sticker_settings(db)
     if method=="POST" and path=="/api/sticker/settings":
-        allowed={"companyName","orgName","AssetTerminology","footerNote","hotline","lineOA"}
+        allowed={"companyName","orgName","companyAddress","companyAddress2","companyPhone","AssetTerminology","footerNote","hotline","lineOA"}
         for key,value in body.items():
             if key in allowed:
                 db.execute("INSERT INTO sticker_settings(key,value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP",(key,str(value)[:300]))

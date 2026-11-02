@@ -16,7 +16,11 @@ class Connection(sqlite3.Connection):pass
 
 def required():return os.environ.get('ASSET_AUTH_REQUIRED','1')!='0'
 def initialize(path):
-    with sqlite3.connect(path) as db:db.executescript(SCHEMA)
+    with sqlite3.connect(path) as db:
+        db.executescript(SCHEMA)
+        center=db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER' AND is_active=1").fetchone() if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='asset_accounts'").fetchone() else None
+        if center:
+            db.execute('UPDATE app_sessions SET account_id=? WHERE account_id IS NULL',(center[0],))
 def fail(message,status=403):raise GovernanceError(message,status)
 def password_hash(password):
     if not isinstance(password,str) or not 10<=len(password)<=128:fail('รหัสผ่านต้องยาว 10–128 ตัวอักษร',400)
@@ -85,6 +89,9 @@ def session_user(db,handler):
 def new_session(db,handler,user):
     raw=secrets.token_urlsafe(32);csrf=secrets.token_urlsafe(24);grants=memberships(db,user['id']);aid=bid=None
     if user['global_role']=='user' and grants:aid=grants[0]['account_id'];bid=grants[0]['branch_id']
+    elif user['global_role']=='admin':
+        center=db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER' AND is_active=1").fetchone()
+        if center:aid=center['id']
     db.execute('DELETE FROM app_sessions WHERE expires_at<=?',(int(time.time()),))
     permissions={p:False for p in PERMISSIONS}
     for g in grants:
@@ -289,7 +296,7 @@ def authorize(db,ctx,method,path,query,body):
     else:needed='edit'
     if not perms[needed]:fail('ไม่ได้รับสิทธิ์'+{'manage':'จัดการตั้งค่า','approve':'อนุมัติ','create':'เพิ่มข้อมูล','edit':'แก้ไขข้อมูล'}[needed])
     # Mutations in unknown modules fail closed for ordinary users.
-    known=('/api/assets','/api/tickets','/api/supply/','/api/work/','/api/workspace/','/api/governance/','/api/operational-master','/api/imports/','/api/equipment/','/api/catalog/','/api/backups','/api/line/','/api/branding','/api/workflow/settings','/api/survey','/api/features','/api/qr/','/api/lifecycle/')
+    known=('/api/assets','/api/inventory/','/api/tickets','/api/supply/','/api/work/','/api/workspace/','/api/governance/','/api/operational-master','/api/imports/','/api/equipment/','/api/catalog/','/api/backups','/api/line/','/api/branding','/api/workflow/settings','/api/survey','/api/features','/api/qr/','/api/lifecycle/')
     if not path.startswith(known):fail('เส้นทางนี้ยังไม่เปิดให้สิทธิ์ระดับองค์กร')
 
 def filter_result(db,path,value):

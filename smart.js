@@ -334,7 +334,7 @@
             </form>
             <ol class="smart-history">${(life.history||[]).map(e => `<li><b>${esc(e.kind)}</b><span>${esc(e.actor)} · ${esc(app.fmtDate(e.created_at))}${e.note ? ' · ' + esc(e.note) : ''}</span></li>`).join('') || '<li>ยังไม่มีประวัติยืม เบิก คืน</li>'}</ol>
           </section></div>
-          <aside class="smart-qr-card"><span class="eyebrow">SMART ASSET QR</span><img class="smart-qr" src="${data.qrImage}" alt="QR ประจำครุภัณฑ์ ${esc(a.code)}"><h3>ฉลากติดที่ตัวเครื่อง</h3><p>หนึ่งเครื่องหนึ่งฉลาก ติดด้านที่สแกนง่าย ไม่บังป้ายเลขทะเบียน Location QR ติดที่ห้องแยกต่างหาก</p><a class="button primary" href="${esc(data.qrUrl)}" target="_blank" rel="noopener">เปิดหน้าสแกน</a><button type="button" class="button outline" id="copySmartUrl">คัดลอกลิงก์</button><button type="button" class="button outline" id="printSmartLabel">พิมพ์ฉลาก QR</button><small>โทรศัพท์ต้องเข้าถึงโดเมนระบบได้ ตั้งค่าโดเมนถาวรก่อนพิมพ์ใช้งาน</small><span>${credit}</span></aside></div>`;
+          <aside class="smart-qr-card"><span class="eyebrow">SMART ASSET QR</span><img class="smart-qr" src="${data.qrImage}" alt="QR ประจำครุภัณฑ์ ${esc(a.code)}"><h3>ฉลากติดตัวเครื่อง / ป้ายจุด</h3><p>เลือกฉลากแนวนอนขนาด 70 × 36 มม. ติดตัวเครื่อง หรือพิมพ์ขนาดใหญ่ถึง A4 สำหรับอุปกรณ์ที่อยู่สูง (เช่น แอร์บนฝ้า)</p><label style="display:block;width:100%;margin-bottom:6px;font-size:12px;text-align:left">ขนาดพิมพ์ฉลาก QR<select id="smartLabelSize" style="width:100%;margin-top:3px;padding:6px 8px;border-radius:8px;border:1px solid #cbd5e1;font-size:12.5px"><option value="brother36">ฉลากแนวนอน (70 × 36 มม.)</option><option value="standard">ฉลากมาตรฐาน (80×60 มม.)</option><option value="a6">ป้าย A6 (105×148 มม. · ติดผนัง)</option><option value="a5">ป้าย A5 (148×210 มม. · ติดจุดสูง)</option><option value="a4">ป้าย A4 เต็มแผ่น (210×297 มม. · แอร์บนฝ้า/ระยะไกล)</option></select></label><button type="button" class="button primary" id="printSmartLabel">🖨️ พิมพ์ฉลาก QR</button><a class="button outline" href="${esc(data.qrUrl)}" target="_blank" rel="noopener">เปิดหน้าสแกน</a><button type="button" class="button outline" id="copySmartUrl">คัดลอกลิงก์</button><small>โทรศัพท์ต้องเข้าถึงโดเมนระบบได้ ตั้งค่าโดเมนถาวรก่อนพิมพ์ใช้งาน</small><span>${credit}</span></aside></div>`;
       if(a.accountId) {
         dialog.querySelector('#smartAssetForm [name="code"]').readOnly=true;
         const category=dialog.querySelector('#smartAssetForm [name="categoryId"]');
@@ -368,7 +368,10 @@
       };
       $('#smartRegister', dialog).onclick = () => { dialog.close(); app.openRegister(a.id); };
       $('#openFullRegisterPage', dialog).onclick = () => { dialog.close(); app.openRegister(a.id); };
-      $('#printSmartLabel', dialog).onclick = () => printLabel(data);
+      $('#printSmartLabel', dialog).onclick = () => {
+        const sizePreset = $('#smartLabelSize', dialog)?.value || 'brother36';
+        printLabel(data, sizePreset);
+      };
       $('#smartCustodyForm', dialog)?.addEventListener('submit', async event => {
         event.preventDefault();
         const button = event.submitter; if (button) button.disabled = true;
@@ -397,12 +400,31 @@
       if (!dialog.open) dialog.showModal();
     } catch (error) { app.showError(error); }
   }
-  function printLabel(data) {
+  function printLabel(data, sizePreset = 'brother36') {
     const frame = document.createElement('iframe'); frame.className='smart-print-frame'; frame.title='พิมพ์ฉลาก Smart QR'; document.body.append(frame);
-    const a=data.asset;
-    const doc=frame.contentDocument;
-    doc.open(); doc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ฉลาก ${esc(a.code)}</title><style>@page{size:80mm 60mm;margin:3mm}*{box-sizing:border-box}body{font:11px Tahoma,sans-serif;margin:0;color:#123d56}.label{width:72mm;border:1px solid #b7c8d5;border-radius:3mm;padding:3mm;text-align:center}header{display:flex;align-items:center;gap:2mm;justify-content:center}header img{width:9mm;height:9mm;object-fit:contain}.qr{width:28mm;height:28mm;display:block;margin:auto}b{display:block}.team-credit{color:#f97316!important;font-size:8px}p{margin:1mm}</style></head><body><div class="label"><header><img src="${esc(branding?.logo || `${location.origin}/assets/govasset-mark-optimized.png`)}" alt=""><b>${esc(branding?.organization || 'GovAsset')}</b></header><img class="qr" src="${data.qrImage}" alt="QR"><b>${esc(a.code)}</b><p>${esc(a.name)}</p><p>ASSET QR · ติดที่ตัวเครื่อง</p>${credit}</div></body></html>`); doc.close();
-    Promise.all([...doc.images].map(img => img.decode().catch(()=>{}))).then(() => { frame.contentWindow.focus(); frame.contentWindow.print(); });
+    const a = data.asset;
+    const logoUrl = branding?.logo || `${location.origin}/assets/govasset-mark-optimized.png`;
+    const orgName = branding?.organization || branding?.appName || 'Smart Asset';
+    const priceText = a.purchasePrice != null && a.purchasePrice !== '' ? Number(a.purchasePrice).toLocaleString('th-TH', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
+    const dateText = app.fmtDate(a.acquiredOn || a.date || '');
+    const doc = frame.contentDocument;
+    doc.open();
+    if (sizePreset === 'brother36') {
+      doc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ฉลากแนวนอน 70 × 36 มม. ${esc(a.code)}</title><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet"><style>@page{size:70mm 36mm;margin:1.5mm}*{box-sizing:border-box}body{font:8.5px 'Sarabun',Tahoma,sans-serif;margin:0;color:#000}.sticker{width:67mm;height:33mm;border:1.5px solid #000;padding:1.5mm 2mm;position:relative;overflow:hidden}.head{display:flex;align-items:center;gap:1.5mm;border-bottom:1.2px solid #000;padding-bottom:1mm;margin-bottom:1mm}.head img{width:8mm;height:8mm;object-fit:contain}.head-text{font-weight:700;font-size:8.5px;line-height:1.15}.body-wrap{display:flex;justify-content:space-between;gap:1.5mm}.meta{flex:1;min-width:0;line-height:1.28}.code{font-weight:800;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row b{font-weight:700}.qr{width:17mm;height:17mm;object-fit:contain;flex-shrink:0}</style></head><body><div class="sticker"><div class="head"><img src="${esc(logoUrl)}" alt=""><div class="head-text">${esc(orgName)}</div></div><div class="body-wrap"><div class="meta"><div class="code">${esc(a.code)}</div><div class="row"><b>ชื่อ:</b> ${esc(a.name)}</div><div class="row"><b>วันที่รับ:</b> ${esc(dateText)} <b>ราคา:</b> ${esc(priceText)}</div><div class="row"><b>สถานที่ตั้ง:</b> ${esc(a.location || '—')}</div></div><img class="qr" src="${data.qrImage}" alt="QR"></div></div></body></html>`);
+    } else {
+      const SIZES = {
+        standard: {page:'80mm 60mm', margin:'3mm', width:'72mm', qr:'28mm', font:'11px', title:'13px', logo:'9mm'},
+        a6:       {page:'105mm 148mm', margin:'6mm', width:'93mm', qr:'54mm', font:'13px', title:'18px', logo:'14mm'},
+        a5:       {page:'148mm 210mm', margin:'8mm', width:'132mm', qr:'80mm', font:'15px', title:'22px', logo:'18mm'},
+        a4:       {page:'210mm 297mm', margin:'12mm', width:'186mm', qr:'115mm', font:'18px', title:'26px', logo:'24mm'}
+      };
+      const cfg = SIZES[sizePreset] || SIZES.standard;
+      doc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ฉลาก ${esc(a.code)}</title><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet"><style>@page{size:${cfg.page};margin:${cfg.margin}}*{box-sizing:border-box}body{font:${cfg.font} 'Sarabun',Tahoma,sans-serif;margin:0;color:#123d56;display:flex;justify-content:center}.label{width:${cfg.width};border:2px solid #0f172a;border-radius:3mm;padding:4mm;text-align:center}header{display:flex;align-items:center;gap:2.5mm;justify-content:center;border-bottom:1.5px solid #cbd5e1;padding-bottom:2.5mm;margin-bottom:2.5mm}header img{width:${cfg.logo};height:${cfg.logo};object-fit:contain}.qr{width:${cfg.qr};height:${cfg.qr};display:block;margin:2.5mm auto}.code{font-size:${cfg.title};font-weight:800;color:#0f172a;margin:1.5mm 0}b{display:block}.team-credit{color:#f97316!important;font-size:0.75em}p{margin:1mm 0}</style></head><body><div class="label"><header><img src="${esc(logoUrl)}" alt=""><b>${esc(orgName)}</b></header><img class="qr" src="${data.qrImage}" alt="QR"><div class="code">${esc(a.code)}</div><p><b>${esc(a.name)}</b></p><p>สถานที่ตั้ง: ${esc(a.location || '—')}</p><p>ASSET QR · สแกนเพื่อดูข้อมูล/แจ้งซ่อม</p>${credit}</div></body></html>`);
+    }
+    doc.close();
+    Promise.all([...doc.images].map(img => img.decode().catch(() => undefined)))
+      .then(() => doc.fonts.ready)
+      .then(() => { frame.contentWindow.focus(); frame.contentWindow.print(); });
     frame.contentWindow.addEventListener('afterprint', () => frame.remove(), {once:true});
   }
   document.addEventListener('click', event => { const b=event.target.closest('[data-smart-id]'); if(b)openAsset(Number(b.dataset.smartId)); });
@@ -820,7 +842,7 @@
               <div class="phone-scan-header">
                 <div class="phone-brand-mark">▦</div>
                 <div>
-                  <strong>GovAsset Smart QR</strong>
+                  <strong>Smart Asset</strong>
                   <small>ระบบครุภัณฑ์และแจ้งซ่อมดิจิทัล</small>
                 </div>
                 <span class="phone-scan-verified">● เชื่อมโยงเรียลไทม์</span>

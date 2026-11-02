@@ -359,6 +359,9 @@
     }) : [];
     const services = [...guest, ...staff];
     const assets = place.active ? (place.guestAssets || []) : [];
+    const assetList = assets.length
+      ? `<ul>${assets.map(item => `<li><b>${esc(item.name)}</b><code>${esc(item.code)}</code></li>`).join('')}</ul>`
+      : `<p>${place.active ? 'ยังไม่มีครุภัณฑ์ผูกกับจุดนี้' : 'จุดนี้ปิดใช้งานชั่วคราว จึงไม่แสดงรายการครุภัณฑ์'}</p>`;
     main.innerHTML = `<div class="scan-breadcrumb">${esc(place.placement || 'ฉลากติดที่จุดพื้นที่ ไม่ใช่ตัวครุภัณฑ์')} <span>${place.active ? '✓ พร้อมรับบริการ' : 'ปิดรับคำแจ้งใหม่'}</span></div>
       <section class="scan-card">
         <span class="scan-kicker">LOCATION QR</span>
@@ -368,6 +371,10 @@
         ${noticeCard()}
         ${place.active ? '' : `<p class="scan-notice" role="status">QR จุดนี้ถูกปิดใช้งานแล้ว สามารถดูชื่อและติดตามใบรับแจ้งเดิมได้ แต่ยังไม่รับคำแจ้งใหม่</p>`}
         ${serviceMenu(services, 'info')}
+        <section class="scan-location-assets" aria-labelledby="scanLocationAssetsTitle">
+          <div class="scan-location-assets-heading"><h2 id="scanLocationAssetsTitle">ครุภัณฑ์ประจำจุด</h2><span>${assets.length} รายการ</span></div>
+          ${assetList}
+        </section>
       </section>`;
     await bindServices(services, async (id, status, panel) => {
       if (id === 'info') {

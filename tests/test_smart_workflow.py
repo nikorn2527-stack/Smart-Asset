@@ -132,11 +132,37 @@ class SmartWorkflow(HTTPFixture):
 
     def test_sticker_uses_same_stable_url(self):
         aid=self.asset('SMART-003');smart=self.smart(aid)
+        templates=self.call('/api/sticker/templates')
+        active=next(template for template in templates['templates'] if template['id']==templates['activeId'])
+        self.assertEqual(active['name'],'ฉลากครุภัณฑ์ 70 × 36 มม.')
+        self.assertTrue(active['isDefault'])
+        self.assertFalse(any('{{Location}}' in element.get('content','') for element in active['elements']))
+        self.assertTrue(any('{{Category}}' in element.get('content','') for element in active['elements']))
         printed=self.call('/api/sticker/render',{'assetIds':[aid]})
         self.assertIn(smart['qrImage'], printed['html'])
+        self.assertNotIn('ห้อง A', printed['html'])
         self.assertEqual(printed['count'],1)
         svg=base64.b64decode(smart['qrImage'].split(',',1)[1])
         self.assertIn(b'<svg',svg)
+
+    def test_sticker_header_settings_are_editable(self):
+        settings=self.call('/api/sticker/settings')
+        self.assertEqual(settings['companyName'],'MEDICAL EDUCATION CENTER OF SURIN HOSPITAL')
+        self.assertEqual(settings['companyAddress'],'68 ถ.หลักเมือง ต.ในเมือง อ.เมืองสุรินทร์')
+        self.assertEqual(settings['companyAddress2'],'จ.สุรินทร์ 32000')
+        self.assertEqual(settings['companyPhone'],'044-518-937')
+        updated=self.call('/api/sticker/settings',{
+            'orgName':'หน่วยงานทดสอบ',
+            'companyAddress':'ที่อยู่บรรทัดหนึ่ง',
+            'companyAddress2':'ที่อยู่บรรทัดสอง',
+            'companyPhone':'02-000-0000',
+            'hotline':'12345',
+        },method='POST')
+        self.assertEqual(updated['orgName'],'หน่วยงานทดสอบ')
+        self.assertEqual(updated['companyAddress'],'ที่อยู่บรรทัดหนึ่ง')
+        self.assertEqual(updated['companyAddress2'],'ที่อยู่บรรทัดสอง')
+        self.assertEqual(updated['companyPhone'],'02-000-0000')
+        self.assertEqual(updated['hotline'],'12345')
 
     def test_branding_validation_persistence_and_logo(self):
         before=self.call('/api/branding')

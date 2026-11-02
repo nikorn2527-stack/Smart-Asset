@@ -347,7 +347,7 @@ CREATE TABLE IF NOT EXISTS asset_events (
 -- A label identifies the asset independently of its editable registration code.
 CREATE TABLE IF NOT EXISTS app_branding (
   id INTEGER PRIMARY KEY CHECK(id=1),
-  app_name TEXT NOT NULL DEFAULT 'GovAsset',
+  app_name TEXT NOT NULL DEFAULT 'Smart Asset',
   organization TEXT NOT NULL DEFAULT 'หน่วยงานตัวอย่าง',
   logo TEXT NOT NULL DEFAULT '',
   public_base_url TEXT NOT NULL DEFAULT '',

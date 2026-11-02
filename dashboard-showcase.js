@@ -46,7 +46,9 @@
     alarm: '<circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 2M4 5l3-2M20 5l-3-2"/>',
     pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>'
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    tag: '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V4h9l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+    pin: '<path d="M12 21s-6-5.2-6-10a6 6 0 1 1 12 0c0 4.8-6 10-6 10z"/><circle cx="12" cy="11" r="2.3"/>'
   };
   const svg = (name, cls = '') => `<svg class="dsc-ico ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name] || ICONS.box}</svg>`;
   const STATE_LABEL = { ready: 'ว่าง', loaned: 'ถูกยืม', issued: 'เบิกใช้', repair: 'ซ่อม', pending: 'รอตรวจ', other: 'อื่น ๆ' };
@@ -98,12 +100,32 @@
         <button type="button" data-dsc-focus="all" aria-pressed="true">ทั้งหน่วยงาน</button>
         <button type="button" data-dsc-focus="center" aria-pressed="false">ศูนย์แพทย์ <span id="dscCenterCount"></span></button>
       </div>
+      <div class="dsc-scope-pill" id="dscScopePill" hidden></div>
       <nav class="dsc-actions" aria-label="ทางลัดงานประจำวัน">
         <button type="button" class="dsc-action a-scan" data-dsc-action="scan"><span class="dsc-action-ico">${svg('qr')}</span><span><b>สแกน QR</b><small>ทดลอง Smart QR</small></span></button>
         <button type="button" class="dsc-action a-loan" data-dsc-action="loan"><span class="dsc-action-ico">${svg('swap')}</span><span><b>ยืม / เบิก / คืน</b><small>ค้นหาแล้วบันทึก</small></span></button>
         <button type="button" class="dsc-action a-repair" data-dsc-action="repair"><span class="dsc-action-ico">${svg('wrench')}</span><span><b>แจ้งซ่อม</b><small>เปิด Ticket ใหม่</small></span></button>
+        <button type="button" class="dsc-action a-stickers" data-dsc-action="stickers"><span class="dsc-action-ico">${svg('tag')}</span><span><b>พิมพ์สติกเกอร์</b><small>70 × 36 มม. · A4</small></span></button>
+        <button type="button" class="dsc-action a-locqr" data-dsc-action="flags"><span class="dsc-action-ico">${svg('pin')}</span><span><b>จุดสแกน QR</b><small>แอร์บนฝ้า · ห้องเรียน</small></span></button>
         <button type="button" class="dsc-action a-register" data-dsc-action="register"><span class="dsc-action-ico">${svg('book')}</span><span><b>เปิดทะเบียน</b><small>ค้นหา · ออก QR</small></span></button>
       </nav>
+    </div>
+    <div class="dsc-lower">
+      <section class="dsc-panel dsc-ring" aria-labelledby="dscRingTitle">
+        <header class="dsc-head"><div><h3 id="dscRingTitle">สถานะครุภัณฑ์</h3><p id="dscRingSub">—</p></div></header>
+        <div class="dsc-ring-body">
+          <div class="dsc-donut" id="dscDonut"></div>
+          <ul class="dsc-legend" id="dscLegend"></ul>
+        </div>
+      </section>
+      <section class="dsc-panel dsc-photos" aria-labelledby="dscPhotoTitle">
+        <header class="dsc-head"><div><h3 id="dscPhotoTitle">ภาพครุภัณฑ์ล่าสุด</h3><p id="dscPhotoSub">—</p></div></header>
+        <div class="dsc-marquee" id="dscMarquee"></div>
+      </section>
+      <section class="dsc-panel dsc-bubbles" aria-labelledby="dscBubbleTitle">
+        <header class="dsc-head"><div><h3 id="dscBubbleTitle">หมวดครุภัณฑ์</h3><p id="dscBubbleSub">—</p></div></header>
+        <div class="dsc-bubble-field" id="dscBubbles"></div>
+      </section>
     </div>
     <section class="dsc-today" aria-labelledby="dscTodayTitle">
       <header class="dsc-today-head">
@@ -144,23 +166,7 @@
         <div class="dsc-loan-list" id="dscLoanList" role="list"></div>
       </section>
     </div>
-    <div class="dsc-lower">
-      <section class="dsc-panel dsc-ring" aria-labelledby="dscRingTitle">
-        <header class="dsc-head"><div><h3 id="dscRingTitle">สถานะครุภัณฑ์</h3><p id="dscRingSub">—</p></div></header>
-        <div class="dsc-ring-body">
-          <div class="dsc-donut" id="dscDonut"></div>
-          <ul class="dsc-legend" id="dscLegend"></ul>
-        </div>
-      </section>
-      <section class="dsc-panel dsc-photos" aria-labelledby="dscPhotoTitle">
-        <header class="dsc-head"><div><h3 id="dscPhotoTitle">ภาพครุภัณฑ์ล่าสุด</h3><p id="dscPhotoSub">—</p></div></header>
-        <div class="dsc-marquee" id="dscMarquee"></div>
-      </section>
-      <section class="dsc-panel dsc-bubbles" aria-labelledby="dscBubbleTitle">
-        <header class="dsc-head"><div><h3 id="dscBubbleTitle">หมวดครุภัณฑ์</h3><p id="dscBubbleSub">—</p></div></header>
-        <div class="dsc-bubble-field" id="dscBubbles"></div>
-      </section>
-    </div>`;
+    `;
   const anchor = view.querySelector(':scope > .stats-grid');
   if (anchor) anchor.before(root); else view.querySelector(':scope > .page-heading')?.after(root);
   const $ = selector => root.querySelector(selector);
@@ -265,16 +271,25 @@
     const pill = $('#dscOverduePill');
     pill.hidden = !loans.overdue;
     pill.innerHTML = loans.overdue ? `<i aria-hidden="true"></i>เกินกำหนด ${num(loans.overdue)}` : '';
+    const summary = `<div class="dsc-loan-summary" aria-label="สรุปการยืมและเบิก">
+      <div><small>กำลังยืม / เบิก</small><b>${num(loans.total)} <span>รายการ</span></b></div>
+      <div class="${loans.overdue ? 'is-late' : ''}"><small>เกินกำหนดคืน</small><b>${num(loans.overdue)} <span>รายการ</span></b></div>
+    </div>`;
     if (!loans.items.length) {
-      $('#dscLoanList').innerHTML = `<div class="dsc-empty">
-        <span class="dsc-empty-art">${svg('check')}</span>
-        <b>ยังไม่มีครุภัณฑ์ที่ถูกยืมอยู่ในขณะนี้</b>
-        <p>${data.borrowEnabled === false ? 'เปิดบริการยืม-เบิก-คืนที่หน้า QR Smart แล้วบันทึกผ่านรายละเอียดครุภัณฑ์' : 'เมื่อบันทึกยืมหรือเบิกในรายละเอียดครุภัณฑ์ รายการและวันครบกำหนดคืนจะแสดงที่นี่'}</p>
-        <button type="button" class="dsc-link-btn" data-dsc-action="${data.borrowEnabled === false ? 'flags' : 'loan'}">${data.borrowEnabled === false ? 'ไปที่ QR Smart →' : 'บันทึกการยืม →'}</button>
+      const disabled = data.borrowEnabled === false;
+      $('#dscLoanList').innerHTML = `${summary}<div class="dsc-empty">
+        <div class="dsc-empty-copy"><span class="dsc-empty-art">${svg('check')}</span><div>
+          <b>ยังไม่มีรายการยืมหรือเบิกค้าง</b>
+          <p>${disabled ? 'เปิดใช้บริการยืม / เบิก / คืนก่อน จากนั้นรายการและกำหนดคืนจะแสดงในหน้านี้' : 'เริ่มบันทึกการยืม หรือสแกน QR เพื่อเปิดรายละเอียดครุภัณฑ์'}</p>
+        </div></div>
+        <div class="dsc-loan-empty-actions">
+          <button type="button" class="dsc-loan-action is-primary" data-dsc-action="${disabled ? 'flags' : 'loan'}">${svg(disabled ? 'pencil' : 'swap')}<span>${disabled ? 'ตั้งค่าบริการยืม / เบิก' : 'บันทึกยืม / เบิก'}</span></button>
+          <button type="button" class="dsc-loan-action" data-dsc-action="scan">${svg('qr')}<span>สแกน QR ครุภัณฑ์</span></button>
+        </div>
       </div>`;
       return;
     }
-    $('#dscLoanList').innerHTML = loans.items.map((item, i) => {
+    $('#dscLoanList').innerHTML = summary + loans.items.map((item, i) => {
       const due = dueInfo(item);
       const key = remember(`loan:${item.id}`, { ...item, mode: 'loan', dueText: due.text });
       return `<button type="button" class="dsc-loan d-${due.cls}" role="listitem" data-smart-id="${item.id}" data-dsc-tab="custody" data-dsc-key="${key}" style="--i:${i}"
@@ -351,9 +366,12 @@
   function renderBubbles() {
     const center = data.center || {};
     const list = center.categories || [];
-    const isCenter = center.categoriesScope === 'center';
+    const total = data.statusCounts?.total || center.total || 0;
+    const isCenter = center.categoriesScope === 'center' || center.isScoped;
     $('#dscBubbleTitle').textContent = isCenter ? `หมวดครุภัณฑ์ · ${center.shortName || 'ศูนย์แพทย์'}` : 'หมวดครุภัณฑ์ · ทั้งหน่วยงาน';
-    $('#dscBubbleSub').textContent = isCenter ? `${num(center.total)} รายการที่ระบุเป็นของ${center.shortName || 'ศูนย์แพทย์'}` : 'ยังไม่พบรายการที่ระบุหน่วยงานเป็นศูนย์แพทย์';
+    $('#dscBubbleSub').textContent = total
+      ? `${num(total)} รายการในขอบเขตของ${center.shortName || 'หน่วยงาน'} · เลือกหมวดเพื่อดูรายการ`
+      : 'ยังไม่มีรายการครุภัณฑ์ในขอบเขตนี้';
     if (!list.length) {
       $('#dscBubbles').innerHTML = '<p class="dsc-soft">ยังไม่มีข้อมูลหมวดครุภัณฑ์</p>';
       return;
@@ -363,8 +381,9 @@
     const short = n => n >= 10000 ? `${(n / 1000).toFixed(0)}K` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
     $('#dscBubbles').innerHTML = list.map((c, i) => {
       const d = Math.round(40 + 44 * Math.sqrt(c.count / max));
-      return `<div class="dsc-bubble" style="--d:${d}px;--c:${palette[i % palette.length]};--i:${i}" title="${esc(`${c.name}: ${num(c.count)} รายการ`)}">
-        <span class="dsc-bubble-dot"><b>${esc(short(c.count))}</b></span><small>${esc(c.name)}</small></div>`;
+      const categoryId = c.id == null ? '' : String(c.id);
+      return `<button type="button" class="dsc-bubble" data-dsc-category="${esc(categoryId)}" data-dsc-category-name="${esc(c.name)}" style="--d:${d}px;--c:${palette[i % palette.length]};--i:${i}" title="${esc(`ดู${c.name} ${num(c.count)} รายการ`)}" aria-label="ดูครุภัณฑ์หมวด ${esc(c.name)} จำนวน ${num(c.count)} รายการ">
+        <span class="dsc-bubble-dot"><b>${esc(short(c.count))}</b></span><small>${esc(c.name)}</small></button>`;
     }).join('');
   }
 
@@ -518,10 +537,25 @@
   function renderFocus() {
     const center = data?.center;
     const group = $('.dsc-focus');
-    if (center?.name) $('#dscCenterName').textContent = center.name;
-    group.hidden = !center?.total;
-    $('#dscCenterCount').textContent = center?.total ? num(center.total) : '';
-    group.querySelectorAll('[data-dsc-focus]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.dscFocus === focus)));
+    const pill = $('#dscScopePill');
+    if (center?.name) {
+      $('#dscCenterName').textContent = center.name;
+      document.querySelectorAll('.dsc-heading-org').forEach(el => { el.textContent = center.name; });
+    }
+    if (center?.isScoped) {
+      group.hidden = true;
+      if (pill) {
+        const total = data?.statusCounts?.total || center?.total || 0;
+        const locCount = center?.locationQrCount || 0;
+        pill.hidden = false;
+        pill.innerHTML = `<span>ขอบเขต <b>${esc(center.shortName || 'หน่วยงาน')}</b> · <b>${num(total)}</b> รายการ${locCount ? ` · จุด QR <b>${num(locCount)}</b> จุด` : ''}</span>`;
+      }
+    } else {
+      if (pill) pill.hidden = true;
+      group.hidden = !center?.total;
+      $('#dscCenterCount').textContent = center?.total ? num(center.total) : '';
+      group.querySelectorAll('[data-dsc-focus]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.dscFocus === focus)));
+    }
   }
 
   function animateCounts() {
@@ -903,6 +937,7 @@
     'pin-add': () => openFinder('pin'),
     repair: () => app.openRepairDialog?.(),
     register: () => app.switchView?.('assets'),
+    stickers: () => app.switchView?.('stickers'),
     flags: () => app.switchView?.('qr-smart'),
     'go-approvals': () => app.switchView?.('approvals'),
     'go-repairs': () => app.switchView?.('repairs'),
@@ -918,6 +953,11 @@
   document.addEventListener('click', event => {
     const pinButton = event.target.closest('[data-dsc-pin]');
     if (pinButton) { openPin(Number(pinButton.dataset.dscPin)); return; }
+    const categoryButton = event.target.closest('[data-dsc-category]');
+    if (categoryButton && root.contains(categoryButton)) {
+      app.openCategory?.(categoryButton.dataset.dscCategory, categoryButton.dataset.dscCategoryName);
+      return;
+    }
     const tabTarget = event.target.closest('[data-dsc-tab]');
     if (tabTarget) openAssetTab(tabTarget.dataset.dscTab);
     if (!root.contains(event.target)) return;
@@ -965,6 +1005,142 @@
     if (data) { renderToday(); renderFeatured(); }
     if (isActive()) load(); else stale = true;
   });
+  document.getElementById('accessScope')?.addEventListener('change', () => {
+    stale = true;
+    setTimeout(() => load(), 80);
+  });
   reduce.addEventListener?.('change', () => data && renderAll());
   if (isActive()) load();
+})();
+
+/* Universal View Stage Banner, Staggered Entrance & KPI Counter Roll-up across all pages */
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  const kpiMemory = new Map();
+  const KPI_SELECTORS = [
+    '#totalCount', '#openRepairCount', '#activeCategoryCount',
+    '#kpiTotalAssets', '#kpiReadyAssets', '#kpiPendingAssets', '#kpiRepairAssets',
+    '#repairTotal', '#repairWaiting', '#repairPendingApproval', '#repairActive',
+    '#workStatTotal', '#workStatOverdue', '#workStatDueSoon', '#workStatDone',
+    '.work-stat-card .stat-number', '.asset-kpi-card strong', '.stat-card strong'
+  ].join(', ');
+
+  function currentOrgLabel() {
+    const sel = document.getElementById('accessScope');
+    const opt = sel?.selectedOptions?.[0];
+    if (opt && opt.textContent) {
+      return opt.textContent.replace(/^มุมมอง:\s*/, '').trim();
+    }
+    return document.getElementById('dscCenterName')?.textContent || 'ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์';
+  }
+
+  function enhancePageHeadings() {
+    document.querySelectorAll('.view > .page-heading').forEach(heading => {
+      if (heading.dataset.dscEnhanced === '1') return;
+      heading.dataset.dscEnhanced = '1';
+      heading.classList.add('dsc-view-stage');
+      const titleCol = heading.querySelector(':scope > div:first-child');
+      if (titleCol && !titleCol.querySelector('.dsc-heading-eyebrow')) {
+        const eyebrow = document.createElement('span');
+        eyebrow.className = 'dsc-heading-eyebrow';
+        eyebrow.innerHTML = `<i class="dsc-live" aria-hidden="true"></i><span class="dsc-heading-org"></span>`;
+        eyebrow.querySelector('.dsc-heading-org').textContent = currentOrgLabel();
+        titleCol.prepend(eyebrow);
+      }
+    });
+  }
+
+  function syncOrgEyebrows() {
+    const label = currentOrgLabel();
+    document.querySelectorAll('.dsc-heading-org').forEach(el => {
+      el.textContent = label;
+    });
+  }
+
+  function staggerViewElements(viewEl) {
+    if (!viewEl) return;
+    const blocks = viewEl.querySelectorAll(
+      ':scope > .page-heading, :scope > .asset-kpi-strip > .asset-kpi-card, :scope > .stats-grid > .stat-card, ' +
+      '.work-stats-row > .work-stat-card, .settings-hub > .settings-link, :scope > .panel, :scope > .split-grid > *, ' +
+      ':scope > .supply-workspace > *, .work-Dual-Grid > .work-section, .sticker-studio-grid > *, ' +
+      '.qr-smart-grid > *, .qr-smart-locations > .qr-smart-location, #view-dashboard .stats-grid > .stat-card, ' +
+      '#view-dashboard .content-grid > .panel'
+    );
+    blocks.forEach((el, idx) => {
+      el.style.setProperty('--i', String(Math.min(idx, 12)));
+      el.classList.remove('dsc-enter');
+      if (!reduce.matches) {
+        void el.offsetWidth;
+        el.classList.add('dsc-enter');
+      }
+    });
+    const rows = viewEl.querySelectorAll('tbody tr, .supply-card, .ticket-item, .approval-card');
+    rows.forEach((row, idx) => {
+      if (idx < 20) {
+        row.style.setProperty('--row-i', String(idx));
+      }
+    });
+  }
+
+  function animateViewKpis(rootEl = document) {
+    if (reduce.matches) return;
+    rootEl.querySelectorAll(KPI_SELECTORS).forEach((el, idx) => {
+      const raw = (el.textContent || '').trim();
+      if (!raw || !/^[\d,]+$/.test(raw)) return;
+      const to = Number(raw.replace(/,/g, ''));
+      if (!Number.isFinite(to)) return;
+      const key = el.id || `kpi-${idx}-${el.closest('.view')?.id || 'v'}`;
+      const prev = kpiMemory.get(key);
+      kpiMemory.set(key, to);
+      const from = prev !== undefined && prev !== to ? prev : 0;
+      if (to === 0 && from === 0) return;
+      const t0 = performance.now();
+      const dur = 680;
+      const step = now => {
+        const p = Math.min(1, (now - t0) / dur);
+        const val = Math.round(from + (to - from) * (1 - Math.pow(1 - p, 3)));
+        el.textContent = val.toLocaleString('th-TH');
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  enhancePageHeadings();
+
+  document.addEventListener('govasset:view-changed', event => {
+    enhancePageHeadings();
+    syncOrgEyebrows();
+    const activeView = document.querySelector('.view.active') || (event.detail?.name ? document.getElementById(`view-${event.detail.name}`) : null);
+    if (activeView) {
+      staggerViewElements(activeView);
+      setTimeout(() => animateViewKpis(activeView), 60);
+    }
+  });
+
+  document.addEventListener('govasset:data-changed', () => {
+    syncOrgEyebrows();
+    const activeView = document.querySelector('.view.active');
+    if (activeView) {
+      setTimeout(() => {
+        const rows = activeView.querySelectorAll('tbody tr, .supply-card, .ticket-item, .approval-card, .qr-smart-location');
+        rows.forEach((row, idx) => {
+          if (idx < 20) row.style.setProperty('--row-i', String(idx));
+        });
+        animateViewKpis(activeView);
+      }, 90);
+    }
+  });
+
+  document.getElementById('accessScope')?.addEventListener('change', () => {
+    setTimeout(syncOrgEyebrows, 40);
+  });
+
+  requestAnimationFrame(() => {
+    const activeView = document.querySelector('.view.active');
+    if (activeView) {
+      staggerViewElements(activeView);
+      setTimeout(() => animateViewKpis(activeView), 160);
+    }
+  });
 })();

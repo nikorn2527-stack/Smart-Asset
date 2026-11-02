@@ -60,7 +60,7 @@ def _now() -> str:
     return datetime.now(TZ).isoformat(timespec="seconds")
 
 
-def _decode(data_url: object, label: str, limit: int) -> tuple[str, bytes]:
+def decode_image(data_url: object, label: str, limit: int) -> tuple[str, bytes]:
     if not isinstance(data_url, str):
         raise PhotoError(f"ไม่พบ{label}")
     match = re.fullmatch(r"data:(image/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)", data_url.strip())
@@ -128,8 +128,8 @@ def handle(db: sqlite3.Connection, method: str, path: str, body: dict):
         count = db.execute("SELECT COUNT(*) FROM asset_photos WHERE asset_id=? AND removed_at IS NULL", (asset_id,)).fetchone()[0]
         if count >= MAX_PHOTOS_PER_ASSET:
             raise PhotoError(f"เก็บรูปได้สูงสุด {MAX_PHOTOS_PER_ASSET} รูปต่อครุภัณฑ์ ลบรูปเดิมก่อนเพิ่มใหม่")
-        mime, image = _decode(body.get("image"), "รูป", MAX_FULL_BYTES)
-        _, thumb = _decode(body.get("thumb") or body.get("image"), "รูปย่อ", MAX_THUMB_BYTES if body.get("thumb") else MAX_FULL_BYTES)
+        mime, image = decode_image(body.get("image"), "รูป", MAX_FULL_BYTES)
+        _, thumb = decode_image(body.get("thumb") or body.get("image"), "รูปย่อ", MAX_THUMB_BYTES if body.get("thumb") else MAX_FULL_BYTES)
         try:
             width, height = max(0, int(body.get("width") or 0)), max(0, int(body.get("height") or 0))
         except (TypeError, ValueError):

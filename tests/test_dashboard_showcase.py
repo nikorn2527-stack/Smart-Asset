@@ -69,6 +69,11 @@ class DashboardShowcase(HTTPFixture):
         self.assertGreaterEqual(data['center']['total'], 1)
         self.assertEqual(data['center']['categoriesScope'], 'center')
         self.assertTrue(data['center']['categories'])
+        self.assertIn('id', data['center']['categories'][0])
+        category_id = data['center']['categories'][0]['id']
+        filtered = self.call('/api/inventory?category=' + str(category_id))
+        self.assertIn(center, {item['id'] for item in filtered['items']})
+        self.assertTrue(all(item['categoryId'] == category_id for item in filtered['items']))
         ids = {item['id'] for item in data['topBorrowed']}
         self.assertIn(center, ids)
         self.assertNotIn(other, ids)

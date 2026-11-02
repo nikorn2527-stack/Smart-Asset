@@ -82,10 +82,34 @@
   });
   window.govAssetAccountRegistration={scoped,payload,render,openWith:preset=>app.openAssetDialog({preset})};
   // Scoped filters are additive; legacy rows remain visible via the explicit option.
-  const filterRow=$('#view-assets .filter-row'),filters=document.createElement('div');filters.className='account-inventory-filters';filters.innerHTML='<label>บัญชีหน่วยงาน<select id="inventoryAccount" aria-label="กรองบัญชีหน่วยงาน"><option value="">ทุกบัญชี</option><option value="legacy">ยังไม่แยกหน่วยงาน</option></select></label><label>สาขา<select id="inventoryBranch" aria-label="กรองสาขา"><option value="">ทุกสาขา</option></select></label>';filterRow.before(filters);
-  async function filterOptions(){try{const s=await app.api('/api/governance');const value=$('#inventoryAccount').value;$('#inventoryAccount').innerHTML='<option value="">ทุกบัญชี</option><option value="legacy">ยังไม่แยกหน่วยงาน</option>'+s.accounts.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');$('#inventoryAccount').value=value;$('#inventoryAccount').onchange=()=>{$('#inventoryBranch').innerHTML='<option value="">ทุกสาขา</option>'+s.branches.filter(b=>b.account_id===Number($('#inventoryAccount').value)).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');$('#assetSearch').dispatchEvent(new Event('input'));};}catch(e){app.showError(e);}}
-  $('#inventoryBranch').onchange=()=>$('#assetSearch').dispatchEvent(new Event('input'));
-  window.govAssetAccountFilters=()=>({accountId:$('#inventoryAccount').value,branchId:$('#inventoryBranch').value});
+  const locRow=$('#view-assets .filter-location-row'),filterRow=$('#view-assets .filter-row')||$('#view-assets .filter-toolbar');
+  if(locRow){
+    const acctWrap=document.createElement('span');
+    acctWrap.className='account-inventory-inline';
+    acctWrap.innerHTML='<select id="inventoryAccount" aria-label="กรองบัญชีหน่วยงาน" title="กรองบัญชีหน่วยงาน"><option value="">ทุกบัญชีหน่วยงาน</option><option value="legacy">ยังไม่แยกหน่วยงาน</option></select><select id="inventoryBranch" aria-label="กรองสาขา" title="กรองสาขา"><option value="">ทุกสาขา</option></select>';
+    const fiscalFilter=$('#fiscalYearFilter',locRow);
+    if(fiscalFilter)fiscalFilter.after(acctWrap);else locRow.prepend(acctWrap);
+  }else if(filterRow){
+    const filters=document.createElement('div');filters.className='account-inventory-filters';filters.innerHTML='<label>บัญชีหน่วยงาน<select id="inventoryAccount" aria-label="กรองบัญชีหน่วยงาน"><option value="">ทุกบัญชี</option><option value="legacy">ยังไม่แยกหน่วยงาน</option></select></label><label>สาขา<select id="inventoryBranch" aria-label="กรองสาขา"><option value="">ทุกสาขา</option></select></label>';filterRow.before(filters);
+  }
+  async function filterOptions(){try{
+    const s=await app.api('/api/governance'),sessionAid=window.govAssetAccess?.session?.accountId;
+    const account=$('#inventoryAccount'),branch=$('#inventoryBranch'),value=account?.value||(sessionAid?String(sessionAid):'');
+    if(account){
+      account.innerHTML='<option value="">ทุกบัญชี</option><option value="legacy">ยังไม่แยกหน่วยงาน</option>'+s.accounts.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+      if(value&&[...account.options].some(option=>option.value===value))account.value=value;
+      branch.innerHTML='<option value="">ทุกสาขา</option>'+s.branches.filter(item=>item.account_id===Number(account.value)).map(item=>`<option value="${item.id}">${esc(item.name)}</option>`).join('');
+      account.onchange=()=>{
+        branch.innerHTML='<option value="">ทุกสาขา</option>'+s.branches.filter(item=>item.account_id===Number(account.value)).map(item=>`<option value="${item.id}">${esc(item.name)}</option>`).join('');
+        branch.value='';
+        app.setSmartFilterAccountChoices?.({accounts:[{id:'legacy',name:'ยังไม่แยกหน่วยงาน'},...s.accounts.map(item=>({id:String(item.id),name:item.name}))],branches:s.branches.map(item=>({id:String(item.id),name:item.name,account_id:String(item.account_id)}))},account.value,'');
+        app.loadInventory?.(0);app.loadLocationFacets?.();
+      };
+    }
+    if(branch)branch.onchange=()=>{app.setSmartFilterAccountChoices?.({accounts:[{id:'legacy',name:'ยังไม่แยกหน่วยงาน'},...s.accounts.map(item=>({id:String(item.id),name:item.name}))],branches:s.branches.map(item=>({id:String(item.id),name:item.name,account_id:String(item.account_id)}))},account?.value||'',branch.value);app.loadInventory?.(0);app.loadLocationFacets?.();};
+    app.setSmartFilterAccountChoices?.({accounts:[{id:'legacy',name:'ยังไม่แยกหน่วยงาน'},...s.accounts.map(item=>({id:String(item.id),name:item.name}))],branches:s.branches.map(item=>({id:String(item.id),name:item.name,account_id:String(item.account_id)}))},account?.value||'',branch?.value||'');
+  }catch(error){app.showError(error);}}
+  window.govAssetAccountFilters=()=>{const filters={},account=$('#inventoryAccount')?.value,branch=$('#inventoryBranch')?.value;if(account)filters.accountId=account;if(branch)filters.branchId=branch;return filters;};
   document.addEventListener('govasset:view-changed',e=>{if(e.detail.name==='assets')filterOptions();});
   load();filterOptions();
   window.govAssetAccountContextMarkup=data=>{

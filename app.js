@@ -81,21 +81,33 @@ let assets=[], approvalAssets=[], sheet=[], repairs=[], appConfig={approvalThres
 let inventoryRows=null, inventoryTotal=0, inventoryOffset=0, inventoryLimit=50;
 let fsnRows=null, fsnTotal=0, fsnOffset=0, fsnLimit=50, liveCategories=null, liveDepreciationRows=null;
 let inventorySearchTimer=null, fsnSearchTimer=null, inventoryRequest=0;
+const smartFilterMultiKeys=['fiscalYear','category','status','building','floor','room'];
+const smartFilterGroupLabels={fiscalYear:'ปีงบประมาณ',category:'หมวดครุภัณฑ์',status:'สถานะ',account:'หน่วยงาน',branch:'สาขา',building:'อาคาร',floor:'ชั้น',room:'ห้อง / งานย่อย'};
+let smartFilterCommitted={fiscalYear:[],category:[],status:[],building:[],floor:[],room:[],account:'',branch:''};
+let smartFilterDraft=cloneSmartFilter(smartFilterCommitted);
+let smartFilterCatalog={},smartFilterActiveGroup='fiscalYear',smartFilterFacets={};
 let currentRole=window.govAssetAccess?.session?.actor||localStorage.getItem('govAssetPrototype.role') || ROLE_OFFICER;
 let activeTicketId=null;
 const assetApprovalsInFlight=new Set();
 let fontScale=Number(localStorage.getItem('govAssetPrototype.fontScale')) || 1;
 
 async function api(path, options={}) {
-  const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
-  const payload=await response.json().catch(()=>({error:'ไม่สามารถอ่านผลจาก server ได้'}));
-  if(!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-  if(options.method&&options.method!=='GET')document.dispatchEvent(new CustomEvent('govasset:data-changed',{detail:{path}}));
-  return payload;
+  const loading = document.getElementById('app-loading');
+  if(loading) loading.classList.add('show');
+  try {
+    const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
+    const payload=await response.json().catch(()=>({error:'ไม่สามารถอ่านผลจาก server ได้'}));
+    if(!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    if(options.method&&options.method!=='GET')document.dispatchEvent(new CustomEvent('govasset:data-changed',{detail:{path}}));
+    return payload;
+  } finally {
+    if(loading) loading.classList.remove('show');
+  }
 }
-function toast(message) { const el=$('#toast'); if(!el) return; el.innerHTML=`<span class="toast-icon">✓</span> <span>${esc(message)}</span>`; if(typeof el.showPopover==='function'){el.popover='manual';if(el.matches(':popover-open'))el.hidePopover();el.showPopover();} el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'),3800); }
-function showError(error) { const message=error?.message || 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้'; toast(message); const badge=$('#dbIndicator'); if(badge){badge.textContent='เชื่อมต่อระบบไม่ได้';badge.classList.add('offline');} }
+function toast(message, type = 'info') { const el=$('#toast'); if(!el) return; el.setAttribute('data-type', type); const icon = type === 'error' ? '✕' : type === 'warning' ? '⚠' : '✓'; el.innerHTML=`<span class="toast-icon">${icon}</span> <span>${esc(message)}</span> <button class="toast-close" onclick="this.closest('#toast').classList.remove('show');clearTimeout(toast.timer)">×</button>`; if(typeof el.showPopover==='function'){el.popover='manual';if(el.matches(':popover-open'))el.hidePopover();el.showPopover();} el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'), type === 'error' ? 8000 : type === 'warning' ? 6000 : 5000); }
+function showError(error) { const message=error?.message || 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้'; toast(message, 'error'); const badge=$('#dbIndicator'); if(badge){badge.textContent='เชื่อมต่อระบบไม่ได้';badge.classList.add('offline');} }
 function setConnected() { const badge=$('#dbIndicator'); if(badge){badge.innerHTML='<i></i> ระบบพร้อมใช้งาน';badge.classList.remove('offline');} }
+function confirmDialog(message, title = 'ยืนยันการดำเนินการ') { return new Promise((resolve) => { document.getElementById('confirm-title').textContent = title; document.getElementById('confirm-message').textContent = message; const dlg = document.getElementById('confirm-dialog'); window.confirmDialogResult = (value) => { dlg.close(); delete window.confirmDialogResult; resolve(value); }; window.closeConfirmDialog = (value) => { dlg.close(); delete window.confirmDialogResult; resolve(value === true); }; dlg.showModal(); }); }
 function populateAssetCategoryOptions(rows) {
   const categories=(Array.isArray(rows)?rows:[]).filter(item=>item&&item.isActive!==false&&Number.isInteger(Number(item.id))&&Number(item.id)>0);
   const select=$('#assetCategoryId');
@@ -111,12 +123,134 @@ function populateAssetCategoryOptions(rows) {
     catFilter.innerHTML=`<option value="">ทุกหมวดหมู่ (${categories.length} หมวด)</option>`+categories.map(item=>`<option value="${Number(item.id)}">${esc(item.name)}</option>`).join('');
     if(categories.some(item=>String(item.id)===currentCat))catFilter.value=currentCat;
   }
+  renderSmartFilterCatalog(smartFilterFacets);
+}
+function inventoryQueryParams(offset=0) {
+  const params=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),limit:String(inventoryLimit),offset:String(Math.max(0,offset))});
+  const category=$('#categoryFilter')?.value;
+  if(category)params.append('category',category);
+  smartFilterMultiKeys.forEach(key=>smartFilterCommitted[key].forEach(value=>params.append(key,value)));
+  return params;
+}
+function cloneSmartFilter(source) {
+  return Object.fromEntries([...smartFilterMultiKeys.map(key=>[key,[...(source[key]||[])]]),['account',source.account||''],['branch',source.branch||'']]);
+}
+function optionList(select,counts=new Map()) {
+  if(!select)return [];
+  return [...select.options].slice(1).map(option=>({value:option.value,label:option.textContent.replace(/\s*\(\d[\d,]*\)\s*$/,'').trim(),count:counts.get(option.value)}));
+}
+function smartFilterSelectionCount(source=smartFilterCommitted) {
+  return smartFilterMultiKeys.reduce((total,key)=>total+(source[key]?.length||0),0)+(source.account?1:0)+(source.branch?1:0);
+}
+function renderSmartFilterCatalog(facets={}) {
+  smartFilterFacets=facets||smartFilterFacets||{};
+  const mergeSelected=(items,selected)=>{const known=new Set(items.map(item=>item.value));return [...items,...selected.filter(value=>value&&!known.has(value)).map(value=>({value,label:value==='__unassigned__'?'ไม่ระบุ':value,count:0}))];};
+  smartFilterCatalog={
+    fiscalYear:(smartFilterFacets.fiscalYears||[]).map(item=>({value:item.value,label:item.value==='__unassigned__'?'ไม่ระบุปี':item.value,count:item.count})),
+    category:(smartFilterFacets.categories||[]).map(item=>({value:String(item.value),label:item.label,count:item.count})),
+    status:(smartFilterFacets.statuses||[]).map(item=>({value:item.value,label:optionList($('#statusFilter')).find(option=>option.value===item.value)?.label||item.value,count:item.count})),
+    building:(smartFilterFacets.buildings||[]).map(item=>({value:item.name,label:item.name==='__unassigned__'?'ยังไม่ระบุอาคาร':item.name,count:item.count})),
+    floor:(smartFilterFacets.floors||[]).map(item=>({value:item.name,label:item.name==='__unassigned__'?'ยังไม่ระบุชั้น':item.name,count:item.count})),
+    room:(smartFilterFacets.rooms||[]).map(item=>({value:item.name,label:item.name==='__unassigned__'?'ยังไม่ระบุห้อง / งานย่อย':item.name,count:item.count})),
+    account:(window.govAssetAccountFilterChoices?.accounts||[]).map(item=>({value:String(item.id),label:item.name})),
+    branch:(window.govAssetAccountFilterChoices?.branches||[]).map(item=>({value:String(item.id),label:item.name,accountId:String(item.account_id)}))
+  };
+  smartFilterMultiKeys.forEach(key=>smartFilterCatalog[key]=mergeSelected(smartFilterCatalog[key]||[],smartFilterCommitted[key]));
+  if($('#inventoryAccount')?.value==='legacy'&&!smartFilterCatalog.account.some(item=>item.value==='legacy'))smartFilterCatalog.account.unshift({value:'legacy',label:'ยังไม่แยกหน่วยงาน'});
+  renderSmartFilterMenu();
+}
+function renderSmartFilterMenu() {
+  const tabs=$('#smartFilterTabs'),list=$('#smartFilterOptions'),trigger=$('#smartFilterButton');
+  if(!tabs||!list)return;
+  const keys=['fiscalYear','category','status','account','branch','building','floor','room'];
+  if(!keys.includes(smartFilterActiveGroup))smartFilterActiveGroup='fiscalYear';
+  tabs.innerHTML=keys.map(key=>{
+    const count=smartFilterMultiKeys.includes(key)?smartFilterDraft[key].length:Number(Boolean(smartFilterDraft[key]));
+    return `<button type="button" role="tab" aria-selected="${smartFilterActiveGroup===key}" data-filter-group="${key}">${esc(smartFilterGroupLabels[key])}${count?`<span>${count}</span>`:''}</button>`;
+  }).join('');
+  const query=($('#smartFilterSearch')?.value||'').trim().toLocaleLowerCase('th-TH');
+  let options=smartFilterCatalog[smartFilterActiveGroup]||[];
+  if(smartFilterActiveGroup==='branch')options=options.filter(option=>!smartFilterDraft.account||option.accountId===smartFilterDraft.account);
+  options=options.filter(option=>!query||option.label.toLocaleLowerCase('th-TH').includes(query));
+  const multi=smartFilterMultiKeys.includes(smartFilterActiveGroup),selected=smartFilterDraft[smartFilterActiveGroup];
+  list.innerHTML=options.length?options.map(option=>{
+    const checked=multi?selected.includes(option.value):selected===option.value;
+    return `<label class="smart-filter-option"><input type="${multi?'checkbox':'radio'}" name="smart-filter-${smartFilterActiveGroup}" value="${esc(option.value)}"${checked?' checked':''}><span>${esc(option.label)}</span>${option.count!=null?`<small>${Number(option.count).toLocaleString('th-TH')}</small>`:''}</label>`;
+  }).join(''):'<p class="smart-filter-empty">ไม่พบตัวเลือกที่ตรงกับคำค้น</p>';
+  const count=$('#smartFilterGroupCount'),selectVisible=$('#selectVisibleFilters'),clearCurrent=$('#clearCurrentFilter');
+  if(count)count.textContent=multi?`${options.length} ตัวเลือก · เลือกได้หลายค่า`:`${options.length} ตัวเลือก`;
+  if(selectVisible)selectVisible.hidden=!multi||!options.length;
+  if(clearCurrent)clearCurrent.textContent=multi?'ล้างหมวดนี้':'ไม่เลือก';
+  if(trigger){
+    const selectedCount=smartFilterSelectionCount();
+    trigger.setAttribute('aria-label',selectedCount?`ตัวกรองที่ใช้ ${selectedCount} รายการ`:'เปิดตัวกรองทะเบียน');
+    $('#smartFilterCount').textContent=String(selectedCount);
+    trigger.classList.toggle('has-filters',selectedCount>0);
+  }
+  renderSmartFilterChips();
+  requestAnimationFrame(positionSmartFilterMenu);
+}
+function renderSmartFilterChips() {
+  const root=$('#smartFilterChips');
+  if(!root)return;
+  const chips=[];
+  smartFilterMultiKeys.forEach(key=>smartFilterCommitted[key].forEach(value=>{
+    const option=smartFilterCatalog[key]?.find(item=>item.value===value);
+    chips.push({key,value,label:`${smartFilterGroupLabels[key]}: ${option?.label||value}`});
+  }));
+  for(const key of ['account','branch']){
+    const value=smartFilterCommitted[key];
+    if(value){const option=(smartFilterCatalog[key]||[]).find(item=>item.value===value);chips.push({key,value,label:`${smartFilterGroupLabels[key]}: ${option?.label||value}`});}
+  }
+  root.innerHTML=chips.map(chip=>`<button type="button" class="smart-filter-chip" data-remove-filter="${chip.key}" data-filter-value="${esc(chip.value)}" aria-label="นำตัวกรอง ${esc(chip.label)} ออก">${esc(chip.label)} <span aria-hidden="true">×</span></button>`).join('');
+  root.hidden=chips.length===0;
+}
+function applySmartFilterDraft() {
+  const requested=cloneSmartFilter(smartFilterDraft);
+  smartFilterCommitted=cloneSmartFilter(requested);
+  const account=$('#inventoryAccount'),branch=$('#inventoryBranch');
+  if(account&&account.value!==smartFilterCommitted.account){
+    account.value=smartFilterCommitted.account;
+    account.dispatchEvent(new Event('change'));
+  }
+  if(branch){
+    branch.value=requested.branch;
+    if(branch.value!==requested.branch)smartFilterCommitted.branch='';
+    else smartFilterCommitted.branch=requested.branch;
+    branch.dispatchEvent(new Event('change'));
+  }
+  smartFilterDraft=cloneSmartFilter(smartFilterCommitted);
+  renderSmartFilterMenu();
+  $('#smartFilterMenu')?.hidePopover();
+  loadInventory(0);
+}
+function clearSmartFilterGroup(group) {
+  if(smartFilterMultiKeys.includes(group))smartFilterDraft[group]=[];
+  else if(group==='account'){smartFilterDraft.account='';smartFilterDraft.branch='';}
+  else if(group==='branch')smartFilterDraft.branch='';
+  renderSmartFilterMenu();
+}
+function syncSmartFilterAccountChoices(choices,selectedAccount,selectedBranch) {
+  window.govAssetAccountFilterChoices=choices||{accounts:[],branches:[]};
+  smartFilterCommitted.account=selectedAccount||'';
+  smartFilterCommitted.branch=selectedBranch||'';
+  smartFilterDraft.account=smartFilterCommitted.account;
+  smartFilterDraft.branch=smartFilterCommitted.branch;
+  renderSmartFilterCatalog(smartFilterFacets);
+}
+function positionSmartFilterMenu() {
+  const menu=$('#smartFilterMenu'),trigger=$('#smartFilterButton');
+  if(!menu?.matches(':popover-open')||!trigger)return;
+  const triggerRect=trigger.getBoundingClientRect(),menuRect=menu.getBoundingClientRect();
+  const left=Math.max(8,Math.min(triggerRect.left,window.innerWidth-menuRect.width-8));
+  const below=triggerRect.bottom+6;
+  menu.style.left=`${left}px`;
+  menu.style.top=`${below+menuRect.height<=window.innerHeight-8?below:Math.max(8,triggerRect.top-menuRect.height-6)}px`;
 }
 async function refreshData() {
   const request=++inventoryRequest;
   clearTimeout(inventorySearchTimer);
-  const catVal=$('#categoryFilter')?.value||'';
-  const inventoryParams=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),status:$('#statusFilter')?.value||'all',category:catVal,limit:String(inventoryLimit),offset:'0'});
+  const inventoryParams=inventoryQueryParams(0);
   try {
     const [assetData,surveyData,ticketData,config,inventoryData,fsnData,categoryData,depreciationData,pendingData]=await Promise.all([api('/api/assets'),api('/api/survey'),api('/api/tickets'),api('/api/config'),api(`/api/inventory?${inventoryParams}`),api(`/api/catalog/fsn?limit=${fsnLimit}`),api('/api/catalog/categories'),api('/api/catalog/depreciation'),api('/api/assets/pending')]);
     document.dispatchEvent(new CustomEvent('govasset:inventory-rendering'));assets=assetData; approvalAssets=pendingData; sheet=surveyData; repairs=ticketData; appConfig=config;
@@ -126,8 +260,7 @@ async function refreshData() {
     liveDepreciationRows=depreciationData.items?.length?depreciationData.items.map(row=>({no:row.ruleNo,category:row.category,years:row.years==null?'พิจารณาเฉพาะกรณี':String(row.years),rate:row.annualRate==null?'พิจารณาเฉพาะกรณี':String(row.annualRate),note:row.note||''})):null;
     setConnected();
     const overview=await api('/api/overview'); appConfig.overview=overview;
-    setText('#openRepairCount',overview.activeRepairs);setText('#actualRepairCost',Number(overview.actualRepairCost).toLocaleString('th-TH'));setText('#activeCategoryCount',overview.activeCategories);
-    const totalAssets = overview.assets || inventoryTotal || 66399;
+    const totalAssets = overview.assets ?? inventoryTotal ?? 0;
     const activeReps = overview.activeRepairs || 0;
     const pendingCount = overview.pendingAssets || 0;
     const readyCount = Math.max(0, totalAssets - activeReps - pendingCount);
@@ -135,7 +268,9 @@ async function refreshData() {
     setText('#kpiReadyAssets', readyCount.toLocaleString('th-TH'));
     setText('#kpiPendingAssets', pendingCount.toLocaleString('th-TH'));
     setText('#kpiRepairAssets', activeReps.toLocaleString('th-TH'));
-    const navBadge = $('#navAssetBadge'); if(navBadge) navBadge.textContent = totalAssets > 1000 ? Math.round(totalAssets/1000) + 'K' : totalAssets;
+    const navBadge = $('#navAssetBadge'); if(navBadge) navBadge.textContent = totalAssets >= 10000 ? Math.round(totalAssets/1000) + 'K' : totalAssets.toLocaleString('th-TH');
+    const footerScope = $('#assetFooterScope'); if(footerScope) footerScope.textContent = `ฐานข้อมูลหน่วยงานปัจจุบัน ${totalAssets.toLocaleString('th-TH')} รายการ · ระบบทะเบียนและประวัติครุภัณฑ์`;
+    loadLocationFacets();
     renderAssets(); renderRepairs(); renderSheet(); renderCatalog(); renderDepreciation(); renderApprovals(); updateCode();
     await window.govAssetMasterData?.load();
     const threshold=$('#thresholdAmount'); if(threshold) threshold.textContent=Number(config.approvalThreshold).toLocaleString('th-TH');
@@ -159,7 +294,6 @@ function renderAssets() {
   queueMicrotask(()=>document.dispatchEvent(new CustomEvent('govasset:inventory-rendered')));
   document.dispatchEvent(new CustomEvent('govasset:inventory-rendering'));
 
-  const recent=$('#recentRows'); if(recent) recent.innerHTML=assets.slice(0,5).map(item=>`<tr><td>${assetNameCell(item)}</td><td><span class="code-text">${esc(item.fsnCode || item.code || '—')}</span></td><td><span class="category-badge-chip">${esc(item.group || 'ทั่วไป')}</span></td><td>${badge(item.status)}</td></tr>`).join('');
   const search=($('#assetSearch')?.value||'').trim().toLowerCase(), status=$('#statusFilter')?.value||'all', catVal=$('#categoryFilter')?.value||'';
   const filtered=inventoryRows!==null?inventoryRows:assets.filter(item=>`${item.name} ${item.code} ${item.group} ${item.location} ${item.status}`.toLowerCase().includes(search)&&(status==='all'||item.status===status));
   const rows=$('#assetRows');
@@ -167,19 +301,20 @@ function renderAssets() {
     rows.innerHTML=filtered.length?filtered.map(item=>{
       const cost = item.purchasePrice != null ? Number(item.purchasePrice).toLocaleString('th-TH') + ' บาท' : '—';
       const netVal = (item.depreciationEstimate?.netBookValue ?? item.netBookValue) != null ? Number(item.depreciationEstimate?.netBookValue ?? item.netBookValue).toLocaleString('th-TH') + ' บาท' : '—';
-      const fsnDisplay = item.fsnCode ? `<span class="fsn-pill" title="FSN Code">FSN: ${esc(item.fsnCode)}</span>` : '';
       const deptDisplay = [item.location, item.accountName].filter(Boolean).join(' · ');
       return `<tr>
         <td>
           <div class="asset-code-badge">
             <span>${esc(item.code || 'ยังไม่มีรหัส')}</span>
           </div>
-          ${fsnDisplay}
         </td>
         <td>${assetNameCell(item, true)}</td>
         <td><span class="category-badge-chip">${esc(item.group || 'ทั่วไป')}</span></td>
         <td>
-          <div class="asset-primary-name" style="font-size:12px;" title="${esc(item.location || '—')}">${esc(item.location || '—')}</div>
+          <div class="asset-loc-line">
+            <span class="asset-primary-name" style="font-size:12px;" title="${esc(item.location || '—')}">${esc(item.location || '—')}</span>
+            ${(item.building || item.floor || item.room) ? `<span class="asset-loc-pill" title="${esc([item.building, item.floor, item.room].filter(Boolean).join(' · '))}">📍 ${esc([item.building, item.floor, item.room].filter(Boolean).join(' · '))}</span>` : ''}
+          </div>
           <div class="asset-secondary-meta" title="${esc(item.accountName || '')}${item.branchName ? ' · ' + esc(item.branchName) : ''}">${esc(item.accountName || '')}${item.branchName ? ' · ' + esc(item.branchName) : ''}</div>
         </td>
         <td>
@@ -189,9 +324,10 @@ function renderAssets() {
         <td>${badge(item.status)}</td>
         <td style="text-align:center;">
           <div class="table-action-group">
-            <button class="btn-dossier" type="button" data-smart-id="${item.id}" title="ดูรายละเอียด ประวัติ และใบคุมทรัพย์สิน">ดูรายละเอียด</button>
-            <button class="btn-quick-repair" type="button" data-quick-repair="${item.id}" title="แจ้งซ่อมชิ้นนี้">⚒️ แจ้งซ่อม</button>
-            ${currentRole===ROLE_OFFICER && can('edit') ? `<button class="btn-more-action" type="button" data-workspace-edit="${item.id}" title="แก้ไขข้อมูล">✏️</button>` : ''}
+            <button class="btn-dossier" type="button" data-smart-id="${item.id}" title="ดูรายละเอียด ประวัติ และใบคุมทรัพย์สิน">รายละเอียด</button>
+            <button class="btn-quick-repair" type="button" data-quick-repair="${item.id}" title="แจ้งซ่อมชิ้นนี้">⚒️ ซ่อม</button>
+            ${can('edit') ? `<button class="btn-more-action" type="button" data-assign-location="${item.id}" title="ระบุตึก / ชั้น / ห้อง">📍 ที่ตั้ง</button>` : ''}
+            ${currentRole===ROLE_OFFICER && can('edit') ? `<button class="btn-more-action" type="button" data-workspace-edit="${item.id}" title="แก้ไขข้อมูล">✏️ แก้ไข</button>` : ''}
           </div>
         </td>
       </tr>`;
@@ -250,9 +386,8 @@ function renderAssets() {
 }
 async function loadInventory(offset=0){
   const request=++inventoryRequest;
-  const catVal=$('#categoryFilter')?.value||'';
-  const params=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),status:$('#statusFilter')?.value||'all',category:catVal,limit:String(inventoryLimit),offset:String(Math.max(0,offset))});
-  try{const result=await api(`/api/inventory?${params}`);if(request!==inventoryRequest)return;inventoryRows=result.items;inventoryTotal=result.total;inventoryOffset=result.offset;renderAssets();document.dispatchEvent(new CustomEvent('govasset:inventory-rendered'));}catch(error){if(request===inventoryRequest)showError(error);}
+  const params=inventoryQueryParams(offset);
+  try{const result=await api(`/api/inventory?${params}`);if(request!==inventoryRequest)return;inventoryRows=result.items;inventoryTotal=result.total;inventoryOffset=result.offset;renderAssets();document.dispatchEvent(new CustomEvent('govasset:inventory-rendered'));}catch(error){if(request===inventoryRequest){const rows=$('#assetRows');if(rows)rows.innerHTML=`<tr><td colspan="7" class="empty-cell" role="alert">โหลดทะเบียนไม่สำเร็จ: ${esc(error?.message||'ไม่สามารถเชื่อมต่อฐานข้อมูลได้')} · ลองค้นหาใหม่อีกครั้ง</td></tr>`;setText('#resultCount','โหลดข้อมูลไม่สำเร็จ');showError(error);}}
 }
 function fmtDate(value) {
   if(!value) return '—';
@@ -274,16 +409,13 @@ function urgencyBadge(urgency) { const type=urgency==='เร่งด่วน�
 function renderRepairs() {
   const search=($('#repairSearch')?.value||'').trim().toLowerCase(), status=$('#repairStatusFilter')?.value||'all';
   const filtered=repairs.filter(item=>`${item.ticketNo} ${item.assetCode} ${item.assetName} ${item.issue} ${item.location} ${item.reporterNote||''} ${item.requester} ${item.assignedTo} ${item.status}`.toLowerCase().includes(search)&&(status==='all'||item.status===status));
-  const rowMarkup=item=>`<tr><td><button class="link-button ticket-number" data-ticket-detail="${item.id}">${esc(item.ticketNo)}</button><div class="item-meta">${esc(fmtDate(item.createdAt))}${isUserReport(item)?' · จากผู้ใช้':''}</div></td><td><div class="item-name">${esc(item.assetName)}</div><div class="item-meta">${esc(item.issue)}</div></td><td>${esc(item.location)}</td><td>${urgencyBadge(item.urgency)}</td><td>${userReportBadge(item)}${repairBadge(item.status)}</td><td>${esc(item.assignedTo||'—')}</td><td><button class="button outline mini-action" data-ticket-detail="${item.id}">ติดตาม</button> <button class="button outline mini-action" data-ticket-print="${item.id}" aria-label="พิมพ์ใบแจ้งซ่อม ${esc(item.ticketNo)}">พิมพ์</button></td></tr>`;
+  const rowMarkup=item=>`<tr><td><button class="link-button ticket-number" data-ticket-detail="${item.id}">${esc(item.ticketNo)}</button><div class="item-meta">${esc(fmtDate(item.createdAt))}${isUserReport(item)?' · จากผู้ใช้':''}</div></td><td><div class="item-name">${esc(item.assetName)}</div><div class="item-meta">${esc(item.issue)}</div></td><td>${esc(item.location)}</td><td>${urgencyBadge(item.urgency)}</td><td>${userReportBadge(item)}${repairBadge(item.status)}</td><td>${esc(item.assignedTo||'—')}</td><td><div class="ticket-row-actions"><button class="button outline mini-action" data-ticket-detail="${item.id}" aria-label="ดูรายละเอียด" title="ดูรายละเอียด"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button class="button outline mini-action" data-ticket-print="${item.id}" aria-label="พิมพ์เอกสาร" title="พิมพ์เอกสาร"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><path d="M6 14h12v7H6zM18 12h.01"></path></svg></button></div></td></tr>`;
   const body=$('#repairRows'); if(body) body.innerHTML=filtered.length?filtered.map(rowMarkup).join(''):'<tr><td colspan="7" class="empty-cell">ไม่พบ Ticket ที่ตรงกับคำค้น</td></tr>';
   // Overview shows open work first; closed and cancelled tickets only fill leftover rows.
-  const closedStatuses=['ปิดงาน','ยกเลิก','ไม่อนุมัติ'];
-  const dashRows=[...repairs.filter(x=>!closedStatuses.includes(x.status)),...repairs.filter(x=>closedStatuses.includes(x.status))];
-  const dash=$('#dashboardRepairRows'); if(dash) dash.innerHTML=repairs.length?dashRows.slice(0,5).map(item=>`<tr><td><button class="link-button ticket-number" data-ticket-detail="${item.id}">${esc(item.ticketNo)}</button></td><td><div class="item-name">${esc(item.assetName)}</div><div class="item-meta">${esc(item.issue)}</div></td><td>${urgencyBadge(item.urgency)}</td><td>${repairBadge(item.status)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty-cell" style="text-align:center;padding:18px;color:#85939a;">ไม่มีรายการแจ้งซ่อมค้าง</td></tr>';
   const count=$('#repairResultCount'); if(count) count.textContent=`แสดง ${filtered.length} จาก ${repairs.length} Ticket`;
   setText('#repairTotal',repairs.length); setText('#repairWaiting',repairs.filter(x=>x.status==='รับแจ้งใหม่').length); setText('#repairPendingApproval',repairs.filter(x=>['รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง'].includes(x.status)).length); setText('#repairActive',repairs.filter(x=>['กำลังซ่อม','รออะไหล่','รอผู้แจ้งยืนยัน','รอมอบหมาย'].includes(x.status)).length);
-  [$('#repairRows'),$('#dashboardRepairRows')].filter(Boolean).forEach(scope=>$$('[data-ticket-detail]',scope).forEach(button=>button.addEventListener('click',()=>openTicket(Number(button.dataset.ticketDetail)))));
-  $$('[data-ticket-print]',body||document).forEach(button=>button.addEventListener('click',()=>printTicket(Number(button.dataset.ticketPrint))));
+  $$('#repairRows [data-ticket-detail]').forEach(button=>button.addEventListener('click',()=>openTicket(Number(button.dataset.ticketDetail))));
+  $$('[data-ticket-print]',body||document).forEach(button=>button.addEventListener('click',()=>openRepairPrintDialog(Number(button.dataset.ticketPrint))));
 }
 function setText(id,value) { const el=$(id); if(el) el.textContent=String(value); }
 function renderApprovals() {
@@ -363,7 +495,7 @@ function switchView(name, isBack=false) {
   const titles={equipment:'บัญชีอุปกรณ์และนำเข้าทะเบียน','access-admin':'ผู้ใช้งานและสิทธิ์','operational-master':'ข้อมูลหลักหน่วยงาน',supply:'รับเข้า / เบิกจ่าย','supply-settings':'เงื่อนไขรับเข้าและเบิกจ่าย',administration:'ตั้งหมวดและค่าเสื่อม',work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่า',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตามงาน',approvals:'คิวรออนุมัติ',register:'เอกสารทะเบียนคุมทรัพย์สิน',stickers:'แบบสติกเกอร์และการพิมพ์',depreciation:'อายุใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'หมวดและเอกสารอ้างอิง',numbering:'จัดการเลขครุภัณฑ์'};
   const title=titles[name]||'ภาพรวม';
   $('#crumbCurrent').textContent=parents[name]?`${titles[activeMenu]} / ${title}`:title;
-  document.title=`${title} — ${window.govAssetBranding?.appName || 'GovAsset'}`;
+  document.title=`${title} — ${window.govAssetBranding?.appName || 'Smart Asset'}`;
 
   // Update prominent global back button in topbar: ONLY for subpages
   const backBtn = $('#globalBackBtn');
@@ -381,6 +513,29 @@ function switchView(name, isBack=false) {
 
   document.dispatchEvent(new CustomEvent('govasset:view-changed',{detail:{name}}));
   window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function openCategory(categoryId, categoryName) {
+  const filter=$('#categoryFilter');
+  if(!filter)return;
+  const id=String(categoryId||'');
+  let option=id?[...filter.options].find(item=>item.value===id):null;
+  if(!option){
+    const name=String(categoryName||'').trim();
+    if(!name)return;
+    const value=id||name;
+    option=[...filter.options].find(item=>item.value===value);
+    if(!option){option=document.createElement('option');option.value=value;option.textContent=name;filter.append(option);}
+  }
+  filter.value=option.value;
+  if($('#assetSearch'))$('#assetSearch').value='';
+  if($('#statusFilter'))$('#statusFilter').value='all';
+  smartFilterMultiKeys.forEach(key=>smartFilterCommitted[key]=[]);
+  smartFilterDraft=cloneSmartFilter(smartFilterCommitted);
+  if($('#smartFilterSearch'))$('#smartFilterSearch').value='';
+  renderSmartFilterMenu();
+  switchView('assets');
+  loadInventory(0);
 }
 
 function goBack() {
@@ -412,10 +567,12 @@ async function openTicket(id) {
   try {
     const ticket=await api(`/api/tickets/${id}`); activeTicketId=id;
     const timeline=ticket.events.map(event=>`<li><span class="timeline-dot"></span><div><b>${esc(event.action)} · ${esc(event.actor)}</b><small>${esc(fmtDate(event.createdAt))} ${esc(new Date(event.createdAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}))}</small><p>${esc(event.note||`${event.from_status||'เริ่ม'} → ${event.to_status}`)}</p></div></li>`).join('');
-    $('#ticketDialogContent').innerHTML=`<div class="ticket-dialog-inner"><div class="dialog-head"><div><div class="eyebrow">ติดตาม Ticket · ${esc(ticket.ticketNo)}</div><h2 id="ticketDialogTitle">${esc(ticket.assetName)}</h2></div><button type="button" class="dialog-close" data-close-ticket aria-label="ปิด">×</button></div><div class="ticket-status-row">${userReportBadge(ticket)} ${repairBadge(ticket.status)} ${urgencyBadge(ticket.urgency)}<span class="ticket-date">เปิด ${esc(fmtDate(ticket.createdAt))}</span></div><div class="ticket-detail-grid"><div><small>เลข Ticket</small><b>${esc(ticket.ticketNo)}</b></div><div><small>รหัสครุภัณฑ์</small><b>${esc(ticket.assetCode||'—')}</b></div><div><small>ผู้แจ้ง / ช่องทางติดต่อ</small><b>${esc(ticket.requester)} · ${esc(ticket.contact||'—')}</b></div><div><small>สถานที่</small><b>${esc(ticket.location)}</b></div><div class="wide"><small>อาการ</small><b>${esc(ticket.issue)}</b></div>${ticket.reporterNote?`<div class="wide reporter-note"><small>หมายเหตุผู้แจ้ง / ที่ตั้งจริงที่ขอตรวจสอบ</small><b>${esc(ticket.reporterNote)}</b></div>`:''}<div><small>ผู้รับผิดชอบ</small><b>${esc(ticket.assignedTo||'ยังไม่มอบหมาย')}</b></div><div><small>ค่าใช้จ่ายประมาณ / จริง</small><b>${Number(ticket.estimateCost||0).toLocaleString('th-TH')} / ${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท</b></div>${ticket.approvalRequired?`<div class="wide"><small>เหตุผลที่ต้องอนุมัติ</small><b>${esc(ticket.approvalReason)} · ผู้อนุมัติ ${esc(ticket.approvedBy||'รอดำเนินการ')}</b></div>`:''}${ticket.workNotes?`<div class="wide"><small>ผลซ่อม</small><b>${esc(ticket.workNotes)}</b></div>`:''}${ticket.finalCostApprovalRequired?`<div class="wide"><small>อนุมัติค่าใช้จ่ายจริง</small><b>${esc(ticket.finalCostStatus)} · ${esc(ticket.finalCostApprovedBy||'รอผู้อนุมัติ')}</b></div>`:''}</div><div class="ticket-columns"><section class="timeline-panel"><h3>ประวัติการดำเนินงาน</h3><ol class="ticket-timeline">${timeline||'<li>ยังไม่มีเหตุการณ์</li>'}</ol></section><section class="ticket-actions-panel"><h3>ดำเนินการในฐานะ: ${esc(currentRole)}</h3>${actionMarkup(ticket)}<p id="ticketActionError" role="alert"></p><div class="ticket-dialog-buttons"><label>ขนาดพิมพ์<select class="modal-print-size"><option value="a4">A4</option><option value="a5">A5</option><option value="80mm">80 มม.</option><option value="58mm">58 มม.</option></select></label><button class="button outline" data-print-current="${ticket.id}">พิมพ์ใบแจ้งซ่อม</button></div></section></div></div>`;
+    const ticketPhotos=(ticket.photos||[]).map(photo=>`<a href="${esc(photo.url)}" target="_blank" rel="noopener"><img src="${esc(photo.thumbUrl)}" alt="รูปประกอบ ${esc(ticket.ticketNo)}" loading="lazy"></a>`).join('');
+    $('#ticketDialogContent').innerHTML=`<div class="ticket-dialog-inner"><div class="dialog-head"><div><div class="eyebrow">ติดตาม Ticket · ${esc(ticket.ticketNo)}</div><h2 id="ticketDialogTitle">${esc(ticket.assetName)}</h2></div><button type="button" class="dialog-close" data-close-ticket aria-label="ปิด">×</button></div><div class="ticket-status-row">${userReportBadge(ticket)} ${repairBadge(ticket.status)} ${urgencyBadge(ticket.urgency)}<span class="ticket-date">เปิด ${esc(fmtDate(ticket.createdAt))}</span></div><div class="ticket-detail-grid"><div><small>เลข Ticket</small><b>${esc(ticket.ticketNo)}</b></div><div><small>รหัสครุภัณฑ์</small><b>${esc(ticket.assetCode||'—')}</b></div><div><small>ผู้แจ้ง / ช่องทางติดต่อ</small><b>${esc(ticket.requester)} · ${esc(ticket.contact||'—')}</b></div><div><small>สถานที่</small><b>${esc(ticket.location)}</b></div><div class="wide"><small>อาการ</small><b>${esc(ticket.issue)}</b></div>${ticket.reporterNote?`<div class="wide reporter-note"><small>หมายเหตุผู้แจ้ง / ที่ตั้งจริงที่ขอตรวจสอบ</small><b>${esc(ticket.reporterNote)}</b></div>`:''}<div><small>ผู้รับผิดชอบ</small><b>${esc(ticket.assignedTo||'ยังไม่มอบหมาย')}</b></div><div><small>ค่าใช้จ่ายประมาณ / จริง</small><b>${Number(ticket.estimateCost||0).toLocaleString('th-TH')} / ${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท</b></div>${ticket.approvalRequired?`<div class="wide"><small>เหตุผลที่ต้องอนุมัติ</small><b>${esc(ticket.approvalReason)} · ผู้อนุมัติ ${esc(ticket.approvedBy||'รอดำเนินการ')}</b></div>`:''}${ticket.workNotes?`<div class="wide"><small>ผลซ่อม</small><b>${esc(ticket.workNotes)}</b></div>`:''}${ticket.finalCostApprovalRequired?`<div class="wide"><small>อนุมัติค่าใช้จ่ายจริง</small><b>${esc(ticket.finalCostStatus)} · ${esc(ticket.finalCostApprovedBy||'รอผู้อนุมัติ')}</b></div>`:''}${ticketPhotos?`<div class="wide"><small>รูปถ่ายประกอบ (${(ticket.photos||[]).length} รูป)</small><div class="ticket-photo-gallery">${ticketPhotos}</div></div>`:''}</div><div class="ticket-columns"><section class="timeline-panel"><h3>ประวัติการดำเนินงาน</h3><ol class="ticket-timeline">${timeline||'<li>ยังไม่มีเหตุการณ์</li>'}</ol></section><section class="ticket-actions-panel"><h3>ดำเนินการในฐานะ: ${esc(currentRole)}</h3>${actionMarkup(ticket)}<p id="ticketActionError" role="alert"></p><div class="ticket-dialog-buttons"><label>ประเภทเอกสาร<select class="modal-print-format"><option value="work-order">ใบงาน A4</option><option value="slip">สลิป</option><option value="both">ทั้งคู่</option></select></label><label>ขนาดสลิป<select class="modal-slip-size"><option value="80mm">80 มม.</option><option value="58mm">58 มม.</option></select></label><button class="button outline" data-print-current="${ticket.id}">พิมพ์</button></div></section></div></div>`;
+    $('.ticket-dialog-buttons').innerHTML=`<button class="button outline" data-print-current="${ticket.id}">พิมพ์</button>`;
     if(!$('#ticketDialog').open) $('#ticketDialog').showModal();
     $('[data-close-ticket]')?.addEventListener('click',()=>$('#ticketDialog').close());
-    $('[data-print-current]')?.addEventListener('click',()=>printTicket(id,$('.modal-print-size')?.value));
+    $('[data-print-current]')?.addEventListener('click',()=>openRepairPrintDialog(id));
     $('#switchToApprover')?.addEventListener('click',()=>{$('#actorRole').value=ROLE_APPROVER;switchRole(ROLE_APPROVER);});
     $$('[data-ticket-action]').forEach(button=>button.addEventListener('click',()=>runTicketAction(id,button.dataset.ticketAction)));
   } catch(error) { showError(error); }
@@ -423,6 +580,10 @@ async function openTicket(id) {
 async function runTicketAction(id,action) {
   const panel=$('#ticketDialog .ticket-actions-panel');if(panel?.dataset.saving)return;if(panel)panel.dataset.saving='1';
   const buttons=[...document.querySelectorAll('#ticketDialog [data-ticket-action]')];buttons.forEach(button=>button.disabled=true);
+  if(action === 'cancel') {
+    const confirmed = await confirmDialog('คุณแน่ใจหรือไม่ที่จะยกเลิก Ticket นี้? การยกเลิกไม่สามารถกู้คืนได้', 'ยืนยันการยกเลิก Ticket');
+    if(!confirmed) { delete panel.dataset.saving; buttons.forEach(button=>button.disabled=false); return; }
+  }
   const data={action,actor:currentRole};
   if(action==='review') Object.assign(data,{estimateCost:$('#estimateCost')?.value||0,requiresPurchase:$('#requiresPurchase')?.checked,requiresExternal:$('#requiresExternal')?.checked,requiresReplacement:$('#requiresReplacement')?.checked,approvalRequired:$('#approvalRequired')?.checked,note:$('#reviewNote')?.value||''});
   if(action==='approve'||action==='reject') data.note=$('#approvalNote')?.value||'';
@@ -445,13 +606,35 @@ async function handleAssetApproval(id,action) {
   catch(error){toast(error.message);}
   finally{assetApprovalsInFlight.delete(key);buttons.forEach(button=>button.disabled=false);}
 }
-function printTicket(id,size) {
-  const ticket=repairs.find(item=>item.id===id); if(!ticket){showError(new Error('ไม่พบ Ticket สำหรับพิมพ์'));return;}
-  const printSize=size||$('#repairPrintSize')?.value||'a4'; const configs={a4:{page:'A4 portrait',margin:'10mm',width:'190mm'},a5:{page:'A5 portrait',margin:'7mm',width:'134mm'},'80mm':{page:'80mm 297mm',margin:'4mm',width:'72mm'},'58mm':{page:'58mm 210mm',margin:'3mm',width:'52mm'}}; const config=configs[printSize]||configs.a4;
-  let style=$('#dynamicPrintPage'); if(!style){style=document.createElement('style');style.id='dynamicPrintPage';document.head.append(style);} style.textContent=`@media print{@page{size:${config.page};margin:${config.margin}}}`;
-  const root=$('#repairPrintArea'); root.className=`repair-print-sheet size-${printSize}`;
-  root.innerHTML=`<div class="repair-print-card" style="--paper-width:${config.width}"><header class="repair-print-head"><div class="print-brand-mark">${esc(window.govAssetBranding?.organization || 'ครุภัณฑ์')} · ${esc(window.govAssetBranding?.appName || 'GovAsset')}</div><h1>ใบแจ้งซ่อมครุภัณฑ์</h1><div class="print-ticket-no">${esc(ticket.ticketNo)}</div></header><div class="print-status">สถานะ: ${esc(ticket.status)} · ความเร่งด่วน: ${esc(ticket.urgency)}</div><div class="print-details"><div><span>วันที่แจ้ง</span><b>${esc(fmtDate(ticket.createdAt))}</b></div><div><span>ผู้แจ้ง</span><b>${esc(ticket.requester)}</b></div><div><span>ช่องทางติดต่อ</span><b>${esc(ticket.contact||'—')}</b></div><div><span>สถานที่ตั้ง</span><b>${esc(ticket.location)}</b></div><div><span>ครุภัณฑ์</span><b>${esc(ticket.assetName)}</b></div><div><span>รหัสครุภัณฑ์</span><b>${esc(ticket.assetCode||'—')}</b></div><div class="print-wide"><span>อาการ/รายละเอียด</span><b>${esc(ticket.issue)}</b></div><div><span>ผู้รับผิดชอบ</span><b>${esc(ticket.assignedTo||'ยังไม่มอบหมาย')}</b></div>${ticket.reporterNote?`<div class="print-wide reporter-note"><span>หมายเหตุผู้แจ้ง / ที่ตั้งจริง</span><b>${esc(ticket.reporterNote)}</b></div>`:''}<div><span>ผลการซ่อม</span><b>${esc(ticket.workNotes||'รอดำเนินการ')}</b></div><div><span>ประมาณการ</span><b>${Number(ticket.estimateCost||0).toLocaleString('th-TH')} บาท</b></div><div><span>ค่าใช้จ่ายจริง</span><b>${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท</b></div></div><div class="print-signatures"><div>ผู้แจ้ง ____________________ วันที่ __________</div><div>ผู้ตรวจรับ ________________ วันที่ __________</div><div>ผู้อนุมัติ _________________ วันที่ __________</div><div>ผู้ปฏิบัติงาน ______________ วันที่ __________</div></div><footer><b class="team-credit">POWER BY PNG TEAM</b> · เอกสารทะเบียนครุภัณฑ์และใบแจ้งซ่อมภาครัฐ</footer></div>`;
-  document.body.dataset.printing='ticket'; window.addEventListener('afterprint',()=>{delete document.body.dataset.printing;root.innerHTML='';},{once:true}); window.print();
+function openRepairPrintDialog(id) {
+  const ticket=repairs.find(item=>item.id===id);
+  if(!ticket){showError(new Error('ไม่พบ Ticket สำหรับพิมพ์'));return;}
+  const dialog=$('#repairPrintDialog'),form=$('#repairPrintForm');
+  form.reset();
+  dialog.dataset.ticketId=String(id);
+  $('#repairPrintTicketInfo').textContent=`${ticket.ticketNo} · ${ticket.assetName}`;
+  $('#repairSlipSizeField').hidden=true;
+  dialog.showModal();
+}
+async function printTicket(id,format='work-order',slipSize='80mm') {
+  const summary=repairs.find(item=>item.id===id); if(!summary){showError(new Error('ไม่พบ Ticket สำหรับพิมพ์'));return;}
+  const ticket=await api(`/api/tickets/${id}`);
+  slipSize=slipSize==='58mm'?'58mm':'80mm';
+  const configs={'80mm':{page:'80mm 297mm',margin:'4mm',width:'72mm'},'58mm':{page:'58mm 210mm',margin:'3mm',width:'52mm'}};
+  const slip=configs[slipSize],brand=`${esc(window.govAssetBranding?.organization||'ครุภัณฑ์')} · ${esc(window.govAssetBranding?.appName||'Smart Asset')}`;
+  const field=(label,value)=>`<div><span>${label}</span><b>${value||'—'}</b></div>`;
+  const workOrder=()=>`<section class="repair-work-order"><div class="repair-print-card work-order-card"><header class="repair-print-head"><div class="print-brand-mark">${brand}</div><h1>ใบงานซ่อมบำรุงครุภัณฑ์</h1><div class="print-ticket-no">${esc(ticket.ticketNo)}</div></header><div class="print-status">สถานะ: ${esc(ticket.status)} · ความเร่งด่วน: ${esc(ticket.urgency)}</div><section class="work-order-section"><h2>1. ข้อมูลการแจ้งซ่อม</h2><div class="print-details">${field('วันที่แจ้ง',esc(fmtDate(ticket.createdAt)))}${field('ผู้แจ้ง',esc(ticket.requester))}${field('ช่องทางติดต่อ',esc(ticket.contact||'—'))}${field('สถานที่ตั้ง',esc(ticket.location))}<div class="print-wide"><span>อาการ/รายละเอียดที่แจ้ง</span><b>${esc(ticket.issue)}</b></div>${ticket.reporterNote?`<div class="print-wide"><span>หมายเหตุเพิ่มเติม</span><b>${esc(ticket.reporterNote)}</b></div>`:''}</div></section>${(ticket.photos||[]).length?`<section class="work-order-section"><h2>รูปถ่ายประกอบการแจ้งซ่อม</h2><div class="print-ticket-photos">${ticket.photos.map(photo=>`<figure><img src="${esc(photo.url)}" alt="รูปประกอบ ${esc(ticket.ticketNo)}"></figure>`).join('')}</div></section>`:''}<section class="work-order-section"><h2>2. ข้อมูลครุภัณฑ์และมอบหมายงาน</h2><div class="print-details">${field('ชื่อครุภัณฑ์',esc(ticket.assetName))}${field('รหัสครุภัณฑ์',esc(ticket.assetCode||'—'))}${field('ผู้รับผิดชอบ/ช่าง',esc(ticket.assignedTo||'ยังไม่มอบหมาย'))}${field('สถานะอนุมัติ',esc(ticket.approvalRequired?`${ticket.finalCostStatus||'รอพิจารณา'} · ${ticket.approvedBy||'ยังไม่มีผู้อนุมัติ'}`:'ไม่ต้องขออนุมัติ'))}${field('เหตุผลอนุมัติ',esc(ticket.approvalReason||'—'))}${field('ประมาณการค่าใช้จ่าย',`${Number(ticket.estimateCost||0).toLocaleString('th-TH')} บาท`)}${field('ค่าใช้จ่ายจริง',`${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท`)}</div></section><section class="work-order-section"><h2>3. ผลการปฏิบัติงาน</h2><div class="work-result">${esc(ticket.workNotes||'ยังไม่ได้บันทึกผลการซ่อม')}</div></section><section class="work-order-section"><h2>4. ประวัติการดำเนินงาน</h2><ol class="print-timeline">${(ticket.events||[]).map(event=>`<li><b>${esc(event.action)} · ${esc(event.actor)}</b><span>${esc(fmtDate(event.createdAt))} · ${esc(event.note||`${event.from_status||'เริ่ม'} → ${event.to_status}`)}</span></li>`).join('')||'<li>ยังไม่มีประวัติ</li>'}</ol></section><div class="print-signatures"><div>ผู้แจ้ง ____________________ วันที่ __________</div><div>ผู้ตรวจรับ ________________ วันที่ __________</div><div>ผู้อนุมัติ _________________ วันที่ __________</div><div>ผู้ปฏิบัติงาน ______________ วันที่ __________</div></div><footer>เอกสารใบงานซ่อมบำรุง · ${esc(ticket.ticketNo)}</footer></div></section>`;
+  const receiptSlip=()=>`<section class="repair-slip" style="--paper-width:${slip.width}"><header class="slip-head"><div>${brand}</div><h1>สลิปแจ้งซ่อม</h1><b class="slip-ticket-no">${esc(ticket.ticketNo)}</b></header><div class="slip-status">${esc(ticket.status)} · ${esc(ticket.urgency)}</div><div class="slip-details">${field('วันที่แจ้ง',esc(fmtDate(ticket.createdAt)))}${field('ผู้แจ้ง',esc(ticket.requester))}${field('ติดต่อ',esc(ticket.contact||'—'))}${field('ครุภัณฑ์',esc(ticket.assetName))}${field('รหัสครุภัณฑ์',esc(ticket.assetCode||'—'))}${field('สถานที่',esc(ticket.location))}<div class="slip-wide"><span>อาการที่แจ้ง</span><b>${esc(ticket.issue)}</b></div>${ticket.assignedTo?field('ผู้รับผิดชอบ',esc(ticket.assignedTo)):''}</div><footer>โปรดเก็บเลข Ticket นี้ไว้สำหรับติดตามงาน</footer></section>`;
+  let style=$('#dynamicPrintPage'); if(!style){style=document.createElement('style');style.id='dynamicPrintPage';document.head.append(style);} style.textContent=`@media print{@page workorder{size:A4 portrait;margin:12mm}@page slip80{size:${slip.page};margin:${slip.margin}}}`;
+  const root=$('#repairPrintArea'); root.className=`repair-print-sheet format-${['slip','both'].includes(format)?format:'work-order'} slip-${slipSize}`;
+  root.innerHTML=`${format==='slip'?receiptSlip():workOrder()}${format==='both'?receiptSlip():''}`;
+  await Promise.all([...root.querySelectorAll('img')].map(image=>image.decode()));
+  const ticketDialog=$('#ticketDialog'),restoreTicketDialog=ticketDialog.open;
+  if($('#repairPrintDialog').open)$('#repairPrintDialog').close();
+  if(restoreTicketDialog)ticketDialog.close();
+  document.body.dataset.printing='ticket';
+  window.addEventListener('afterprint',()=>{delete document.body.dataset.printing;root.innerHTML='';if(restoreTicketDialog&&ticketDialog.isConnected)ticketDialog.showModal();},{once:true});
+  window.print();
 }
 function applyFontScale(value) { fontScale=Math.min(1.4,Math.max(0.95,Math.round(value*100)/100)); document.documentElement.style.zoom=String(fontScale); setText('#fontScaleLabel',`${Math.round(fontScale*100)}%`); localStorage.setItem('govAssetPrototype.fontScale',String(fontScale)); }
 function switchRole(role) { currentRole=role; localStorage.setItem('govAssetPrototype.role',role); renderAssets(); renderApprovals(); if(activeTicketId&&$('#ticketDialog')?.open)openTicket(activeTicketId);document.dispatchEvent(new CustomEvent('govasset:role-changed')); }
@@ -464,7 +647,31 @@ function updateCode() {
   window.govAssetNumbering?.renderPreview();
 }
 function openAssetDialog(options={}) { populateAssetCategoryOptions(liveCategories||[]); $('#assetFormError').textContent='';updateCode(); $('#assetDialog').showModal(); document.dispatchEvent(new CustomEvent('govasset:asset-entry-open',{detail:{preset:options?.preset||null}})); $('#assetCategoryId').focus(); }
-let repairSearchTimer=null,repairSearchVersion=0,repairSearchItems=[],selectedRepairAsset=null,repairSubmitting=false;
+let repairSearchTimer=null,repairSearchVersion=0,repairSearchItems=[],selectedRepairAsset=null,repairSubmitting=false,repairPhotoFiles=[];
+function resetRepairPhotos(){
+  repairPhotoFiles.forEach(photo=>URL.revokeObjectURL(photo.previewUrl));repairPhotoFiles=[];
+  $('#repairPhotos').value='';$('#repairPhotoPreviews').replaceChildren();
+}
+function renderRepairPhotoPreviews(){
+  const root=$('#repairPhotoPreviews');
+  root.innerHTML=repairPhotoFiles.map((photo,index)=>`<div class="repair-photo-preview"><img src="${photo.previewUrl}" alt="${esc(photo.file.name)}"><span>${esc(photo.file.name)}</span><button type="button" data-remove-repair-photo="${index}" aria-label="นำรูปออก">×</button></div>`).join('');
+}
+function readDataUrl(blob){
+  return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('อ่านไฟล์รูปไม่สำเร็จ'));reader.readAsDataURL(blob);});
+}
+async function encodeRepairPhoto(file){
+  if(!file.type.startsWith('image/'))throw new Error(`ไฟล์ ${file.name} ไม่ใช่รูปภาพ`);
+  const bitmap=await createImageBitmap(file);
+  if(bitmap.width*bitmap.height>40_000_000){bitmap.close();throw new Error(`ไฟล์ ${file.name} มีความละเอียดสูงเกินไป`);}
+  const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));
+  const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+  canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
+  const image=canvas.toDataURL('image/jpeg',.82);
+  const thumbCanvas=document.createElement('canvas'),thumbScale=Math.min(1,320/Math.max(canvas.width,canvas.height));
+  thumbCanvas.width=Math.max(1,Math.round(canvas.width*thumbScale));thumbCanvas.height=Math.max(1,Math.round(canvas.height*thumbScale));
+  thumbCanvas.getContext('2d').drawImage(canvas,0,0,thumbCanvas.width,thumbCanvas.height);
+  return{image,thumb:thumbCanvas.toDataURL('image/jpeg',.72),width:canvas.width,height:canvas.height};
+}
 function repairSelectionState(){
   const note=$('#repairReporterNote'),missing=Boolean(selectedRepairAsset&&!selectedRepairAsset.location),mismatch=$('#repairLocationMismatch').checked;
   note.required=missing||mismatch;note.setAttribute('aria-required',String(note.required));$('#repairNoteRequired').hidden=!note.required;
@@ -479,7 +686,7 @@ function selectRepairAsset(asset){
   repairSelectionState();
 }
 function openRepairDialog(asset=null){
-  $('#repairForm').reset();$('#repairFormError').textContent='';$('#repairSearchStatus').textContent='พิมพ์เพื่อค้นทะเบียนที่คุณมีสิทธิ์เข้าถึง แล้วเลือกรายการ';selectRepairAsset(Number.isSafeInteger(asset?.id)?asset:null);
+  $('#repairForm').reset();resetRepairPhotos();$('#repairFormError').textContent='';$('#repairSearchStatus').textContent='พิมพ์เพื่อค้นทะเบียนที่คุณมีสิทธิ์เข้าถึง แล้วเลือกรายการ';selectRepairAsset(Number.isSafeInteger(asset?.id)?asset:null);
   $('#repairReporter').value=window.govAssetAccess?.session?.user?.name||'';$('#repairDialog').showModal();(selectedRepairAsset?$('#repairIssue'):$('#repairAssetSearch')).focus();
 }
 async function searchRepairAssets(){
@@ -493,11 +700,123 @@ async function searchRepairAssets(){
 }
 
 
+async function loadLocationFacets(){
+  const bSel=$('#buildingFilter'),fSel=$('#floorFilter'),rSel=$('#roomFilter');
+  if(!bSel||!fSel||!rSel)return;
+  try{
+    const params=new URLSearchParams(window.govAssetAccountFilters?.()||{});
+    const facets=await api(`/api/inventory/facets?${params}`);
+    const curB=bSel.value,curF=fSel.value,curR=rSel.value;
+    const presetB=['อาคารศูนย์แพทยศาสตรศึกษาชั้นคลินิก','อาคารหอพักนักศึกษาแพทย์','อาคาร 100 ปี การสาธารณสุขไทย','อาคารเฉลิมพระเกียรติ','อาคารอำนวยการ'];
+    const allB=[...new Map([...(facets.buildings||[]).map(x=>[x.name,x.count]),...presetB.map(n=>[n,null])]).entries()];
+    bSel.innerHTML='<option value="">ทุกอาคาร / ตึก</option><option value="__unassigned__">— ยังไม่ระบุอาคาร —</option>'+allB.map(([n,c])=>`<option value="${esc(n)}">${esc(n)}${c!=null?` (${c.toLocaleString('th-TH')})`:''}</option>`).join('');
+    if([...bSel.options].some(o=>o.value===curB))bSel.value=curB;
+    const presetF=['ชั้น 1','ชั้น 2','ชั้น 3','ชั้น 4','ชั้น 5','ชั้น 6','ชั้น 7','ชั้น 8','ชั้น 9'];
+    const allF=[...new Map([...(facets.floors||[]).map(x=>[x.name,x.count]),...presetF.map(n=>[n,null])]).entries()];
+    fSel.innerHTML='<option value="">ทุกชั้น</option><option value="__unassigned__">— ยังไม่ระบุชั้น —</option>'+allF.map(([n,c])=>`<option value="${esc(n)}">${esc(n)}${c!=null?` (${c.toLocaleString('th-TH')})`:''}</option>`).join('');
+    if([...fSel.options].some(o=>o.value===curF))fSel.value=curF;
+    const presetR=['งานบริหารทั่วไป','งานแพทยศาสตรศึกษา','ห้องเรียนรวม','ห้องปฏิบัติการทักษะทางคลินิก (Skill Lab)','ห้องสมุดศูนย์แพทย์','ห้องประชุมศูนย์แพทย์','ห้องพักอาจารย์แพทย์','ห้องพักนักศึกษาแพทย์'];
+    const allR=[...new Map([...(facets.rooms||[]).map(x=>[x.name,x.count]),...presetR.map(n=>[n,null])]).entries()];
+    rSel.innerHTML='<option value="">ทุกห้อง / จุดติดตั้ง / งานย่อย</option><option value="__unassigned__">— ยังไม่ระบุห้อง/งานย่อย —</option>'+allR.map(([n,c])=>`<option value="${esc(n)}">${esc(n)}${c!=null?` (${c.toLocaleString('th-TH')})`:''}</option>`).join('');
+    if([...rSel.options].some(o=>o.value===curR))rSel.value=curR;
+    renderSmartFilterCatalog(facets);
+  }catch(error){showError(error);}
+}
+function openLocationAssignDialog(targetItems){
+  const list=Array.isArray(targetItems)&&targetItems.length?targetItems:(inventoryRows||[]);
+  if(!list.length){toast('ไม่มีรายการครุภัณฑ์ให้กำหนดตำแหน่ง');return;}
+  let dlg=$('#assignLocationDialog');
+  if(!dlg){dlg=document.createElement('dialog');dlg.id='assignLocationDialog';dlg.className='smart-modal';document.body.append(dlg);}
+  const first=list[0]||{};
+  dlg.innerHTML=`<form id="assignLocationForm" style="min-width:min(520px,92vw);padding:20px;">
+    <h2 style="margin:0 0 6px;font-size:18px;color:#123d56;">📍 กำหนดอาคาร / ชั้น / ห้อง / งานย่อย</h2>
+    <p style="margin:0 0 14px;font-size:12.5px;color:#475569;">แยกโครงสร้างที่ตั้งเพื่อให้กรองค้นหาและดูแลรับผิดชอบภายในหน่วยงานได้ง่าย (${list.length===1?`รหัส <b>${esc(first.code||first.name)}</b>`:`เลือก <b>${list.length} รายการ</b> ในหน้านี้`})</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;">อาคาร / ตึก
+        <input name="building" list="presetBuildingsList" value="${esc(first.building||'อาคารศูนย์แพทยศาสตรศึกษาชั้นคลินิก')}" placeholder="เช่น อาคารศูนย์แพทยศาสตรศึกษาฯ" style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:6px;">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;">ชั้น
+        <input name="floor" list="presetFloorsList" value="${esc(first.floor||'')}" placeholder="เช่น ชั้น 1, ชั้น 2, ชั้น 3" style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:6px;">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;">ห้อง / จุดติดตั้ง (เช่น ห้องตรวจ, โถงแอร์)
+        <input name="room" list="presetRoomsList" value="${esc(first.room||'')}" placeholder="เช่น ห้องเรียนรวม 1 / โถงชั้น 2" style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:6px;">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;">งานย่อย / ผู้รับผิดชอบในหน่วยงาน
+        <input name="subUnit" value="${esc(first.subUnit||'ศูนย์แพทย์')}" placeholder="เช่น งานแพทยศาสตรศึกษา / งานบริหาร" style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:6px;">
+      </label>
+    </div>
+    <datalist id="presetBuildingsList"><option value="อาคารศูนย์แพทยศาสตรศึกษาชั้นคลินิก"><option value="อาคารหอพักนักศึกษาแพทย์"><option value="อาคาร 100 ปี การสาธารณสุขไทย"><option value="อาคารเฉลิมพระเกียรติ"><option value="อาคารอำนวยการ"></datalist>
+    <datalist id="presetFloorsList"><option value="ชั้น 1"><option value="ชั้น 2"><option value="ชั้น 3"><option value="ชั้น 4"><option value="ชั้น 5"><option value="ชั้น 6"><option value="ชั้น 7"><option value="ชั้น 8"><option value="ชั้น 9"></datalist>
+    <datalist id="presetRoomsList"><option value="ห้องเรียนรวม"><option value="ห้องปฏิบัติการทักษะทางคลินิก (Skill Lab)"><option value="ห้องสมุดศูนย์แพทย์"><option value="ห้องประชุมศูนย์แพทย์"><option value="สำนักงานศูนย์แพทย์"><option value="ห้องพักอาจารย์แพทย์"><option value="ห้องพักนักศึกษาแพทย์"></datalist>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:14px;"><input type="checkbox" name="updateLocationText" checked> อัปเดตข้อความช่องสถานที่ตั้งหลักให้ตรงกันด้วย</label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="button outline" data-close-loc>ยกเลิก</button>
+      <button type="submit" class="button primary">บันทึกตำแหน่ง (${list.length} รายการ)</button>
+    </div>
+  </form>`;
+  dlg.querySelector('[data-close-loc]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();const fd=new FormData(e.currentTarget);
+    try{
+      const res=await api('/api/inventory/bulk-location',{method:'POST',body:JSON.stringify({assetIds:list.map(x=>x.id),building:fd.get('building'),floor:fd.get('floor'),room:fd.get('room'),subUnit:fd.get('subUnit'),updateLocationText:fd.get('updateLocationText')==='on'})});
+      dlg.close();await loadLocationFacets();await loadInventory(inventoryOffset);toast(`บันทึกตำแหน่ง ตึก/ชั้น/ห้อง แล้ว (${res.updated} รายการ)`);
+    }catch(err){showError(err);}
+  };
+  dlg.showModal();
+}
+
 $$('.nav-item[data-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.view)));
-document.addEventListener('click',event=>{const quick=event.target.closest('[data-quick-repair]');if(!quick)return;const item=(inventoryRows||assets).find(a=>a.id===Number(quick.dataset.quickRepair));if(item)openRepairDialog(item);});
-document.addEventListener('click',event=>{const target=event.target.closest('[data-go-view]');if(target)switchView(target.dataset.goView);const record=event.target.closest('[data-register-id]');if(record)window.govAssetApp.openRegister(Number(record.dataset.registerId));});
+document.addEventListener('click',event=>{const quick=event.target.closest('[data-quick-repair]');if(quick){const item=(inventoryRows||assets).find(a=>a.id===Number(quick.dataset.quickRepair));if(item)openRepairDialog(item);return;}const locBtn=event.target.closest('[data-assign-location]');if(locBtn){const item=(inventoryRows||assets).find(a=>a.id===Number(locBtn.dataset.assignLocation));if(item)openLocationAssignDialog([item]);}});
+document.addEventListener('click',event=>{const target=event.target.closest('[data-go-view]');if(target)switchView(target.dataset.goView);const record=event.target.closest('[data-register-id]');if(record)window.govAssetApp.openRegister(Number(record.dataset.registerId));const chip=event.target.closest('[data-remove-filter]');if(chip){const key=chip.dataset.removeFilter,value=chip.dataset.filterValue;if(smartFilterMultiKeys.includes(key))smartFilterCommitted[key]=smartFilterCommitted[key].filter(item=>item!==value);else if(key==='account'){smartFilterCommitted.account='';smartFilterCommitted.branch='';}else smartFilterCommitted.branch='';smartFilterDraft=cloneSmartFilter(smartFilterCommitted);applySmartFilterDraft();}});
 $$('[data-open-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.openView)));
-$('#assetSearch')?.addEventListener('input',()=>{++inventoryRequest;clearTimeout(inventorySearchTimer);inventorySearchTimer=setTimeout(()=>loadInventory(0),220);}); $('#statusFilter')?.addEventListener('change',()=>loadInventory(0)); $('#categoryFilter')?.addEventListener('change',()=>loadInventory(0)); $('#clearAssetFilter')?.addEventListener('click',()=>{const s=$('#assetSearch'),c=$('#categoryFilter'),st=$('#statusFilter');if(s)s.value='';if(c)c.value='';if(st)st.value='all';loadInventory(0);}); $('#codeSearch')?.addEventListener('input',()=>{renderCatalog();clearTimeout(fsnSearchTimer);fsnSearchTimer=setTimeout(()=>loadFsn(0),220);});
+$('#assetSearch')?.addEventListener('input',()=>{++inventoryRequest;clearTimeout(inventorySearchTimer);inventorySearchTimer=setTimeout(()=>loadInventory(0),220);});
+$('#categoryFilter')?.addEventListener('change',()=>loadInventory(0));
+$('#bulkLocationBtn')?.addEventListener('click',()=>openLocationAssignDialog(inventoryRows||[]));
+$('#clearAssetFilter')?.addEventListener('click',()=>{
+  const search=$('#assetSearch');if(search)search.value='';
+  smartFilterMultiKeys.forEach(key=>smartFilterCommitted[key]=[]);
+  smartFilterCommitted.account='';smartFilterCommitted.branch='';
+  smartFilterDraft=cloneSmartFilter(smartFilterCommitted);
+  if($('#smartFilterSearch'))$('#smartFilterSearch').value='';
+  applySmartFilterDraft();
+});
+$('#codeSearch')?.addEventListener('input',()=>{renderCatalog();clearTimeout(fsnSearchTimer);fsnSearchTimer=setTimeout(()=>loadFsn(0),220);});
+$('#smartFilterTabs')?.addEventListener('click',event=>{
+  const tab=event.target.closest('[data-filter-group]');if(!tab)return;
+  smartFilterActiveGroup=tab.dataset.filterGroup;$('#smartFilterSearch').value='';renderSmartFilterMenu();
+});
+$('#smartFilterSearch')?.addEventListener('input',renderSmartFilterMenu);
+$('#smartFilterOptions')?.addEventListener('change',event=>{
+  const input=event.target.closest('input');if(!input)return;
+  const group=smartFilterActiveGroup;
+  const value=input.value;
+  if(smartFilterMultiKeys.includes(group)){
+    const values=smartFilterDraft[group];
+    smartFilterDraft[group]=input.checked?[...new Set([...values,input.value])]:values.filter(value=>value!==input.value);
+  }else if(group==='account'){
+    smartFilterDraft.account=input.value;
+    if(smartFilterDraft.branch&&!smartFilterCatalog.branch.some(item=>item.value===smartFilterDraft.branch&&item.accountId===input.value))smartFilterDraft.branch='';
+  }else smartFilterDraft.branch=input.value;
+  renderSmartFilterMenu();
+  $$('#smartFilterOptions input').find(candidate=>candidate.value===value)?.focus();
+});
+$('#selectVisibleFilters')?.addEventListener('click',()=>{
+  const group=smartFilterActiveGroup;
+  const visible=$$('#smartFilterOptions input[type="checkbox"]').map(input=>input.value);
+  smartFilterDraft[group]=[...new Set([...smartFilterDraft[group],...visible])];
+  renderSmartFilterMenu();
+});
+$('#clearCurrentFilter')?.addEventListener('click',()=>clearSmartFilterGroup(smartFilterActiveGroup));
+$('#clearAllSmartFilters')?.addEventListener('click',()=>{$('#clearAssetFilter')?.click();});
+$('#applySmartFilters')?.addEventListener('click',applySmartFilterDraft);
+$('#closeSmartFilter')?.addEventListener('click',()=>$('#smartFilterMenu')?.hidePopover());
+$('#smartFilterMenu')?.addEventListener('toggle',event=>{
+  const open=event.newState==='open';
+  $('#smartFilterButton')?.setAttribute('aria-expanded',String(open));
+  if(open){smartFilterDraft=cloneSmartFilter(smartFilterCommitted);renderSmartFilterMenu();$('#smartFilterSearch')?.focus({preventScroll:true});requestAnimationFrame(positionSmartFilterMenu);}
+});
+window.addEventListener('resize',positionSmartFilterMenu);
+window.addEventListener('scroll',positionSmartFilterMenu,true);
 document.addEventListener('govasset:view-changed',e=>{if(e.detail?.name==='codes'&&(fsnRows===null||fsnRows.length===0))loadFsn(0);});
 $('#repairSearch')?.addEventListener('input',renderRepairs); $('#repairStatusFilter')?.addEventListener('change',renderRepairs); $('#depreciationSearch')?.addEventListener('input',renderDepreciation);
 $('#actorRole').value=currentRole; $('#actorRole').addEventListener('change',event=>switchRole(event.target.value));
@@ -510,12 +829,28 @@ $('#repairAssetResults').addEventListener('click',e=>{const b=e.target.closest('
 $('#repairAssetSearch').addEventListener('keydown',e=>{if(e.key==='ArrowDown'&&repairSearchItems.length){e.preventDefault();$('#repairAssetResults button')?.focus();}else if(e.key==='Enter'&&!selectedRepairAsset){e.preventDefault();clearTimeout(repairSearchTimer);searchRepairAssets();}});
 $('#repairAssetResults').addEventListener('keydown',e=>{const buttons=[...$('#repairAssetResults').querySelectorAll('button')],i=buttons.indexOf(document.activeElement);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();buttons[(i+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();$('#repairAssetSearch').focus();}});
 $('#repairLocationMismatch').addEventListener('change',repairSelectionState);
+$('#repairPhotos').addEventListener('change',event=>{
+  const files=[...event.currentTarget.files];event.currentTarget.value='';
+  const remaining=5-repairPhotoFiles.length;
+  if(files.length>remaining){$('#repairFormError').textContent='แนบรูปได้สูงสุด 5 รูปต่อใบแจ้งซ่อม';}
+  files.slice(0,remaining).forEach(file=>{
+    if(!['image/jpeg','image/png','image/webp'].includes(file.type)){ $('#repairFormError').textContent=`${file.name}: รองรับเฉพาะ JPG, PNG หรือ WebP`;return; }
+    if(file.size>15_000_000){$('#repairFormError').textContent=`${file.name}: ไฟล์ใหญ่เกิน 15 MB`;return;}
+    repairPhotoFiles.push({file,previewUrl:URL.createObjectURL(file)});
+  });
+  renderRepairPhotoPreviews();
+});
+$('#repairPhotoPreviews').addEventListener('click',event=>{
+  const button=event.target.closest('[data-remove-repair-photo]');if(!button)return;
+  const [photo]=repairPhotoFiles.splice(Number(button.dataset.removeRepairPhoto),1);if(photo)URL.revokeObjectURL(photo.previewUrl);
+  renderRepairPhotoPreviews();
+});
 $('#repairDialog').addEventListener('close',()=>{clearTimeout(repairSearchTimer);++repairSearchVersion;selectedRepairAsset=null;});
 $('#repairForm').addEventListener('submit',async event=>{
   event.preventDefault();const form=event.currentTarget,button=form.querySelector('[type="submit"]');if(button.disabled)return;
   if(!selectedRepairAsset){$('#repairFormError').textContent='กรุณาเลือกครุภัณฑ์จากผลค้นหา';return;}
-  const data=Object.fromEntries(new FormData(form));data.assetId=selectedRepairAsset.id;repairSubmitting=true;button.disabled=true;button.textContent='กำลังส่งคำขอ…';$('#repairFormError').textContent='';
-  try{const ticket=await api('/api/tickets',{method:'POST',body:JSON.stringify(data)});form.reset();$('#repairForm input[name="assetId"]')?.remove();$('#repairDialog').close();await refreshData();toast(`เปิด Ticket ${ticket.ticketNo} แล้ว`);switchView('repairs');await openTicket(ticket.id);}catch(error){$('#repairFormError').textContent=error.message;}finally{repairSubmitting=false;button.textContent='ส่งคำขอแจ้งซ่อม';repairSelectionState();}
+  const data=Object.fromEntries(new FormData(form));data.assetId=selectedRepairAsset.id;repairSubmitting=true;button.disabled=true;button.textContent='กำลังเตรียมรูป…';$('#repairFormError').textContent='';
+  try{data.photos=await Promise.all(repairPhotoFiles.map(photo=>encodeRepairPhoto(photo.file)));button.textContent='กำลังส่งคำขอ…';const ticket=await api('/api/tickets',{method:'POST',body:JSON.stringify(data)});form.reset();resetRepairPhotos();$('#repairForm input[name="assetId"]')?.remove();$('#repairDialog').close();await refreshData();toast(`เปิด Ticket ${ticket.ticketNo} แล้ว`);switchView('repairs');await openTicket(ticket.id);}catch(error){$('#repairFormError').textContent=error.message;}finally{repairSubmitting=false;button.textContent='ส่งคำขอแจ้งซ่อม';repairSelectionState();}
 });
 $('#newAssetTop')?.addEventListener('click',openAssetDialog); $('#newAssetList')?.addEventListener('click',openAssetDialog); $('#newSurvey')?.addEventListener('click',openAssetDialog);
 $('#closeDialog').addEventListener('click',()=>$('#assetDialog').close()); $('#cancelDialog').addEventListener('click',()=>$('#assetDialog').close()); $('#assetDialog').addEventListener('click',event=>{if(event.target===$('#assetDialog'))$('#assetDialog').close();});
@@ -539,6 +874,17 @@ $('#manualDialog .manual-content')?.insertAdjacentHTML('afterbegin',`<section><h
 $('#helpBtn').addEventListener('click',()=>$('#manualDialog').showModal()); $('#closeManual').addEventListener('click',()=>$('#manualDialog').close()); $('#manualDialog').addEventListener('click',event=>{if(event.target===$('#manualDialog'))$('#manualDialog').close();});
 $('.close-notice')?.addEventListener('click',event=>event.currentTarget.closest('.notice').remove());
 $('#ticketDialog').addEventListener('click',event=>{if(event.target===$('#ticketDialog'))$('#ticketDialog').close();});
+$('#closeRepairPrintDialog').addEventListener('click',()=>$('#repairPrintDialog').close());
+$('#cancelRepairPrint').addEventListener('click',()=>$('#repairPrintDialog').close());
+$('#repairPrintDialog').addEventListener('click',event=>{if(event.target===$('#repairPrintDialog'))$('#repairPrintDialog').close();});
+$('#repairPrintForm').addEventListener('change',event=>{if(event.target.name==='printFormat')$('#repairSlipSizeField').hidden=event.target.value==='work-order';});
+$('#repairPrintForm').addEventListener('submit',event=>{
+  event.preventDefault();
+  const dialog=$('#repairPrintDialog'),data=new FormData(event.currentTarget),id=Number(dialog.dataset.ticketId);
+  const format=data.get('printFormat'),slipSize=data.get('slipSize');
+  dialog.close();
+  printTicket(id,format,slipSize).catch(showError);
+});
 applyFontScale(fontScale);
-window.govAssetApp={api,toast,showError,refreshData,switchView,goBack,fmtDate,openTicket,openRepairDialog,getRole:()=>currentRole,canManageSettings:()=>{const s=window.govAssetAccess?.session;return s?.required?Boolean(s.isAdmin):currentRole===ROLE_OFFICER;},loadFsn,openAssetDialog};
+window.govAssetApp={api,toast,showError,refreshData,switchView,openCategory,goBack,fmtDate,openTicket,openRepairDialog,getRole:()=>currentRole,canManageSettings:()=>{const s=window.govAssetAccess?.session;return s?.required?Boolean(s.isAdmin):currentRole===ROLE_OFFICER;},loadFsn,loadLocationFacets,loadInventory,setSmartFilterAccountChoices:syncSmartFilterAccountChoices,openAssetDialog};
 refreshData();

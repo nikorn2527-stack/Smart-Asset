@@ -16,12 +16,15 @@ import mimetypes
 import os
 import re
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Iterator
 from urllib.parse import parse_qs, unquote, urlparse
-from asset_api import handle as handle_asset_api
+from asset_api import ensure_location_hierarchy, handle as handle_asset_api
 import asset_photos
+import ticket_photos
 import dashboard_api
 from smart_assets import base_url, branding, public_asset, public_receipt, qr_url, token_for
 from qr_smart import (
@@ -130,8 +133,18 @@ def connect() -> sqlite3.Connection:
     return conn
 
 
+@contextmanager
+def managed_connection() -> Iterator[sqlite3.Connection]:
+    db = connect()
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
+
+
 def initialize() -> None:
-    with connect() as db:
+    with managed_connection() as db:
         # Upgrade the original lightweight demo table before applying indexes
         # from schema.sql. Existing ids and repair foreign keys remain intact.
         old_assets = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='assets'").fetchone()
@@ -333,6 +346,7 @@ def initialize() -> None:
         seed_starter_catalog(db)
         initialize_qr_smart(db)
         asset_photos.ensure_schema(db)
+        ticket_photos.ensure_schema(db)
         dashboard_api.ensure_schema(db)
 
 
@@ -392,7 +406,7 @@ class Handler(BaseHTTPRequestHandler):
     def read_json(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length < 0 or length > (asset_photos.UPLOAD_BODY_LIMIT if asset_photos.UPLOAD_PATH.fullmatch(self.path) else 35_000_000 if self.path.startswith("/api/imports/") else 9_000_000 if self.path.startswith("/api/supply/") else 35_000_000 if self.path == "/api/backups/sources" else 750_000 if self.path == "/api/branding" else 100_000):
+            if length < 0 or length > (asset_photos.UPLOAD_BODY_LIMIT if asset_photos.UPLOAD_PATH.fullmatch(self.path) else ticket_photos.UPLOAD_BODY_LIMIT if ticket_photos.UPLOAD_PATH.fullmatch(self.path) else 35_000_000 if self.path.startswith("/api/imports/") else 9_000_000 if self.path.startswith("/api/supply/") else 35_000_000 if self.path == "/api/backups/sources" else 750_000 if self.path == "/api/branding" else 100_000):
                 raise ApiError("ข้อมูลที่ส่งมายาวเกินกำหนด", 413)
             data = json.loads(self.rfile.read(length) or b"{}")
             if not isinstance(data, dict):
@@ -402,7 +416,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError("JSON ไม่ถูกต้อง")
 
     def handle_api(self, method: str, path: str, query: dict, body: dict):
-        with connect() as db:
+        with managed_connection() as db:
             authenticated = access.auth_api(db,self,method,path,body)
             if authenticated is not None: return authenticated
             ctx = access.authenticate(db,self,method,path,body)
@@ -496,7 +510,7 @@ class Handler(BaseHTTPRequestHandler):
                 if row is None:
                     raise ApiError("ไม่พบ Ticket นี้", 404)
                 events = [dict(item) for item in db.execute("SELECT id,actor,action,from_status,to_status,note,created_at AS createdAt FROM ticket_events WHERE ticket_id=? ORDER BY id", (ticket_id,))]
-                return {**ticket_dict(row), "events": events}
+                return {**ticket_dict(row), "events": events, "photos": ticket_photos.list_photos(db, ticket_id)}
             if method == "POST" and path == "/api/tickets":
                 return self.create_ticket(db, body)
             if method == "POST" and path == "/api/assets":
@@ -668,6 +682,10 @@ class Handler(BaseHTTPRequestHandler):
                 "events": [dict(e) for e in db.execute("SELECT action,actor,created_at AS createdAt FROM asset_events WHERE asset_id=? ORDER BY id DESC LIMIT 50", (asset_id,))]}
 
     def create_ticket(self, db: sqlite3.Connection, body: dict):
+        try:
+            prepared_photos = ticket_photos.validate_batch(body.get("photos"))
+        except ticket_photos.TicketPhotoError as exc:
+            raise ApiError(str(exc))
         asset_name = clean_text(body.get("assetName"), 300, "ครุภัณฑ์")
         issue = clean_text(body.get("issue"), 3000, "อาการ")
         location = clean_text(body.get("location", ""), 300, "สถานที่", required=False)
@@ -730,10 +748,11 @@ class Handler(BaseHTTPRequestHandler):
         cur = db.execute("""INSERT INTO tickets(ticket_no,asset_id,asset_code,asset_name,location,issue,urgency,requester,contact,status,created_at,updated_at,reporter_note)
             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (ticket_no, asset["id"] if asset else None, asset["code"] if asset else asset_code, asset_name, location, issue, urgency, requester, contact, "รับแจ้งใหม่", stamp, stamp, reporter_note))
         db.execute("INSERT INTO ticket_events(ticket_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)", (cur.lastrowid, requester, "สร้าง Ticket", "", "รับแจ้งใหม่", "รับคำขอและออกเลข Ticket อัตโนมัติ" + ("\nหมายเหตุผู้แจ้ง: " + reporter_note if reporter_note else ""), stamp))
+        ticket_photos.save_batch(db, cur.lastrowid, prepared_photos, str(body.get("actor") or requester)[:160], stamp)
         if work_id is not None:
             db.execute("UPDATE scheduled_work SET repair_ticket_id=? WHERE id=?", (cur.lastrowid, work_id))
         row = db.execute("SELECT * FROM tickets WHERE id=?", (cur.lastrowid,)).fetchone()
-        return ticket_dict(row), 201
+        return {**ticket_dict(row), "photos": ticket_photos.list_photos(db, cur.lastrowid)}, 201
 
     def create_asset(self, db: sqlite3.Connection, body: dict):
         if body.get("accountId"):
@@ -925,11 +944,33 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+        ticket_photo = ticket_photos.IMAGE_PATH.fullmatch(path)
+        if ticket_photo:
+            try:
+                ticket_id, photo_id = int(ticket_photo[1]), int(ticket_photo[2])
+                with managed_connection() as db:
+                    query = parse_qs(parsed.query); ctx = access.authenticate(db, self, 'GET', path, {})
+                    access.authorize(db, ctx, 'GET', path, query, {})
+                    found = ticket_photos.image_bytes(db, ticket_id, photo_id, ticket_photo[3])
+                if found is None:
+                    self.send_json({"error": "ไม่พบรูปนี้"}, 404)
+                    return
+                mime, data = found
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "private, max-age=86400")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(data)
+            except (ApiError, GovernanceError) as exc:
+                self.send_json({"error": str(exc)}, exc.status)
+            return
         photo = asset_photos.IMAGE_PATH.fullmatch(path)
         if photo:
             # Images are binary, so they skip the JSON responder but keep the same access checks.
             try:
-                with connect() as db:
+                with managed_connection() as db:
                     query = parse_qs(parsed.query); ctx = access.authenticate(db, self, 'GET', path, {})
                     access.authorize(db, ctx, 'GET', path, query, {})
                     found = asset_photos.image_bytes(db, int(photo[1]), int(photo[2]), photo[3])
@@ -952,7 +993,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
             folder = None
             try:
-                with connect() as db:
+                with managed_connection() as db:
                     query=parse_qs(parsed.query);ctx=access.authenticate(db,self,'GET',path,{})
                     access.authorize(db,ctx,'GET',path,query,{})
                     actor=query.get('actor',[''])[0]
@@ -985,7 +1026,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}", flush=True)
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/qr-smart.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css", "/qr-smart.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -1015,7 +1056,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
             folder = None
             try:
-                with connect() as db:
+                with managed_connection() as db:
                     query=parse_qs(parsed.query);ctx=access.authenticate(db,self,'GET',path,{})
                     access.authorize(db,ctx,'GET',path,query,{})
                     actor=query.get('actor',[''])[0]
@@ -1047,7 +1088,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/qr-smart.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css", "/qr-smart.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -1077,6 +1118,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not 0<length<=1_000_000:
                     raise ApiError("ขนาด webhook ไม่ถูกต้อง",413)
                 raw=self.rfile.read(length)
+                with managed_connection() as db:
+                    result=verify_webhook(db,raw,self.headers.get("X-Line-Signature",""))
+                self.send_json(result)
+                return
             if method == "POST" and unquote(parsed.path) == "/api/admin/upload-database":
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
@@ -1178,13 +1223,15 @@ def main() -> None:
     initialize_shared_catalog(DB_PATH)
     initialize_asset_import(DB_PATH)
     access.initialize(DB_PATH)
+    with managed_connection() as db:
+        ensure_location_hierarchy(db)
     stop_scheduler = threading.Event()
     def run_scheduler():
         WORK_SCHEDULER["running"] = True
         interval = max(1, int(os.environ.get("WORK_SCHEDULER_INTERVAL_SECONDS", "60")))
         while not stop_scheduler.is_set():
             try:
-                with connect() as db:
+                with managed_connection() as db:
                     db.execute("BEGIN IMMEDIATE")
                     generate_due(db)
                 WORK_SCHEDULER.update(lastRun=now_iso(), lastError=None)
@@ -1208,7 +1255,7 @@ def main() -> None:
     threading.Thread(target=run_line,name="line-notifications",daemon=True).start()
     print(f"SQLite prototype listening on http://{HOST}:{PORT}")
     print(f"SQLite database: {DB_PATH}")
-    with connect() as db:
+    with managed_connection() as db:
         print(f"Repair approval threshold (demo only): {approval_threshold(db):,.2f} THB")
     ThreadingHTTPServer.allow_reuse_address = True
     with ThreadingHTTPServer((HOST, PORT), Handler) as server:

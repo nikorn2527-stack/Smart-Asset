@@ -6,12 +6,15 @@ class WebImport(HTTPFixture):
     def setUp(self):
         self.aid=self.call('/api/governance/accounts',{'actor':OFFICER,'name':'องค์กรนำเข้า','code':uuid.uuid4().hex},expected=201)['id']
         self.cid=self.call('/api/catalog/categories')[0]['id']
-    def upload(self,rows=None,headers=None):
-        b=Workbook();s=b.active;s.title='ทะเบียนจริง';s.append(headers or ['เลขครุภัณฑ์','รายละเอียดครุภัณฑ์','กลุ่มครุภัณฑ์','ราคาทุน','มูลค่าเสื่อมสะสม','มูลค่าคงเหลือ','หมายเลขเครื่อง (Serial Number)','คอลัมน์เฉพาะหน่วยงาน'])
-        for r in rows or [['7110-002-0001-0009','ตู้เดิม','หมวดเดิม',1000,200,800,'SN-009','เก็บทั้งหมด']]:s.append(r)
-        data=io.BytesIO();b.save(data);archive=io.BytesIO()
-        with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:z.writestr('folder/ทะเบียน.xlsx',data.getvalue())
-        return self.call('/api/imports/preview',{'actor':OFFICER,'accountId':self.aid,'filename':'ทะเบียน.zip','content':base64.b64encode(archive.getvalue()).decode()})
+    def upload(self,rows=None,headers=None,archive_bytes=None):
+        if archive_bytes is None:
+            b=Workbook();s=b.active;s.title='ทะเบียนจริง';s.append(headers or ['เลขครุภัณฑ์','รายละเอียดครุภัณฑ์','กลุ่มครุภัณฑ์','ราคาทุน','มูลค่าเสื่อมสะสม','มูลค่าคงเหลือ','หมายเลขเครื่อง (Serial Number)','คอลัมน์เฉพาะหน่วยงาน'])
+            for r in rows or [['7110-002-0001-0009','ตู้เดิม','หมวดเดิม',1000,200,800,'SN-009','เก็บทั้งหมด']]:s.append(r)
+            data=io.BytesIO();b.save(data);archive=io.BytesIO()
+            with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:z.writestr('folder/ทะเบียน.xlsx',data.getvalue())
+            archive_bytes=archive.getvalue()
+        self.last_archive=archive_bytes
+        return self.call('/api/imports/preview',{'actor':OFFICER,'accountId':self.aid,'filename':'ทะเบียน.zip','content':base64.b64encode(archive_bytes).decode()})
     def test_preview_all_columns_confirm_original_values_idempotency(self):
         job=self.upload();self.assertEqual(job['assetRows'],1);self.assertIsNone(job['files'][0]['columns'][-1]['field'])
         with sqlite3.connect(self.db) as db:self.assertEqual(db.execute('SELECT COUNT(*) FROM assets WHERE numbering_account_id=?',(self.aid,)).fetchone()[0],0)
@@ -22,7 +25,7 @@ class WebImport(HTTPFixture):
         with sqlite3.connect(self.db) as db:
             raw=json.loads(db.execute('SELECT raw_data_json FROM source_row_records WHERE asset_id=?',(inv['id'],)).fetchone()[0]);self.assertEqual(raw['คอลัมน์เฉพาะหน่วยงาน'],'เก็บทั้งหมด')
             self.assertEqual(db.execute('SELECT COUNT(*) FROM source_columns WHERE source_document_id=?',(inv['sourceDocumentId'],)).fetchone()[0],8)
-        self.assertTrue(self.upload()['alreadyImported'])
+        self.assertTrue(self.upload(archive_bytes=self.last_archive)['alreadyImported'])
     def test_duplicate_blank_and_nonstandard_numbers_remain_records(self):
         job=self.upload(rows=[['OLD/01','รายการ ก'],['OLD/01','รายการ ข'],['','ไม่มีเลขแต่มีชื่อ']])
         self.assertEqual(job['duplicateNumbers'],2);self.assertEqual(job['blankNumbers'],1)
