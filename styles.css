@@ -96,6 +96,20 @@ body{font-size:16px}.brand strong{font-size:16px}.brand span{font-size:12px}.wor
 .role-picker:hover{border-color:#cbd5e1}
 .role-picker span{font-size:11.5px;color:#64748b;font-weight:600}
 .role-picker select{height:100%;border:none;background:transparent;padding:0 2px;font-size:12px;font-weight:700;color:#1e293b;cursor:pointer;outline:none}
+.role-permission-help{position:relative;display:inline-flex;align-items:center;font-size:11px}
+.role-permission-help summary{list-style:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 9px;background:#fff;color:#334155;font-weight:700;cursor:pointer}
+.role-permission-help summary::-webkit-details-marker{display:none}
+.role-permission-help summary::before{content:"ⓘ ";color:#147d78}
+.role-permission-help[open] summary{border-color:#147d78}
+.role-permission-help>div{position:absolute;z-index:30;top:calc(100% + 8px);right:0;width:min(340px,90vw);padding:14px 16px;background:#fff;border:1px solid #dce5ea;border-radius:10px;box-shadow:0 12px 32px rgba(16,49,67,.18);white-space:normal;color:#334155}
+.role-permission-help strong{display:block;color:#16384d;margin-bottom:8px}
+.role-permission-help ul{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+.role-permission-help li{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.role-permission-help li span b,.role-permission-help li span small{display:block}
+.role-permission-help li span b{font-size:10px}
+.role-permission-help li span small{color:#647687;font-size:9px}
+.role-permission-help li>strong{font-size:10px;white-space:nowrap}
+.role-permission-help>div p{margin:10px 0 0;padding-top:8px;border-top:1px solid #e2e9ed;color:#647687;font-size:10px}
 
 /* Tabs Architecture for Approvals, Work, and Codes */
 .approval-tabs-bar,.work-tabs-bar,.codes-tabs-bar{display:flex!important;align-items:center!important;gap:6px!important;padding:5px 6px!important;background:#f1f5f9!important;border-radius:10px!important;border:1px solid #e2e8f0!important;margin-bottom:14px!important;overflow-x:auto!important;flex-shrink:0!important}
