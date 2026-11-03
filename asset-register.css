@@ -30,6 +30,13 @@
   padding: 14px 12px 6px;
 }
 
+.nav-section-title-en {
+  display: block;
+  white-space: nowrap;
+  font-size: 9px;
+  letter-spacing: 0.45px;
+}
+
 .nav-divider {
   height: 1px;
   background: rgba(255, 255, 255, 0.12);

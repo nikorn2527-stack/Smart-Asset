@@ -1,14 +1,9 @@
-/* QR Smart settings: feature flags, Location QR master, and overdue loans. */
+/* QR Smart settings: feature flags and Location QR master. */
   (() => {
     const app = window.govAssetApp;
     const $ = (s, r = document) => r.querySelector(s);
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const KIND_LABELS = { building: 'อาคาร', floor: 'ชั้น', room: 'ห้อง', service_point: 'จุดบริการ', common_area: 'พื้นที่ส่วนกลาง' };
-    const LOCATION_PRINT_PROFILES = {
-      a6: { label: 'A6 · 105 × 148 มม.', page: '105mm 148mm', margin: '6mm', scale: 1 },
-      a5: { label: 'A5 · 148 × 210 มม.', page: '148mm 210mm', margin: '6mm', scale: 1.46 },
-      a4: { label: 'A4 · 210 × 297 มม.', page: '210mm 297mm', margin: '12mm', scale: 2 }
-    };
     const view = $('#view-qr-smart');
     if (!view || !app) return;
 
@@ -16,6 +11,21 @@
     let locations = [];
     let kinds = Object.keys(KIND_LABELS);
     let editingId = null;
+    let activeTab = 'services';
+    let initializedTab = false;
+
+    function selectQrTab(tabName) {
+      activeTab = tabName === 'locations' ? 'locations' : 'services';
+      const selectedButton = $(`[data-qr-smart-tab="${activeTab}"]`);
+      view.querySelectorAll('[data-qr-smart-tab]').forEach(button => {
+        const selected = button === selectedButton;
+        button.classList.toggle('active', selected);
+        button.setAttribute('aria-selected', String(selected));
+        button.tabIndex = selected ? 0 : -1;
+      });
+      $('#qrSmartFlagsPanel').hidden = activeTab !== 'services';
+      $('#qrSmartLocationsPanel').hidden = activeTab !== 'locations';
+    }
 
     function status(message, alert = false) {
       const el = $('#qrSmartStatus');
@@ -51,11 +61,68 @@
     function flagFields() {
       const labels = features.labels || {};
       const flags = features.flags || {};
+      const descriptions = {
+        assetQr: 'ให้สแกน QR บนตัวครุภัณฑ์เพื่อดูข้อมูลและบริการของรายการนั้น',
+        locationQr: 'ใช้ QR ที่ห้องหรือจุดบริการ และจัดการ Location QR ในหน้านี้',
+        guestReporting: 'ให้ผู้สแกนส่งแจ้งปัญหาจากหน้า QR โดยไม่ต้องเข้าแอปเจ้าหน้าที่',
+        assetIntake: 'เปิดขั้นตอนรับเข้าและตรวจรับครุภัณฑ์',
+        borrowIssueReturn: 'เปิดการทำรายการยืม เบิก คืน และติดตามรายการเกินกำหนด',
+        repairManagement: 'เปิดเมนูและขั้นตอนติดตามงานแจ้งซ่อม',
+        returnNotifications: 'ระบบแจ้งเตือนอัตโนมัติยังไม่พร้อมใช้งาน',
+        fullAssetRegistration: 'เปิดแบบฟอร์มทะเบียนครุภัณฑ์ที่มีข้อมูลครบ',
+        assetNumberGeneration: 'เปิดการออกเลขครุภัณฑ์และรหัส FSN',
+        depreciation: 'เปิดเมนูหลักเกณฑ์และข้อมูลค่าเสื่อมราคา',
+        additionalQrServices: 'เปิดบริการเสริมที่ใช้งานผ่านหน้า QR'
+      };
       const keys = Object.keys(labels).length ? Object.keys(labels) : Object.keys(flags);
-      $('#qrSmartFlagFields').innerHTML = keys.map(key => `<label class="check-inline qr-smart-flag">
-      <input type="checkbox" name="${esc(key)}" ${flags[key] ? 'checked' : ''}>
-      <span><b>${esc(labels[key] || key)}</b><small>${esc(key)}</small></span>
-    </label>`).join('') || '<p class="field-hint">ไม่พบรายการบริการ</p>';
+      const writable = canWrite();
+      const busy = $('#qrSmartFlagFields').getAttribute('aria-busy') === 'true';
+      const availableKeys = keys.filter(key => key !== 'returnNotifications');
+      const enabledCount = availableKeys.filter(key => Boolean(flags[key])).length;
+      $('#qrSmartFlagsSummary').textContent = `เปิดใช้แล้ว ${enabledCount} / ${availableKeys.length} บริการ`;
+      $('#qrSmartFlagFields').innerHTML = keys.map(key => {
+        const enabled = Boolean(flags[key]);
+        const label = labels[key] || key;
+        const description = descriptions[key] || 'กำหนดว่าจะเปิดใช้บริการนี้ในระบบหรือไม่';
+        const ready = key !== 'returnNotifications';
+        return `<label class="qr-smart-flag" data-enabled="${enabled}">
+          <input type="checkbox" role="switch" name="${esc(key)}" aria-label="${esc(label)}" aria-checked="${enabled}" ${enabled ? 'checked' : ''} ${writable && !busy && ready ? '' : 'disabled'}>
+          <span class="qr-smart-flag-copy"><b>${esc(label)}</b><small>${esc(description)}</small><span class="qr-smart-flag-state">${ready ? (enabled ? 'เปิดใช้งาน' : 'ปิดอยู่') : 'ยังไม่พร้อมใช้งาน'}</span></span>
+          <span class="qr-smart-switch" aria-hidden="true"></span>
+        </label>`;
+      }).join('') || '<p class="field-hint">ไม่พบรายการบริการ</p>';
+      $('#qrSmartFlagFields').querySelectorAll('input[role="switch"]').forEach(input => {
+        input.addEventListener('change', () => saveFeatureToggle(input));
+      });
+    }
+
+    async function saveFeatureToggle(changedInput) {
+      const fields = $('#qrSmartFlagFields');
+      const inputs = [...fields.querySelectorAll('input[role="switch"]')];
+      const selectedValue = changedInput.checked;
+      const label = features.labels?.[changedInput.name] || changedInput.getAttribute('aria-label');
+      inputs.forEach(input => { input.disabled = true; });
+      fields.setAttribute('aria-busy', 'true');
+      status(`กำลัง${selectedValue ? 'เปิด' : 'ปิด'}บริการ${label}…`);
+      try {
+        const flags = Object.fromEntries(inputs.map(input => [input.name, input.checked]));
+        features = await call('/api/features', {
+          method: 'PUT',
+          body: JSON.stringify({ flags, revision: features.revision, actor: app.getRole?.() || 'เจ้าหน้าที่พัสดุ' })
+        });
+        flagFields();
+        applyModuleVisibility();
+        await loadLocations();
+        status(`บันทึกแล้ว · ${label} — ${selectedValue ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}`);
+      } catch (error) {
+        flagFields();
+        status(error.message, true);
+      } finally {
+        fields.removeAttribute('aria-busy');
+        fields.querySelectorAll('input[role="switch"]').forEach(input => {
+          input.disabled = !canWrite() || input.name === 'returnNotifications';
+        });
+      }
     }
 
     function locationOptions(exceptId) {
@@ -89,13 +156,14 @@
     function renderLocations() {
       const list = $('#qrSmartLocationList');
       const on = Boolean(features.flags?.locationQr);
-      $('#qrSmartLocationsPanel').hidden = !on;
+      $('#qrSmartLocationsSummary').textContent = on ? `${locations.length} จุดบริการ` : 'ยังไม่เปิดบริการ';
       const notice = $('#qrSmartSimpleNotice');
-      if (notice) notice.hidden = on && Boolean(features.flags?.borrowIssueReturn);
+      if (notice) notice.hidden = on;
       $('#qrSmartNewLocation').disabled = !on || !canWrite();
       if (!on) {
         list.innerHTML = '';
         $('#qrSmartLocationForm').hidden = true;
+        view.classList.remove('location-form-open');
         return;
       }
       list.innerHTML = locations.length ? locations.map(item => {
@@ -103,82 +171,26 @@
         return `<article class="qr-smart-location panel">
         <div>
           <strong>${esc(item.name)}</strong>
-          <span>${esc(KIND_LABELS[item.kind] || item.kind)} · ${active ? 'เปิดใช้งาน' : 'ปิดใช้งานชั่วคราว'}</span>
-          <small>ชื่อสาธารณะ: ${esc(item.public_name || item.publicName || item.name)}</small>
-          <label>URL ของ Location QR<input readonly value="${esc(item.qrUrl || '')}"></label>
-          <label>โทเคน (คงที่เมื่อเปลี่ยนชื่อ)<input readonly value="${esc(item.qrToken || '')}"></label>
+          <span>${esc(KIND_LABELS[item.kind] || item.kind)} · ${active ? 'พร้อมใช้งาน' : 'ปิดชั่วคราว'}</span>
+          <small>ผู้สแกนเห็น: ${esc(item.public_name || item.publicName || item.name)}</small>
         </div>
         <div class="qr-smart-location-actions">
-          <label class="qr-smart-location-paper">ขนาดกระดาษ · ใช้แบบเดียวกันทุกขนาด
-          <select class="qr-smart-location-size" data-print-location-size="${item.id}" aria-label="ขนาดกระดาษป้าย Location QR">
-            ${Object.entries(LOCATION_PRINT_PROFILES).map(([id, profile]) => `<option value="${id}" ${id === 'a6' ? 'selected' : ''}>${esc(profile.label)}</option>`).join('')}
-          </select>
-          </label>
-          <button type="button" class="button outline" data-print-location="${item.id}">🖨️ พิมพ์ป้าย Location QR</button>
-          <button type="button" class="button outline" data-edit-location="${item.id}" ${canWrite() ? '' : 'disabled'}>แก้ไข</button>
+          <div class="qr-smart-location-buttons">
+            <button type="button" class="button primary" data-use-location-template="${item.id}">ใช้เทมเพลตพิมพ์ QR</button>
+            <button type="button" class="button outline" data-edit-location="${item.id}" ${canWrite() ? '' : 'disabled'}>แก้ไขข้อมูล</button>
+          </div>
         </div>
+        <details class="qr-smart-location-details">
+          <summary>ข้อมูล QR สำหรับเปิดหรือเชื่อมต่อ</summary>
+          <label>URL ของ Location QR<input readonly value="${esc(item.qrUrl || '')}"></label>
+          <label>โทเคนประจำจุด (คงเดิมเมื่อเปลี่ยนชื่อ)<input readonly value="${esc(item.qrToken || '')}"></label>
+        </details>
       </article>`;
       }).join('') : '<p class="field-hint">ยังไม่มีจุด Location เพิ่มตำแหน่ง แล้วพิมพ์ป้ายไปติด ณ จุดที่ต้องการให้สแกนดูครุภัณฑ์</p>';
     }
 
-    function printLocation(item, sizePreset = 'a6') {
-      const branding = window.govAssetBranding || {};
-      const name = item.publicName || item.public_name || item.name || 'จุดบริการ';
-      const kind = KIND_LABELS[item.kind] || item.kind || 'จุดบริการ';
-      const profile = LOCATION_PRINT_PROFILES[sizePreset] || LOCATION_PRINT_PROFILES.a6;
-      const logoUrl = branding.logo || `${location.origin}/assets/govasset-mark-optimized.png`;
-      const orgName = branding.organization || branding.appName || 'Smart Asset';
-      const locationCode = item.code || 'ยังไม่ระบุ';
-      const frame = document.createElement('iframe');
-      frame.className = 'smart-print-frame';
-      frame.title = 'พิมพ์ฉลาก Location QR';
-      document.body.append(frame);
-      const doc = frame.contentDocument;
-      doc.open();
-      doc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ป้ายจุด · ${esc(name)}</title><style>
-@font-face{font-family:LocationSarabun;src:url('/assets/fonts/Sarabun-Regular.ttf') format('truetype');font-weight:400}
-@font-face{font-family:LocationSarabun;src:url('/assets/fonts/Sarabun-Bold.ttf') format('truetype');font-weight:700}
-@page{size:${profile.page};margin:${profile.margin}}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{min-height:100vh;display:flex;justify-content:center;align-items:flex-start;color:#17384b;font-family:LocationSarabun,Tahoma,sans-serif}
-.sign{position:relative;flex:none;width:93mm;height:132mm;transform:scale(${profile.scale});transform-origin:top center;overflow:hidden;border:1mm solid #174b62;border-radius:4mm;background:#fff;padding:6mm 7mm;display:flex;flex-direction:column;align-items:center;text-align:center}
-.brand{width:100%;min-height:12mm;display:flex;align-items:center;justify-content:center;gap:3mm;padding-bottom:3mm;border-bottom:.35mm solid #d5e2e8}
-.brand img{width:9mm;height:9mm;object-fit:contain;flex:none}
-.brand-name{font-size:9pt;font-weight:700;line-height:1.25;text-align:left}
-.brand-caption{display:block;margin-top:.7mm;color:#607987;font-size:7.5pt;font-weight:400}
-.kicker{margin:4mm 0 1.5mm;color:#147d78;font-size:9pt;font-weight:700;letter-spacing:.35mm}
-.title{width:100%;margin:0;color:#123d56;font-size:17pt;font-weight:700;line-height:1.2;overflow-wrap:anywhere}
-.kind{margin:1.5mm 0 0;color:#607987;font-size:9pt}
-.code{width:100%;margin:3mm 0 0;padding:1.5mm 2mm;border:.35mm solid #d5e2e8;border-radius:2mm;color:#17384b;font-size:10pt;line-height:1.25}
-.code span,.code strong{display:block}
-.code span{color:#607987;font-size:8pt}
-.code strong{margin-top:.5mm;overflow-wrap:anywhere}
-.qr{width:48mm;height:48mm;object-fit:contain;margin:3mm auto 0;padding:1.5mm;border:.4mm solid #d5e2e8;border-radius:2mm;background:#fff}
-.instruction{margin:2mm 0 0;color:#334e5e;font-size:9pt;line-height:1.3}
-.footer{margin-top:auto;padding-top:1.5mm;color:#82939d;font-size:7pt;letter-spacing:.2mm}
-@media print{body{min-height:0}.sign{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-</style></head><body><main class="sign">
-<header class="brand"><img src="${esc(logoUrl)}" alt=""><div class="brand-name">${esc(orgName)}<span class="brand-caption">ป้ายระบุตำแหน่งครุภัณฑ์</span></div></header>
-<p class="kicker">ป้ายจุด · ${esc(kind)}</p>
-<h1 class="title">${esc(name)}</h1>
-<p class="kind">ตำแหน่งสำหรับดูครุภัณฑ์ประจำจุด</p>
-<div class="code"><span>รหัส Location</span><strong>${esc(locationCode)}</strong></div>
-<img class="qr" src="${esc(item.qrImage || '')}" alt="QR สำหรับดูครุภัณฑ์ประจำตำแหน่งนี้">
-<p class="instruction">สแกนเพื่อดูรายการครุภัณฑ์และแจ้งปัญหาประจำจุด</p>
-<footer class="footer">SMART ASSET · QR ประจำจุด</footer>
-</main></body></html>`);
-      doc.close();
-      Promise.all([...doc.images].map(img => img.decode().catch(() => undefined)))
-        .then(() => doc.fonts.ready)
-        .then(() => {
-        frame.contentWindow.focus();
-        frame.contentWindow.print();
-      });
-      frame.contentWindow.addEventListener('afterprint', () => frame.remove(), { once: true });
-    }
-
     function showLocationForm(item = null) {
+      selectQrTab('locations');
       editingId = item?.id || null;
       const form = $('#qrSmartLocationForm');
       const publicName = item?.publicName || item?.public_name || item?.name || '';
@@ -186,56 +198,95 @@ body{min-height:100vh;display:flex;justify-content:center;align-items:flex-start
       const active = item ? item.isActive !== false && item.is_active !== 0 : true;
       const canPlace = item ? item.guestCanReportPlace !== false && item.guest_can_report_place !== 0 : true;
       const ids = (item?.guestAssetIds || []).join(', ');
+      view.classList.add('location-form-open');
       form.hidden = false;
-      form.innerHTML = `<h3>${item ? 'แก้ไขจุดบริการ' : 'เพิ่มจุดบริการ'}</h3>
-      <p class="field-hint">มาตรฐาน: ฉลากจุดนี้ติดที่ประตูห้อง เคาน์เตอร์ หรือผนังจุดสังเกตง่าย (รองรับพิมพ์ถึงขนาด A4 สำหรับครุภัณฑ์ที่อยู่สูง เช่น แอร์บนฝ้า) เปลี่ยนชื่อได้ โทเคนเดิม</p>
-      ${item ? `<label>URL ของ Location QR<input readonly value="${esc(item.qrUrl || '')}"></label>
-        <label>โทเคน<input readonly value="${esc(item.qrToken || '')}"></label>` : ''}
-      <div class="qr-smart-grid">
-        <label>ประเภทพื้นที่ <span class="required">*</span><select name="kind" required>${kindOptions(item?.kind || 'room')}</select></label>
-        <label>พื้นที่แม่<select name="parentId"><option value="">ไม่มี</option>${locationOptions(item?.id)}</select></label>
-        <label>ชื่อในระบบ <span class="required">*</span><input name="name" required maxlength="200" value="${esc(item?.name || '')}" placeholder="เช่น อาคารศูนย์แพทยศาสตรศึกษา ชั้น 3 ห้องบรรยาย 1"></label>
-        <label>ชื่อที่แสดงสาธารณะ<input name="publicName" maxlength="200" value="${esc(publicName)}" placeholder="เช่น ห้องบรรยาย 1 ชั้น 3"></label>
-        <label>รหัสจุด<input name="code" maxlength="80" value="${esc(item?.code || '')}" placeholder="เช่น MED-FL3-RM01"></label>
+      form.innerHTML = `<div class="qr-location-form-heading">
+        <div><span class="eyebrow">LOCATION QR</span><h3>${item ? 'แก้ไขจุดบริการ' : 'เพิ่มจุดบริการ'}</h3>
+          <p>กรอกข้อมูลตำแหน่งก่อน แล้วกำหนดว่าผู้สแกนจะเห็นหรือทำอะไรได้</p></div>
+        <button class="button outline" type="button" id="qrSmartCancelLocationTop">ปิด</button>
       </div>
-      <label>ข้อมูลสาธารณะ<textarea name="publicInfo" rows="2" maxlength="2000" placeholder="คำแนะนำเมื่อสแกน เช่น เลือกแอร์หรืออุปกรณ์ในห้องเพื่อแจ้งซ่อม">${esc(publicInfo)}</textarea></label>
-      <div class="panel" style="padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0">
-        <label style="margin-bottom:6px">🔍 ค้นหาครุภัณฑ์ในห้อง/จุดนี้เพื่อผูกกับ QR (เช่น แอร์บนฝ้า, โปรเจคเตอร์)
-          <div style="display:flex;gap:6px">
-            <input type="search" id="qrLocationAssetSearch" placeholder="พิมพ์เลขครุภัณฑ์ หรือชื่อ เช่น แอร์, เครื่องปรับอากาศ, ชั้น 3...">
-            <button type="button" class="button outline" id="qrLocationAssetSearchBtn">ค้นหา</button>
-          </div>
-        </label>
-        <div id="qrLocationAssetResults" style="max-height:160px;overflow:auto;margin-bottom:6px"></div>
-        <label>รายการ ID ครุภัณฑ์ที่ผูกกับจุดนี้ (คั่นด้วยจุลภาค)<input name="assetIds" id="qrLocationAssetIdsInput" value="${esc(ids)}" placeholder="เช่น 12, 15, 20"></label>
-      </div>
-      <label class="check-inline"><input name="guestCanReportPlace" type="checkbox" ${canPlace ? 'checked' : ''}> ให้แจ้งปัญหาของพื้นที่โดยไม่ต้องเลือกครุภัณฑ์</label>
-      <label class="check-inline"><input name="isActive" type="checkbox" ${active ? 'checked' : ''}> เปิดใช้งาน QR นี้ (ยกเลิกการติ๊กเพื่อปิดชั่วคราว ไม่ลบจุดบริการ)</label>
+      ${item ? `<details class="qr-location-qr-details"><summary>ข้อมูล QR ปัจจุบัน</summary>
+        <label>URL สำหรับเปิด QR<input readonly value="${esc(item.qrUrl || '')}"></label>
+        <label>โทเคนประจำจุด<input readonly value="${esc(item.qrToken || '')}"></label>
+      </details>` : ''}
+      <section class="qr-location-form-step">
+        <h4><span>1</span> ระบุตำแหน่ง</h4>
+        <div class="qr-location-field-grid">
+        <label><span class="qr-location-field-label">ประเภทพื้นที่ <span class="required">*</span></span><select name="kind" required>${kindOptions(item?.kind || 'room')}</select></label>
+        <label><span class="qr-location-field-label">อยู่ภายใต้พื้นที่</span><select name="parentId"><option value="">ไม่มี / เป็นพื้นที่หลัก</option>${locationOptions(item?.id)}</select></label>
+        <label class="qr-location-field-wide"><span class="qr-location-field-label">ชื่อในระบบ <span class="required">*</span></span><input name="name" required maxlength="200" value="${esc(item?.name || '')}" placeholder="เช่น อาคารศูนย์แพทยศาสตรศึกษา ชั้น 3 ห้องบรรยาย 1"><small>ใช้สำหรับค้นหาและจัดการในระบบ</small></label>
+        <label><span class="qr-location-field-label">ชื่อที่ผู้สแกนเห็น</span><input name="publicName" maxlength="200" value="${esc(publicName)}" placeholder="เช่น ห้องบรรยาย 1 ชั้น 3"><small>เว้นว่างเพื่อใช้ชื่อในระบบ</small></label>
+        <label><span class="qr-location-field-label">รหัสจุด (ถ้ามี)</span><input name="code" maxlength="80" value="${esc(item?.code || '')}" placeholder="เช่น MED-FL3-RM01"></label>
+        </div>
+      </section>
+      <section class="qr-location-form-step">
+        <h4><span>2</span> สิ่งที่ผู้สแกนเห็น</h4>
+        <label class="qr-location-form-label">คำแนะนำหรือข้อมูลเพิ่มเติม<textarea name="publicInfo" rows="3" maxlength="2000" placeholder="ตัวอย่าง: เลือกเครื่องปรับอากาศหรืออุปกรณ์ในห้องเพื่อแจ้งซ่อม">${esc(publicInfo)}</textarea></label>
+        <label class="qr-location-check"><input name="guestCanReportPlace" type="checkbox" ${canPlace ? 'checked' : ''}><span><b>อนุญาตให้แจ้งปัญหาของพื้นที่</b><small>ผู้สแกนแจ้งปัญหาห้องหรือจุดบริการได้ โดยไม่ต้องเลือกครุภัณฑ์</small></span></label>
+      </section>
+      <section class="qr-location-form-step">
+        <h4><span>3</span> ผูกครุภัณฑ์ประจำจุด <small>ไม่บังคับ</small></h4>
+        <p class="qr-location-step-help">ค้นหาด้วยชื่อหรือเลขครุภัณฑ์ แล้วกด “เพิ่ม” รายการที่เลือกจะปรากฏด้านล่าง</p>
+        <div class="qr-location-asset-search">
+          <input type="search" id="qrLocationAssetSearch" aria-label="ค้นหาครุภัณฑ์" placeholder="ค้นหาชื่อหรือเลขครุภัณฑ์ เช่น แอร์ หรือโปรเจคเตอร์">
+          <button type="button" class="button outline" id="qrLocationAssetSearchBtn">ค้นหา</button>
+        </div>
+        <div id="qrLocationAssetResults" class="qr-location-asset-results" aria-live="polite"></div>
+        <div id="qrLocationSelectedAssets" class="qr-location-selected-assets"></div>
+        <input type="hidden" name="assetIds" id="qrLocationAssetIdsInput" value="${esc(ids)}">
+      </section>
+      <label class="qr-location-check"><input name="isActive" type="checkbox" ${active ? 'checked' : ''}><span><b>เปิดใช้งาน QR จุดนี้</b><small>ปิดชั่วคราวได้ภายหลัง โดยไม่ลบข้อมูลหรือโทเคน</small></span></label>
       <div class="dialog-actions">
         <button class="button outline" type="button" id="qrSmartCancelLocation">ยกเลิก</button>
         <button class="button primary" type="submit">บันทึกจุดบริการ</button>
       </div>
       <p id="qrSmartLocationStatus" role="status"></p>`;
       if (form.elements.parentId) form.elements.parentId.value = item?.parent_id || item?.parentId || '';
-      $('#qrSmartCancelLocation').onclick = () => { form.hidden = true; form.innerHTML = ''; editingId = null; };
+      const closeForm = () => {
+        form.hidden = true;
+        form.innerHTML = '';
+        editingId = null;
+        view.classList.remove('location-form-open');
+      };
+      $('#qrSmartCancelLocation').onclick = closeForm;
+      $('#qrSmartCancelLocationTop').onclick = closeForm;
       const searchInput = $('#qrLocationAssetSearch', form);
       const searchBtn = $('#qrLocationAssetSearchBtn', form);
       const resultsBox = $('#qrLocationAssetResults', form);
       const idsInput = $('#qrLocationAssetIdsInput', form);
+      const selectedAssets = $('#qrLocationSelectedAssets', form);
+      const renderSelectedAssets = () => {
+        const selectedIds = parseAssetIds(idsInput.value);
+        selectedAssets.innerHTML = selectedIds.length
+          ? `<p>ครุภัณฑ์ที่เลือก ${selectedIds.length} รายการ</p>${selectedIds.map(id => `<span class="qr-location-asset-chip">#${id}<button type="button" data-remove-location-asset="${id}" aria-label="นำครุภัณฑ์ ${id} ออกจากรายการ">×</button></span>`).join('')}`
+          : '<p>ยังไม่ได้เลือกครุภัณฑ์</p>';
+      };
+      renderSelectedAssets();
+      selectedAssets.onclick = event => {
+        const remove = event.target.closest('[data-remove-location-asset]');
+        if (!remove) return;
+        idsInput.value = parseAssetIds(idsInput.value).filter(id => id !== Number(remove.dataset.removeLocationAsset)).join(', ');
+        renderSelectedAssets();
+      };
       const doSearch = async () => {
         const q = (searchInput?.value || '').trim();
-        resultsBox.innerHTML = '<small class="field-hint">กำลังค้นหา...</small>';
+        if (!q) {
+          resultsBox.innerHTML = '<p class="qr-location-search-message">พิมพ์ชื่อหรือเลขครุภัณฑ์ก่อนค้นหา</p>';
+          searchInput?.focus();
+          return;
+        }
+        resultsBox.innerHTML = '<p class="qr-location-search-message">กำลังค้นหา…</p>';
         try {
           const res = await app.api(`/api/inventory?q=${encodeURIComponent(q)}&pageSize=15`);
           const rows = res.items || [];
           if (!rows.length) {
-            resultsBox.innerHTML = '<small class="field-hint">ไม่พบครุภัณฑ์ที่ตรงกับคำค้น</small>';
+            resultsBox.innerHTML = '<p class="qr-location-search-message">ไม่พบครุภัณฑ์ที่ตรงกับคำค้น ลองค้นด้วยชื่อหรือเลขทะเบียนอีกครั้ง</p>';
             return;
           }
-          resultsBox.innerHTML = rows.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid #e2e8f0;font-size:12.5px">
-          <span><b>#${r.id}</b> · ${esc(r.code)} — ${esc(r.name)} <small style="color:#64748b">(${esc(r.location || '')})</small></span>
-          <button type="button" class="button outline mini-action" data-add-loc-asset="${r.id}">＋ เพิ่ม</button>
-        </div>`).join('');
+          resultsBox.innerHTML = rows.map(r => `<div class="qr-location-asset-result">
+            <span><b>${esc(r.name)}</b><small>${esc(r.code || `ID ${r.id}`)}${r.location ? ` · ${esc(r.location)}` : ''}</small></span>
+            <button type="button" class="button outline mini-action" data-add-loc-asset="${r.id}">เพิ่ม</button>
+          </div>`).join('');
           resultsBox.querySelectorAll('[data-add-loc-asset]').forEach(btn => {
             btn.onclick = () => {
               const pickId = Number(btn.dataset.addLocAsset);
@@ -244,12 +295,13 @@ body{min-height:100vh;display:flex;justify-content:center;align-items:flex-start
                 currentIds.push(pickId);
                 idsInput.value = currentIds.join(', ');
               }
-              btn.textContent = '✓ เพิ่มแล้ว';
+              renderSelectedAssets();
+              btn.textContent = currentIds.includes(pickId) ? 'เพิ่มแล้ว' : 'เพิ่ม';
               btn.disabled = true;
             };
           });
         } catch (e) {
-          resultsBox.innerHTML = `<small role="alert">${esc(e.message)}</small>`;
+          resultsBox.innerHTML = `<p class="qr-location-search-message" role="alert">${esc(e.message)}</p>`;
         }
       };
       if (searchBtn) searchBtn.onclick = doSearch;
@@ -286,34 +338,17 @@ body{min-height:100vh;display:flex;justify-content:center;align-items:flex-start
       }
     }
 
-    async function loadOverdue() {
-      const panel = $('#qrSmartOverduePanel');
-      const list = $('#qrSmartOverdueList');
-      if (!features.flags?.borrowIssueReturn) {
-        panel.hidden = true;
-        list.innerHTML = '';
-        return;
-      }
-      panel.hidden = false;
-      try {
-        const data = await call('/api/lifecycle/overdue');
-        const items = data.items || [];
-        list.innerHTML = items.length ? `<div class="table-wrap"><table><thead><tr><th>ครุภัณฑ์</th><th>ผู้ยืม / ผู้เบิก</th><th>กำหนด</th><th>สถานะ</th></tr></thead><tbody>
-        ${items.map(item => `<tr><td>${esc(item.name)}<div class="item-meta">${esc(item.code)}</div></td><td>${esc(item.custodian)}</td><td>${esc(item.dueAt)}</td><td>${esc(item.loanStatus === 'issued' ? 'เบิก' : 'ยืม')}</td></tr>`).join('')}
-      </tbody></table></div>` : '<p class="field-hint">ไม่มีรายการยืมหรือเบิกที่เกินกำหนด</p>';
-      } catch (error) {
-        list.innerHTML = `<p role="alert">${esc(error.message)}</p>`;
-      }
-    }
-
     async function load() {
       status('กำลังโหลด QR Smart…');
       const writable = canWrite();
-      $('#qrSmartFlagsForm').querySelector('[type=submit]').disabled = !writable;
       $('#qrSmartNewLocation').disabled = !writable;
       try {
         await loadFeatures();
-        await Promise.all([loadLocations(), loadOverdue()]);
+        await loadLocations();
+        if (!initializedTab) {
+          selectQrTab(features.flags?.locationQr ? 'locations' : 'services');
+          initializedTab = true;
+        }
         if (!writable) status(window.govAssetAccess?.session?.required ? 'การบันทึก QR Smart ใช้สิทธิ์จัดการตั้งค่า' : '');
         else status('');
       } catch (error) {
@@ -321,36 +356,30 @@ body{min-height:100vh;display:flex;justify-content:center;align-items:flex-start
       }
     }
 
-    $('#qrSmartFlagsForm').onsubmit = async event => {
-      event.preventDefault();
-      const button = event.submitter;
-      button.disabled = true;
-      status('กำลังบันทึกบริการ…');
-      try {
-        const flags = {};
-        event.target.querySelectorAll('input[type=checkbox][name]').forEach(input => { flags[input.name] = input.checked; });
-        features = await call('/api/features', { method: 'PUT', body: JSON.stringify({ flags, revision: features.revision, actor: app.getRole?.() || 'เจ้าหน้าที่พัสดุ' }) });
-        flagFields();
-        applyModuleVisibility();
-        await Promise.all([loadLocations(), loadOverdue()]);
-        status('บันทึกการเปิด-ปิดบริการแล้ว');
-      } catch (error) {
-        status(error.message, true);
-      } finally { button.disabled = false; }
-    };
-
     $('#qrSmartNewLocation').onclick = () => showLocationForm();
+    view.querySelectorAll('[data-qr-smart-tab]').forEach(button => {
+      button.addEventListener('click', () => selectQrTab(button.dataset.qrSmartTab));
+      button.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const nextTab = event.key === 'Home' ? 'services'
+          : event.key === 'End' ? 'locations'
+            : activeTab === 'services' ? 'locations' : 'services';
+        selectQrTab(nextTab);
+        $(`[data-qr-smart-tab="${nextTab}"]`).focus();
+      });
+    });
 
     $('#qrSmartLocationList').onclick = async event => {
-      const printBtn = event.target.closest('[data-print-location]');
-      if (printBtn) {
+      const templateBtn = event.target.closest('[data-use-location-template]');
+      if (templateBtn) {
+        const openSticker = window.govAssetSticker?.openLocation;
+        if (typeof openSticker !== 'function') {
+          status('หน้าเทมเพลตสติกเกอร์ยังโหลดไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองอีกครั้ง', true);
+          return;
+        }
         try {
-          const locId = printBtn.dataset.printLocation;
-          const sizeEl = $(`[data-print-location-size="${locId}"]`, $('#qrSmartLocationList'));
-          const sizePreset = sizeEl ? sizeEl.value : 'a4';
-          const item = await call(`/api/qr/locations/${locId}`);
-          if (!item.qrImage) throw new Error('ยังสร้างภาพ QR ของจุดนี้ไม่ได้');
-          printLocation(item, sizePreset);
+          await openSticker(templateBtn.dataset.useLocationTemplate);
         } catch (error) {
           status(error.message, true);
         }
@@ -389,7 +418,9 @@ body{min-height:100vh;display:flex;justify-content:center;align-items:flex-start
         note.textContent = 'บันทึกแล้ว โทเคน QR ยังคงเดิม';
         form.hidden = true;
         editingId = null;
+        view.classList.remove('location-form-open');
         await loadLocations();
+        app.toast('บันทึกจุดบริการแล้ว · เลือกเทมเพลตในหน้า Sticker Studio เพื่อพิมพ์');
       } catch (error) {
         note.setAttribute('role', 'alert');
         note.textContent = error.message;

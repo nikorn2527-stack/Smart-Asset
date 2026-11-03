@@ -433,7 +433,12 @@
 
   function applyBranding(b) {
     branding=b; logo=b.logo; window.govAssetBranding=b; document.title=`${$('#crumbCurrent').textContent} — ${b.appName}`;
-    $('.brand-copy strong').textContent=b.appName; $('.brand-copy span').textContent=b.organization;
+    $('.brand-copy strong').textContent=b.appName;
+    const org=$('.brand-copy span'), name=String(b.organization||'').trim(), english=name.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+    const thaiName=(english?.[1]||name).trim(), hospitalAt=thaiName.indexOf(' โรงพยาบาล');
+    const orgLines=hospitalAt>0?[thaiName.slice(0,hospitalAt),thaiName.slice(hospitalAt+1)]:[thaiName];
+    if(english?.[2])orgLines.push(english[2].trim());
+    org.replaceChildren(...orgLines.filter(Boolean).map(text=>{const line=document.createElement('span');line.className=`brand-org-line${text.startsWith('โรงพยาบาล')?' hospital-name':''}`;line.textContent=text;return line;}));
     $('.brand-mark img').src=b.logo || 'assets/govasset-mark-optimized.png';
     $('.crumb > span').textContent=b.organization;
     $('.footer > span').textContent=`${b.appName} · ระบบจัดการครุภัณฑ์และงานซ่อม`;
@@ -954,7 +959,7 @@
   }
 
   const heading = $('#view-dashboard .page-heading p');
-  if (heading) heading.textContent = 'ทะเบียนที่เป็นปัจจุบัน งานซ่อมที่ติดตามได้ และ Smart QR ที่เชื่อมทุกขั้นตอน';
+  if (heading) heading.textContent = 'ทะเบียนครุภัณฑ์ งานซ่อม และ Smart QR ครบในที่เดียว';
   const eyebrow = $('#view-dashboard .page-heading .eyebrow');
   if (eyebrow) eyebrow.textContent = new Date().toLocaleDateString('th-TH', { dateStyle: 'full', timeZone: 'Asia/Bangkok' });
 

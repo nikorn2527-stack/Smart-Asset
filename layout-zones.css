@@ -82,8 +82,10 @@ footer.footer .team-credit {
    ZONE 2: HEADER (Pinned Topbar + Sub-Header / Page Heading)
    ========================================================================== */
 header.topbar {
-  flex: 0 0 56px !important;
-  height: 56px !important;
+  flex: 0 0 48px !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
   background: #ffffff !important;
   border-bottom: 1px solid var(--line, #dce5ea) !important;
   display: flex !important;
@@ -3817,6 +3819,22 @@ footer.footer {
   header.topbar .btn-topbar-back {
     flex: none !important;
   }
+  header.topbar {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  header.topbar .topbar-scope-btn .scope-label {
+    max-width: 90px !important;
+  }
+  header.topbar .topbar-user-btn .user-name-text {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1101px) and (max-width: 1280px) {
+  header.topbar .topbar-scope-btn .scope-label {
+    max-width: 140px !important;
+  }
 }
 
 @media (max-width: 768px) {
@@ -3860,9 +3878,13 @@ footer.footer {
 }
 
 @media (max-width: 720px) {
-  /* Phone topbar: keep the bell and role picker on screen. */
+  /* Phone topbar: keep every control available without forcing horizontal scrolling. */
   header.topbar {
-    padding: 0 10px !important;
+    height: auto !important;
+    min-height: 48px !important;
+    max-height: none !important;
+    flex: 0 0 auto !important;
+    padding: 6px 10px !important;
     gap: 8px !important;
   }
   header.topbar .crumb,
@@ -3871,8 +3893,64 @@ footer.footer {
     display: none !important;
   }
   header.topbar .top-actions {
+    flex: 1 1 0 !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-start !important;
     gap: 6px !important;
     min-width: 0 !important;
+  }
+  header.topbar .font-controls .icon-button {
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+  }
+  header.topbar .font-controls #fontScaleLabel {
+    min-width: 34px !important;
+    padding-left: 5px !important;
+    padding-right: 5px !important;
+  }
+  header.topbar .role-picker {
+    width: 82px !important;
+    min-width: 82px !important;
+    padding-left: 6px !important;
+    padding-right: 4px !important;
+    gap: 4px !important;
+  }
+  header.topbar .role-picker select {
+    width: 58px !important;
+    min-width: 0 !important;
+    max-width: 58px !important;
+    text-overflow: ellipsis !important;
+  }
+  header.topbar .role-permission-help summary {
+    display: grid !important;
+    width: 34px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    place-items: center !important;
+    font-size: 0 !important;
+  }
+  header.topbar .role-permission-help summary::before {
+    font-size: 14px !important;
+  }
+  header.topbar .topbar-user-section {
+    min-width: 0 !important;
+    gap: 4px !important;
+  }
+  header.topbar .topbar-scope-btn {
+    gap: 4px !important;
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+  }
+  header.topbar .topbar-scope-btn .scope-label {
+    max-width: 64px !important;
+  }
+  header.topbar .topbar-user-btn {
+    gap: 4px !important;
+    padding-right: 6px !important;
+  }
+  header.topbar .topbar-user-btn .user-name-text,
+  header.topbar .topbar-user-btn .user-role-badge {
+    display: none !important;
   }
   header.topbar .btn-topbar-back {
     margin-right: 0 !important;
@@ -3883,6 +3961,10 @@ footer.footer {
   }
   header.topbar .topbar-left {
     flex: none !important;
+  }
+  main#main {
+    height: auto !important;
+    max-height: none !important;
   }
 
   /* KPI cards: four columns cannot fit a phone. */
@@ -3978,6 +4060,20 @@ footer.footer {
   }
   #view-supply .supply-lines-table {
     min-width: 980px !important;
+  }
+}
+
+@media (max-width: 340px) {
+  header.topbar .role-picker {
+    width: 76px !important;
+    min-width: 76px !important;
+  }
+  header.topbar .role-picker select {
+    width: 52px !important;
+    max-width: 52px !important;
+  }
+  header.topbar .topbar-scope-btn .scope-label {
+    display: none !important;
   }
 }
 

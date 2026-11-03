@@ -43,14 +43,21 @@
 }
 
 .sidebar .brand-copy > span {
-  display: -webkit-box;
+  display: block;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   margin-top: 5px;
   font-size: 10px;
   line-height: 1.45;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+}
+
+.sidebar .brand-copy .brand-org-line {
+  display: block;
+  overflow-wrap: normal;
+}
+
+.sidebar .brand-copy .hospital-name {
+  white-space: nowrap;
 }
 
 .sidebar .brand-copy .team-credit {

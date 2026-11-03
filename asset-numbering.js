@@ -15,7 +15,11 @@
     $('#numberingBreakdown').hidden=isManual||!complete;
     $('#numberingEvidence').hidden=isManual;
     $('#numberingResultLabel').textContent=isManual?'เลขครุภัณฑ์เดิม':'เลขครุภัณฑ์ที่จะได้รับ';
-    $('#assetForm button[type="submit"]').disabled=loading||(!isManual&&!complete);
+    const submit=$('#assetForm button[type="submit"]');
+    submit.dataset.actionTone='confirm';
+    submit.dataset.actionBusy=String(loading);
+    submit.dataset.actionBlocked=isManual||complete?'':'เลือกรหัสจำแนกครุภัณฑ์ให้ครบ';
+    submit.disabled=loading||(!isManual&&!complete);
     if(isManual){$('#generatedCode').textContent=$('#manualAssetCode').value||'ระบุเลขเดิมตามทะเบียน';return;}
     $('#generatedCode').textContent=complete?(preview||parts().join('-')+'-…'):'เลือกรายการก่อน';
     ['numberingGroup','numberingType','numberingDescription'].forEach((id,i)=>$('#'+id).textContent=parts()[i]||'—');

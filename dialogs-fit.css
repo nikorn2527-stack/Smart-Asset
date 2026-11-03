@@ -259,3 +259,82 @@ dialog .dialog-actions { flex-wrap: wrap !important; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-center b { font-weight: 600; font-size: 14px; }
 .loading-center small { font-size: 12px; opacity: 0.9; }
+
+/* Keep Ticket printing reachable while its details and workflow remain scrollable. */
+#ticketDialog {
+  width: min(1120px, calc(100vw - 28px)) !important;
+  max-height: min(94vh, 900px) !important;
+}
+#ticketDialog > #ticketDialogContent {
+  height: min(94vh, 900px) !important;
+  max-height: min(94vh, 900px) !important;
+  overflow: hidden !important;
+}
+#ticketDialog .ticket-dialog-inner {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+}
+#ticketDialog .dialog-head {
+  flex: none !important;
+}
+#ticketDialog .ticket-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+#ticketDialog .ticket-dialog-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 22px 22px;
+}
+#ticketDialog .ticket-status-row {
+  margin: 12px 0;
+}
+#ticketDialog .ticket-dialog-buttons {
+  flex: none;
+}
+.form-readiness {
+  padding: 8px 10px;
+  border: 1px solid #e7c77b;
+  border-radius: 6px;
+  background: #fff8e6;
+  color: #795512;
+  font-size: 12px;
+  line-height: 1.5;
+}
+form[data-readiness-guard] :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: #bd4d43 !important;
+  box-shadow: 0 0 0 2px rgba(189, 77, 67, .12) !important;
+}
+.form-readiness[hidden],
+.action-readiness[hidden] {
+  display: none !important;
+}
+#ticketDialog .action-readiness {
+  flex-basis: 100%;
+  color: #795512;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (max-width: 540px) {
+  #ticketDialog {
+    width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+  }
+  #ticketDialog > #ticketDialogContent {
+    height: calc(100dvh - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+  }
+  #ticketDialog .ticket-dialog-scroll {
+    padding: 0 12px 14px;
+  }
+  #ticketDialog .dialog-head {
+    padding: 10px 12px !important;
+  }
+}

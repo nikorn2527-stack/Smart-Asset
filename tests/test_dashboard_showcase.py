@@ -1,3 +1,4 @@
+import sqlite3
 import unittest
 
 from test_asset_photos import data_url, png
@@ -18,8 +19,12 @@ class DashboardShowcase(HTTPFixture):
 
     def center_asset(self, code):
         category = self.call('/api/catalog/categories')[0]['id']
-        return self.call('/api/assets', {'name': 'หุ่นฝึกทักษะทางการแพทย์', 'code': code, 'categoryId': category,
-                                         'location': 'ศูนย์แพทย์ ห้องฝึกทักษะ'}, expected=201)['id']
+        asset_id = self.call('/api/assets', {'name': 'หุ่นฝึกทักษะทางการแพทย์', 'code': code, 'categoryId': category,
+                                             'location': 'ศูนย์แพทย์ ห้องฝึกทักษะ'}, expected=201)['id']
+        with sqlite3.connect(self.db) as db:
+            account_id = db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER'").fetchone()[0]
+            db.execute("UPDATE assets SET numbering_account_id=? WHERE id=?", (account_id, asset_id))
+        return asset_id
 
     def test_ranks_borrowed_assets_and_lists_current_loans(self):
         busy, issued, idle = self.asset('SHOW-0001'), self.asset('SHOW-0002'), self.asset('SHOW-0003')
@@ -62,11 +67,13 @@ class DashboardShowcase(HTTPFixture):
         center = self.center_asset('SHOW-C001')
         self.move(center, 'loan', borrower='อาจารย์แพทย์', dueAt='2099-01-01')
         other = self.asset('SHOW-C002')
+        with sqlite3.connect(self.db) as db:
+            db.execute("UPDATE assets SET location='ศูนย์แพทย์ ห้องอื่น' WHERE id=?", (other,))
         self.move(other, 'issue', recipient='งานพัสดุ')
 
         data = self.call(PATH + '?focus=center')
         self.assertEqual(data['focus'], 'center')
-        self.assertGreaterEqual(data['center']['total'], 1)
+        self.assertEqual(data['center']['total'], 1)
         self.assertEqual(data['center']['categoriesScope'], 'center')
         self.assertTrue(data['center']['categories'])
         self.assertIn('id', data['center']['categories'][0])
@@ -79,6 +86,27 @@ class DashboardShowcase(HTTPFixture):
         self.assertNotIn(other, ids)
         self.assertEqual(data['statusCounts']['total'], data['center']['total'])
         self.assertFalse(next(i for i in data['onLoan']['items'] if i['id'] == center)['overdue'])
+
+    def test_z_monthly_trends_include_repair_and_lifecycle_series(self):
+        baseline = self.call(PATH)
+        asset_id = self.asset('SHOW-TREND-0001')
+        self.move(asset_id, 'loan', borrower='ผู้ยืมทดสอบ', dueAt='2099-01-01')
+        self.move(asset_id, 'return')
+        self.move(asset_id, 'issue', recipient='หน่วยงานทดสอบ')
+        self.move(asset_id, 'return')
+
+        data = self.call(PATH)
+
+        self.assertEqual(len(data['monthlyTrends']), 12)
+        current = next(item for item in data['monthlyTrends'] if item['month'] == data['today'][:7])
+        previous = next(item for item in baseline['monthlyTrends'] if item['month'] == baseline['today'][:7])
+        self.assertEqual(current['loans'] - previous['loans'], 1)
+        self.assertEqual(current['issues'] - previous['issues'], 1)
+        self.assertEqual(current['returns'] - previous['returns'], 2)
+        self.assertTrue(all(
+            {'repairsOpened', 'repairsClosed', 'loans', 'issues', 'returns'} <= item.keys()
+            for item in data['monthlyTrends']
+        ))
 
     def test_rejects_writes_and_clamps_limits(self):
         self.call(PATH, {'actor': OFFICER}, expected=405)

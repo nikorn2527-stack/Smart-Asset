@@ -1,4 +1,13 @@
 /* Overview showcase: most borrowed, on loan, status ring, latest photos and quick actions. */
+window.govAssetRenderOrganizationName = (target, value) => {
+  const name=String(value||'').trim(), translated=name.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+  const thaiName=(translated?.[1]||name).trim(), hospitalAt=thaiName.indexOf(' โรงพยาบาล');
+  const lines=hospitalAt>0?[thaiName.slice(0,hospitalAt),thaiName.slice(hospitalAt+1)]:[thaiName];
+  if(translated?.[2])lines.push(translated[2].trim());
+  target.dataset.organizationName=name;
+  target.replaceChildren(...lines.filter(Boolean).map(text=>{const line=document.createElement('span');line.className=`dsc-org-line${text.startsWith('โรงพยาบาล')?' hospital-name':''}`;line.textContent=text;return line;}));
+};
+
 (() => {
   const view = document.querySelector('#view-dashboard');
   if (!view) return;
@@ -11,6 +20,7 @@
   const FOCUS_KEY = 'govAsset.showcaseFocus';
   const REFRESH_MS = 60000;
   let focus = localStorage.getItem(FOCUS_KEY) === 'center' ? 'center' : 'all';
+  let trendRange = 12;
   let data = null;
   let loadedAt = 0;
   let request = 0;
@@ -110,6 +120,27 @@
         <button type="button" class="dsc-action a-register" data-dsc-action="register"><span class="dsc-action-ico">${svg('book')}</span><span><b>เปิดทะเบียน</b><small>ค้นหา · ออก QR</small></span></button>
       </nav>
     </div>
+    <section class="dsc-panel dsc-trends" aria-labelledby="dscTrendsTitle">
+      <header class="dsc-head dsc-trends-head">
+        <div><h3 id="dscTrendsTitle">แนวโน้มการใช้งาน</h3><p>เปรียบเทียบงานซ่อมกับการยืม เบิก และคืน</p></div>
+        <div class="dsc-trend-range" role="group" aria-label="ช่วงเวลาของกราฟ">
+          <button type="button" data-dsc-trend-range="6" aria-pressed="false">6 เดือน</button>
+          <button type="button" data-dsc-trend-range="12" aria-pressed="true">12 เดือน</button>
+        </div>
+      </header>
+      <div class="dsc-trend-grid">
+        <section class="dsc-trend-chart-panel" aria-labelledby="dscRepairTrendTitle">
+          <div class="dsc-trend-chart-title"><h4 id="dscRepairTrendTitle">งานซ่อม</h4><span id="dscRepairTrendSummary"></span></div>
+          <div class="dsc-trend-chart-wrap" id="dscRepairTrend"></div>
+          <ul class="dsc-trend-legend" id="dscRepairTrendLegend"></ul>
+        </section>
+        <section class="dsc-trend-chart-panel" aria-labelledby="dscMovementTrendTitle">
+          <div class="dsc-trend-chart-title"><h4 id="dscMovementTrendTitle">ยืม / เบิก / คืน</h4><span id="dscMovementTrendSummary"></span></div>
+          <div class="dsc-trend-chart-wrap" id="dscMovementTrend"></div>
+          <ul class="dsc-trend-legend" id="dscMovementTrendLegend"></ul>
+        </section>
+      </div>
+    </section>
     <div class="dsc-lower">
       <section class="dsc-panel dsc-ring" aria-labelledby="dscRingTitle">
         <header class="dsc-head"><div><h3 id="dscRingTitle">สถานะครุภัณฑ์</h3><p id="dscRingSub">—</p></div></header>
@@ -228,40 +259,21 @@
     </button>`;
   }
 
-  function guideCard(compact, steps = true) {
-    const enabled = data?.borrowEnabled;
-    return `<div class="dsc-guide${compact ? ' is-compact' : ''}" role="listitem">
-      <b>${compact ? 'รายการถัดไปจะขึ้นที่นี่' : 'อันดับจะขึ้นที่นี่เมื่อเริ่มยืมผ่านระบบ'}</b>
-      ${steps ? `<ol>
-        <li><span>1</span>สแกน QR ที่ตัวเครื่อง หรือค้นหาในทะเบียน</li>
-        <li><span>2</span>เลือกแท็บ “ยืม / เบิก / คืน” แล้วบันทึก</li>
-        <li><span>3</span>ระบบนับครั้งและจัดอันดับให้อัตโนมัติ</li>
-      </ol>` : '<p class="dsc-soft">ครุภัณฑ์ที่ถูกยืมบ่อยจะเรียงอันดับพร้อมรูป ให้ทุกคนเห็นว่าชิ้นไหนใช้งานมากที่สุด</p>'}
-      ${enabled === false
-        ? '<button type="button" class="dsc-link-btn" data-dsc-action="flags">บริการยืม-เบิก-คืนยังปิดอยู่ · เปิดที่ QR Smart →</button>'
-        : '<button type="button" class="dsc-link-btn" data-dsc-action="loan">เริ่มบันทึกการยืม →</button>'}
-    </div>`;
-  }
-
   function renderTop() {
     const top = data.topBorrowed || [];
-    const spot = top.length ? [] : (data.recentPhotos?.items || []).slice(0, 6);
-    let html;
     if (top.length) {
       $('#dscTopTitle').textContent = 'ยืมบ่อยที่สุด';
-      $('#dscTopSub').textContent = `${num(top.length)} อันดับจากประวัติยืมและเบิกทั้งหมด · แตะการ์ดเพื่อเปิดรายละเอียด`;
-      html = top.map((item, i) => card(item, i, 'top')).join('') + (top.length < 4 ? guideCard(true) : '');
-    } else if (spot.length) {
-      $('#dscTopTitle').textContent = 'ครุภัณฑ์พร้อมให้ยืม';
-      $('#dscTopSub').textContent = 'ยังไม่มีประวัติการยืม · แสดงครุภัณฑ์ที่มีรูปล่าสุดแทน';
-      html = spot.map((item, i) => card(item, i, 'spot')).join('') + guideCard(spot.length > 2);
+      $('#dscTopSub').textContent = `${num(top.length)} รายการ · แตะเพื่อดูรายละเอียด`;
+      $('#dscTrack').innerHTML = top.map((item, i) => card(item, i, 'top')).join('');
     } else {
       $('#dscTopTitle').textContent = 'ยืมบ่อยที่สุด';
-      $('#dscTopSub').textContent = 'ยังไม่มีประวัติการยืมหรือเบิกในขอบเขตนี้';
-      html = ['สแกน QR ที่ตัวเครื่อง', 'บันทึก ยืม / เบิก / คืน', 'ติดอันดับที่นี่อัตโนมัติ'].map((text, i) =>
-        `<div class="dsc-ghost" role="listitem" style="--i:${i}"><span class="dsc-ghost-art">${svg(['qr', 'swap', 'check'][i])}</span><b>${i + 1}. ${text}</b></div>`).join('') + guideCard(false, false);
+      $('#dscTopSub').textContent = 'ไม่มีข้อมูลในช่วงที่เลือก';
+      const disabled = data.borrowEnabled === false;
+      $('#dscTrack').innerHTML = `<div class="dsc-inline-empty" role="status">
+        <span>${svg('swap')}</span><b>ยังไม่มีประวัติยืม / เบิก</b>
+        <button type="button" class="dsc-link-btn" data-dsc-action="${disabled ? 'flags' : 'loan'}">${disabled ? 'ตั้งค่าบริการ' : 'บันทึกยืม / เบิก'} →</button>
+      </div>`;
     }
-    $('#dscTrack').innerHTML = html;
     requestAnimationFrame(updateNav);
   }
 
@@ -277,11 +289,8 @@
     </div>`;
     if (!loans.items.length) {
       const disabled = data.borrowEnabled === false;
-      $('#dscLoanList').innerHTML = `${summary}<div class="dsc-empty">
-        <div class="dsc-empty-copy"><span class="dsc-empty-art">${svg('check')}</span><div>
-          <b>ยังไม่มีรายการยืมหรือเบิกค้าง</b>
-          <p>${disabled ? 'เปิดใช้บริการยืม / เบิก / คืนก่อน จากนั้นรายการและกำหนดคืนจะแสดงในหน้านี้' : 'เริ่มบันทึกการยืม หรือสแกน QR เพื่อเปิดรายละเอียดครุภัณฑ์'}</p>
-        </div></div>
+      $('#dscLoanList').innerHTML = `${summary}<div class="dsc-loan-empty-state">
+        <span>${svg('check')}</span><b>ไม่มีรายการค้าง</b>
         <div class="dsc-loan-empty-actions">
           <button type="button" class="dsc-loan-action is-primary" data-dsc-action="${disabled ? 'flags' : 'loan'}">${svg(disabled ? 'pencil' : 'swap')}<span>${disabled ? 'ตั้งค่าบริการยืม / เบิก' : 'บันทึกยืม / เบิก'}</span></button>
           <button type="button" class="dsc-loan-action" data-dsc-action="scan">${svg('qr')}<span>สแกน QR ครุภัณฑ์</span></button>
@@ -336,6 +345,67 @@
     const donut = $('#dscDonut');
     if (ringShown || reduce.matches) donut.classList.add('is-in');
     else requestAnimationFrame(() => requestAnimationFrame(() => { donut.classList.add('is-in'); ringShown = true; }));
+  }
+
+  function trendSvg(rows, series, label) {
+    const width = 600, height = 172, left = 28, right = 590, top = 12, bottom = 132;
+    const maxValue = Math.max(1, ...rows.flatMap(row => series.map(item => row[item.key] || 0)));
+    const step = (right - left) / rows.length;
+    const groupWidth = step * 0.72;
+    const barWidth = Math.min(12, groupWidth / (series.length + 0.5));
+    const grid = [0, 0.5, 1].map(fraction => {
+      const y = bottom - (bottom - top) * fraction;
+      return `<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" class="dsc-trend-gridline"/><text x="${left - 5}" y="${y + 3}" text-anchor="end" class="dsc-trend-axis">${Math.round(maxValue * fraction)}</text>`;
+    }).join('');
+    const bars = rows.map((row, index) => {
+      const center = left + step * (index + 0.5);
+      const groupStart = center - (series.length * barWidth) / 2;
+      const entries = series.map((item, seriesIndex) => {
+        const value = Number(row[item.key]) || 0;
+        const barHeight = value ? Math.max(1, (value / maxValue) * (bottom - top)) : 0;
+        const x = groupStart + seriesIndex * barWidth;
+        const y = bottom - barHeight;
+        const monthText = new Date(`${row.month}-01T00:00:00`).toLocaleDateString('th-TH', {month:'short'});
+        return `<rect class="dsc-trend-bar" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${Math.max(2, barWidth - 2).toFixed(2)}" height="${barHeight.toFixed(2)}" rx="2" fill="${item.color}" style="--bar-i:${index * series.length + seriesIndex}"><title>${esc(`${monthText} · ${item.label}: ${num(value)}`)}</title></rect>`;
+      }).join('');
+      const date = new Date(`${row.month}-01T00:00:00`);
+      const tick = date.toLocaleDateString('th-TH', {month:'short'}).replace('.', '');
+      return `${entries}<text x="${center}" y="${bottom + 17}" text-anchor="middle" class="dsc-trend-axis">${esc(tick)}</text>`;
+    }).join('');
+    const accessible = rows.map(row => {
+      const month = new Date(`${row.month}-01T00:00:00`).toLocaleDateString('th-TH', {month:'long',year:'numeric'});
+      return `${month}: ${series.map(item => `${item.label} ${num(row[item.key])}`).join(', ')}`;
+    }).join('; ');
+    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(`${label}. ${accessible}`)}"><title>${esc(label)}</title>${grid}${bars}</svg>`;
+  }
+
+  function renderTrends() {
+    const rows = (data?.monthlyTrends || []).slice(-trendRange);
+    const repairs = [
+      {key:'repairsOpened', label:'รับแจ้ง', color:'#0c7f82'},
+      {key:'repairsClosed', label:'ปิดงาน', color:'#f9a35a'},
+    ];
+    const movements = [
+      {key:'loans', label:'ยืม', color:'#0c7f82'},
+      {key:'issues', label:'เบิก', color:'#6c7fd8'},
+      {key:'returns', label:'คืน', color:'#f9a35a'},
+    ];
+    const draw = (chartId, legendId, summaryId, series, label) => {
+      const chart = $(`#${chartId}`);
+      if (!chart || !rows.length) return;
+      chart.classList.remove('is-in');
+      chart.innerHTML = trendSvg(rows, series, label);
+      $(`#${legendId}`).innerHTML = series.map(item => `<li><i style="--trend-color:${item.color}"></i>${esc(item.label)}</li>`).join('');
+      const totals = series.map(item => `${item.label} ${num(rows.reduce((sum, row) => sum + (Number(row[item.key]) || 0), 0))}`);
+      $(`#${summaryId}`).textContent = `${trendRange} เดือน · ${totals.join(' / ')}`;
+      if (reduce.matches) chart.classList.add('is-in');
+      else requestAnimationFrame(() => requestAnimationFrame(() => chart.classList.add('is-in')));
+    };
+    draw('dscRepairTrend', 'dscRepairTrendLegend', 'dscRepairTrendSummary', repairs, 'แนวโน้มงานซ่อม');
+    draw('dscMovementTrend', 'dscMovementTrendLegend', 'dscMovementTrendSummary', movements, 'แนวโน้มการยืม เบิก และคืน');
+    root.querySelectorAll('[data-dsc-trend-range]').forEach(button => {
+      button.setAttribute('aria-pressed', String(Number(button.dataset.dscTrendRange) === trendRange));
+    });
   }
 
   function renderPhotos() {
@@ -516,20 +586,16 @@
     const staff = isStaff();
     $('[data-dsc-action="pin-add"]').hidden = !staff || list.length >= max;
     $('#dscFeatSub').textContent = list.length
-      ? `${num(list.length)} / ${num(max)} รายการ · สถานะอัปเดตตามการยืมและงานซ่อมจริง`
-      : 'ปักหมุดหุ่นฝึกหัตถการ เครื่องจำลอง หรืออุปกรณ์ที่ศูนย์ใช้สอนบ่อย ให้ทุกคนเห็นทันที';
+      ? `${num(list.length)} / ${num(max)} รายการ`
+      : `0 / ${num(max)} รายการ`;
     const track = $('#dscFeatTrack');
     if (list.length) {
       track.innerHTML = list.map((item, i) => featureCard(item, i, list.length, staff)).join('');
     } else {
-      const examples = [['medical', 'หุ่นฝึกหัตถการ'], ['education', 'เครื่องจำลองสถานการณ์ทางคลินิก'], ['computer', 'ชุดฝึกทักษะการตรวจร่างกาย']];
-      track.innerHTML = `<div class="dsc-guide dsc-feat-guide" role="listitem"><b>ยังไม่มีอุปกรณ์เด่น</b>
-          <ol><li><span>1</span>${staff ? 'กด “เพิ่มอุปกรณ์เด่น” แล้วค้นหาครุภัณฑ์' : 'เจ้าหน้าที่ค้นหาครุภัณฑ์ที่ต้องการแสดง'}</li>
-          <li><span>2</span>หรือเปิดรายละเอียดครุภัณฑ์ › “☆ ปักหมุดอุปกรณ์เด่น”</li>
-          <li><span>3</span>เขียนบันทึกย่อว่าใช้ทำอะไร การ์ดจะขึ้นที่นี่พร้อมสถานะจริง</li></ol>
-          ${staff ? '<button type="button" class="dsc-link-btn" data-dsc-action="pin-add">＋ เพิ่มอุปกรณ์เด่นชิ้นแรก →</button>' : ''}</div>`
-        + examples.map(([kind, label], i) => `<div class="dsc-feat-ghost" role="listitem" aria-hidden="true" style="--i:${i + 1}">
-          <span class="dsc-glyph g-${kind}">${svg(kind)}</span><b>${label}</b><small>ตัวอย่าง</small></div>`).join('');
+      track.innerHTML = `<div class="dsc-inline-empty" role="status">
+        <span>${svg('star')}</span><b>ยังไม่มีอุปกรณ์เด่น</b>
+        ${staff ? '<button type="button" class="dsc-link-btn" data-dsc-action="pin-add">＋ เพิ่มอุปกรณ์เด่น</button>' : ''}
+      </div>`;
     }
     requestAnimationFrame(updateNav);
   }
@@ -539,8 +605,8 @@
     const group = $('.dsc-focus');
     const pill = $('#dscScopePill');
     if (center?.name) {
-      $('#dscCenterName').textContent = center.name;
-      document.querySelectorAll('.dsc-heading-org').forEach(el => { el.textContent = center.name; });
+      window.govAssetRenderOrganizationName($('#dscCenterName'),center.name);
+      document.querySelectorAll('.dsc-heading-org').forEach(el => window.govAssetRenderOrganizationName(el,center.name));
     }
     if (center?.isScoped) {
       group.hidden = true;
@@ -578,7 +644,7 @@
   function renderAll() {
     items.clear();
     root.classList.remove('is-loading', 'is-error');
-    renderFocus(); renderToday(); renderFeatured(); renderTop(); renderLoans(); renderRing(); renderPhotos(); renderBubbles();
+    renderFocus(); renderToday(); renderFeatured(); renderTop(); renderLoans(); renderRing(); renderTrends(); renderPhotos(); renderBubbles();
     animateCounts();
   }
 
@@ -972,6 +1038,11 @@
     if (unpin) unpinCard(Number(unpin.dataset.dscUnpin));
     const action = event.target.closest('[data-dsc-action]');
     if (action) actions[action.dataset.dscAction]?.();
+    const trendRangeButton = event.target.closest('[data-dsc-trend-range]');
+    if (trendRangeButton && Number(trendRangeButton.dataset.dscTrendRange) !== trendRange) {
+      trendRange = Number(trendRangeButton.dataset.dscTrendRange);
+      renderTrends();
+    }
     const focusButton = event.target.closest('[data-dsc-focus]');
     if (focusButton && focusButton.dataset.dscFocus !== focus) {
       focus = focusButton.dataset.dscFocus;
@@ -1031,7 +1102,7 @@
     if (opt && opt.textContent) {
       return opt.textContent.replace(/^มุมมอง:\s*/, '').trim();
     }
-    return document.getElementById('dscCenterName')?.textContent || 'ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์';
+    return document.getElementById('dscCenterName')?.dataset.organizationName || 'ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์';
   }
 
   function enhancePageHeadings() {
@@ -1044,7 +1115,7 @@
         const eyebrow = document.createElement('span');
         eyebrow.className = 'dsc-heading-eyebrow';
         eyebrow.innerHTML = `<i class="dsc-live" aria-hidden="true"></i><span class="dsc-heading-org"></span>`;
-        eyebrow.querySelector('.dsc-heading-org').textContent = currentOrgLabel();
+        window.govAssetRenderOrganizationName(eyebrow.querySelector('.dsc-heading-org'),currentOrgLabel());
         titleCol.prepend(eyebrow);
       }
     });
@@ -1053,7 +1124,7 @@
   function syncOrgEyebrows() {
     const label = currentOrgLabel();
     document.querySelectorAll('.dsc-heading-org').forEach(el => {
-      el.textContent = label;
+      window.govAssetRenderOrganizationName(el,label);
     });
   }
 

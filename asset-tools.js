@@ -4,15 +4,18 @@
   if (!app) return;
   const $ = (s, root = document) => root.querySelector(s);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const state = { assets: [], total: 0, offset: 0, limit: 50, selected: new Map(), templates: [], template: null, selectedElementId: null, settings: {} };
+  const state = { assets: [], total: 0, offset: 0, limit: 50, selected: new Map(), templates: [], template: null, selectedElementId: null, settings: {}, locations: [] };
   let searchTimer = null, registerLoadEpoch = 0;
   const elementLabels = {text:'ข้อความ',qr:'QR Code',rect:'กรอบ/แถบสี',image:'ภาพ'};
+  const locationKindLabels = {building:'อาคาร',floor:'ชั้น',room:'ห้อง',service_point:'จุดบริการ',common_area:'พื้นที่ส่วนกลาง'};
   const variableMap = {
     AssetNo:'code', Code:'code', AssetSiteCode:'code', FsnCode:'fsnCode', OldCode:'inventoryCode',
     AssetName:'name', Name:'name', Detail:'detail', Category:'group', Group:'group',
     Type:'assetType', AssetType:'assetType', Brand:'brand', Model:'model',
     Serial:'serialNumber', SerialNumber:'serialNumber',
-    Location:'location', Room:'room', Floor:'floor', Building:'building',
+    Location: 'location', LocationName: 'LocationName', LocationCode: 'LocationCode',
+    LocationType: 'LocationType', LocationInfo: 'LocationInfo', LocationQrUrl: 'LocationQrUrl',
+    Room: 'room', Floor: 'floor', Building: 'building',
     Department:'department', DepartmentCode:'departmentCode',
     Custodian:'custodian', CurrentAssignee:'custodian',
     Site:'orgName', OrgName:'orgName', orgName:'orgName',
@@ -128,6 +131,50 @@
     select.innerHTML = state.templates.map(t => `<option value="${esc(t.id)}">${esc(t.name)}${t.isActive?' · แบบหลัก':''}</option>`).join('');
     if (state.template && !state.templates.some(t => t.id === id)) select.insertAdjacentHTML('beforeend', `<option value="">แบบใหม่ (ยังไม่บันทึก)</option>`);
     select.value = id;
+    renderLocationPrintControls();
+  }
+  function renderLocationPrintControls() {
+    const template = state.template;
+    const locationId = $('#stickerLocationSelect').value;
+    const hasQr = Boolean(template?.elements?.some(element => element.type === 'qr'));
+    const dimensions = template?.canvas
+      ? `${Number(template.canvas.width).toLocaleString('th-TH')} × ${Number(template.canvas.height).toLocaleString('th-TH')} มม.`
+      : 'ยังไม่มีเทมเพลต';
+    $('#stickerLocationTemplateInfo').textContent = template
+      ? `เทมเพลต: ${template.name} · ${dimensions}${hasQr ? '' : ' · ต้องเพิ่มองค์ประกอบ QR Code'}`
+      : 'ยังไม่มีเทมเพลตให้พิมพ์';
+    $('#printLocationSticker').disabled = !locationId || !template?.id || !hasQr;
+  }
+  async function loadStickerLocations(preselectedId = '') {
+    const select = $('#stickerLocationSelect');
+    const note = $('#stickerLocationStatus');
+    select.disabled = true;
+    select.innerHTML = '<option value="">กำลังโหลดจุดบริการ…</option>';
+    note.textContent = 'กำลังโหลดรายการ Location QR…';
+    try {
+      const result = await app.api('/api/qr/locations');
+      state.locations = result.items || [];
+      select.innerHTML = '<option value="">เลือกจุดบริการ</option>' + state.locations.map(item => {
+        const name = item.publicName || item.public_name || item.name || `จุดบริการ ${item.id}`;
+        const kind = item.kind ? ` · ${locationKindLabels[item.kind] || item.kind}` : '';
+        return `<option value="${esc(item.id)}">${esc(name + kind)}</option>`;
+      }).join('');
+      if (preselectedId && state.locations.some(item => String(item.id) === String(preselectedId))) {
+        select.value = String(preselectedId);
+      }
+      select.disabled = !state.locations.length;
+      note.textContent = state.locations.length
+        ? 'เลือกจุดบริการ แล้วพิมพ์ด้วยขนาดที่กำหนดในเทมเพลต'
+        : 'ยังไม่มีจุดบริการสำหรับพิมพ์ หรือยังไม่ได้เปิด Location QR';
+      note.setAttribute('role', 'status');
+    } catch (error) {
+      state.locations = [];
+      select.innerHTML = '<option value="">โหลดรายการจุดบริการไม่สำเร็จ</option>';
+      note.textContent = error.message || 'โหลดรายการจุดบริการไม่สำเร็จ';
+      note.setAttribute('role', 'alert');
+    } finally {
+      renderLocationPrintControls();
+    }
   }
   async function loadStickerTemplates() {
     const result = await app.api('/api/sticker/templates');
@@ -159,6 +206,7 @@
     state.template.canvas.unit='mm'; state.template.name=$('#stickerTemplateName').value || 'เทมเพลตใหม่';
     state.template.overflow=$('#stickerOverflowVisible').checked?'visible':'clip';
     renderPreview(); renderSelected();
+    renderLocationPrintControls();
   }
   function elementName(element) {
     const text=String(element.content||'').replace(/\s+/g,' ').trim();
@@ -683,10 +731,10 @@
     window.addEventListener('pointerup', up, { once: true });
     event.preventDefault();
   }
-  async function saveTemplate(active=false) {
+  async function saveTemplate(active=false, notify=true) {
     if(!state.template)return;
     updateCanvas(); state.template.name=$('#stickerTemplateName').value.trim()||'เทมเพลตใหม่';
-    try {const saved=await app.api('/api/sticker/templates',{method:'POST',body:JSON.stringify({template:state.template,isActive:active||Boolean(state.template.isActive)})});state.template=saved;const existing=state.templates.findIndex(t=>t.id===saved.id);if(existing>=0)state.templates[existing]=saved;else state.templates.unshift(saved);renderTemplateSelect();selectTemplate(saved);toast(active?'บันทึกและตั้งเป็นแบบหลักแล้ว':'บันทึกเทมเพลตแล้ว');return true;}
+    try {const saved=await app.api('/api/sticker/templates',{method:'POST',body:JSON.stringify({template:state.template,isActive:active||Boolean(state.template.isActive)})});state.template=saved;const existing=state.templates.findIndex(t=>t.id===saved.id);if(existing>=0)state.templates[existing]=saved;else state.templates.unshift(saved);renderTemplateSelect();selectTemplate(saved);if(notify)toast(active?'บันทึกและตั้งเป็นแบบหลักแล้ว':'บันทึกเทมเพลตแล้ว');return true;}
     catch(error){app.showError(error);return false;}
   }
   async function printSelected() {
@@ -707,6 +755,38 @@
         })
         .catch(error => { iframe.remove(); app.showError(error); });
     } catch(error){app.showError(error);}
+  }
+  async function printLocationSticker() {
+    const locationId = $('#stickerLocationSelect').value;
+    if (!locationId || !state.template) return;
+    try {
+      if (!await saveTemplate(false, false)) return;
+      const result = await app.api('/api/sticker/location-render', {
+        method: 'POST',
+        body: JSON.stringify({ locationId, templateId: state.template.id }),
+      });
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed'; iframe.style.width = '0'; iframe.style.height = '0';
+      iframe.style.opacity = '0'; iframe.style.border = '0'; iframe.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(iframe);
+      const doc = iframe.contentWindow.document;
+      doc.open(); doc.write(result.html); doc.close();
+      Promise.all([...doc.images].map(image => image.decode().catch(() => undefined)))
+        .then(() => doc.fonts.ready)
+        .then(() => {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          toast(`เตรียมพิมพ์ Location QR ด้วยเทมเพลต ${result.template.name} แล้ว`);
+          setTimeout(() => iframe.remove(), 1200);
+        })
+        .catch(error => { iframe.remove(); app.showError(error); });
+    } catch (error) {
+      app.showError(error);
+    }
+  }
+  async function openLocationSticker(locationId) {
+    app.switchView('stickers');
+    await loadStickerLocations(locationId);
   }
   async function loadRegister(id) {
     const request=++registerLoadEpoch;
@@ -775,7 +855,9 @@
   $('#stickerDeleteElement').addEventListener('click',()=>{if(!state.template||!state.selectedElementId)return;state.template.elements=state.template.elements.filter(e=>e.id!==state.selectedElementId);state.selectedElementId=state.template.elements[0]?.id||null;renderElementList();renderProperties();renderPreview();});
   $('#stickerVariableSelect').addEventListener('change',event=>{const value=event.target.value,el=state.template?.elements?.find(item=>item.id===state.selectedElementId);if(value&&el&&['text','qr'].includes(el.type)){el.content=(el.content||'')+value;renderProperties();renderElementList();renderPreview();}event.target.value='';});
   $('#printSelectedStickers').addEventListener('click',printSelected);
-  $('#stickerOpenLocationQr').addEventListener('click',()=>app.switchView('qr-smart'));
+  $('#stickerLocationSelect').addEventListener('change', renderLocationPrintControls);
+  $('#printLocationSticker').addEventListener('click', printLocationSticker);
+  window.govAssetSticker = { openLocation: openLocationSticker };
   $('#saveStickerSettings').addEventListener('click',saveStickerSettings);
-  Promise.all([loadStickerTemplates(),loadStickerAssets(0),app.api('/api/sticker/settings').then(data=>{state.settings=data;$('#stickerOrgName').value=data.orgName||'';$('#stickerCompanyName').value=data.companyName||'';$('#stickerCompanyAddress').value=data.companyAddress||'';$('#stickerCompanyAddress2').value=data.companyAddress2||'';$('#stickerCompanyPhone').value=data.companyPhone||'';$('#stickerHotline').value=data.hotline||'';renderPreview();}).catch(app.showError)]).catch(app.showError);
+  Promise.all([loadStickerTemplates().then(renderLocationPrintControls),loadStickerAssets(0),loadStickerLocations(),app.api('/api/sticker/settings').then(data=>{state.settings=data;$('#stickerOrgName').value=data.orgName||'';$('#stickerCompanyName').value=data.companyName||'';$('#stickerCompanyAddress').value=data.companyAddress||'';$('#stickerCompanyAddress2').value=data.companyAddress2||'';$('#stickerCompanyPhone').value=data.companyPhone||'';$('#stickerHotline').value=data.hotline||'';renderPreview();}).catch(app.showError)]).catch(app.showError);
 })();

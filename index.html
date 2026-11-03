@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css?v=7">
   <link rel="stylesheet" href="stickers.css">
   <link rel="stylesheet" href="master-data.css">
-  <link rel="stylesheet" href="smart.css?v=18">
+  <link rel="stylesheet" href="smart.css?v=26">
   <link rel="stylesheet" href="work.css">
   <link rel="stylesheet" href="notifications.css">
   <link rel="stylesheet" href="register-form.css?v=4">
@@ -23,11 +23,12 @@
   <link rel="stylesheet" href="access.css?v=4">
   <link rel="stylesheet" href="equipment.css">
   <link rel="stylesheet" href="action-buttons.css">
-  <link rel="stylesheet" href="asset-register.css?v=5">
-  <link rel="stylesheet" href="layout-zones.css?v=15">
-  <link rel="stylesheet" href="dialogs-fit.css?v=4">
-  <link rel="stylesheet" href="dashboard-showcase.css?v=2">
-  <link rel="stylesheet" href="controls-polish.css">
+  <link rel="stylesheet" href="asset-register.css?v=6">
+  <link rel="stylesheet" href="layout-zones.css?v=20">
+  <link rel="stylesheet" href="dialogs-fit.css?v=5">
+  <link rel="stylesheet" href="dashboard-showcase.css?v=10">
+  <link rel="stylesheet" href="controls-polish.css?v=2">
+  <link rel="stylesheet" href="repair-print.css?v=7">
 </head>
 <body>
   <a class="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
@@ -37,7 +38,7 @@
         <div class="brand-mark" aria-hidden="true"><img src="assets/govasset-mark-optimized.png" alt=""></div>
         <div class="brand-copy"><strong>Smart Asset</strong><span>ระบบจัดการทะเบียนครุภัณฑ์</span><small class="team-credit">POWER BY PNG TEAM</small></div>
       </div>
-      <div class="nav-section-title">การจัดการครุภัณฑ์ (Asset Lifecycle)</div>
+      <div class="nav-section-title"><span>การจัดการครุภัณฑ์</span><span class="nav-section-title-en">(ASSET LIFECYCLE)</span></div>
       <nav class="primary-nav">
         <button class="nav-item active" data-view="dashboard" aria-label="ภาพรวมระบบ" title="ภาพรวมระบบ"><span class="nav-icon">▦</span>ภาพรวมระบบ</button>
         <div class="nav-divider"></div>
@@ -236,11 +237,19 @@
               <div class="panel-heading">
                 <div>
                   <h2>ค้นหาและเลือกครุภัณฑ์</h2>
-                  <p>แบบครุภัณฑ์ตามตัวอย่าง · พิมพ์สติกเกอร์ Location QR แยกจาก QR Smart</p>
+                  <p>เลือกเทมเพลตที่บันทึกไว้เพื่อพิมพ์ฉลากครุภัณฑ์หรือ Location QR</p>
                 </div>
                 <span id="stickerSelectionCount" class="sheet-count">0 รายการ</span>
               </div>
-              <button type="button" class="button outline full" id="stickerOpenLocationQr">📍 ไปพิมพ์ Location QR</button>
+              <section class="sticker-location-print">
+                <h3>สติกเกอร์แจ้งซ่อมประจำจุด</h3>
+                <p>เลือกจุดบริการ แล้วเลือกเทมเพลต “สติกเกอร์แจ้งซ่อมประจำจุด · 50 × 70 มม.” ในตัวเลือกด้านขวา ขนาดพิมพ์ยึดตามเทมเพลต</p>
+                <label for="stickerLocationSelect">จุดบริการ</label>
+                <select id="stickerLocationSelect"><option value="">กำลังโหลดจุดบริการ…</option></select>
+                <small id="stickerLocationTemplateInfo">กำลังโหลดเทมเพลต…</small>
+                <button type="button" class="button primary full" id="printLocationSticker" disabled>พิมพ์สติกเกอร์แจ้งซ่อม</button>
+                <p id="stickerLocationStatus" role="status" aria-live="polite"></p>
+              </section>
               <form id="stickerSearchForm" class="sticker-search-row">
                 <input id="stickerSearchInput" type="search" placeholder="พิมพ์รหัสหรือชื่อครุภัณฑ์" aria-label="ค้นหาครุภัณฑ์สำหรับสติกเกอร์">
                 <button class="button outline" type="submit">ค้นหา</button>
@@ -261,7 +270,7 @@
               </div>
               <div class="sticker-asset-print-action">
                 <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:6px;">
-                  📄 รูปแบบกระดาษ / ขนาดพิมพ์:
+                  📄 รูปแบบพิมพ์ฉลากครุภัณฑ์:
                   <select id="stickerPaperLayout" style="width:100%;margin-top:4px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">
                     <option value="label">ฉลาก 70 × 36 มม. · 1 ดวง/หน้า</option>
                     <option value="a4-grid">หลายดวง · A4</option>
@@ -367,6 +376,10 @@
                       </optgroup>
                       <optgroup label="🏢 สถานที่และผู้รับผิดชอบ">
                         <option value="{{Location}}">สถานที่ตั้ง / ห้อง ({{Location}})</option>
+                        <option value="{{LocationName}}">ชื่อจุดบริการ ({{LocationName}})</option>
+                        <option value="{{LocationCode}}">รหัสจุดบริการ ({{LocationCode}})</option>
+                        <option value="{{LocationType}}">ประเภทจุดบริการ ({{LocationType}})</option>
+                        <option value="{{LocationInfo}}">ข้อมูลสาธารณะของจุด ({{LocationInfo}})</option>
                         <option value="{{Building}}">อาคาร ({{Building}})</option>
                         <option value="{{Floor}}">ชั้น ({{Floor}})</option>
                         <option value="{{Room}}">ห้อง ({{Room}})</option>
@@ -387,6 +400,7 @@
                       </optgroup>
                       <optgroup label="📱 QR และระบบ">
                         <option value="{{QrUrl}}">ลิงก์ Smart QR สแกนแจ้งซ่อม ({{QrUrl}})</option>
+                        <option value="{{LocationQrUrl}}">ลิงก์ Location QR ({{LocationQrUrl}})</option>
                         <option value="{{Status}}">สถานะครุภัณฑ์ ({{Status}})</option>
                       </optgroup>
                     </select>
@@ -543,38 +557,33 @@
 
         <section class="view" id="view-qr-smart">
           <div class="subpage-nav"><button class="button outline" type="button" data-go-view="settings">← กลับตั้งค่า</button></div>
-          <div class="page-heading"><div><div class="eyebrow">QR SMART</div><h1>QR Smart</h1><p>QR ครุภัณฑ์ Location QR แจ้งซ่อม ยืม–เบิก–คืน และติดตามงาน ใช้จากฉลากเดิมได้ทั้งผู้สแกนและเจ้าหน้าที่</p></div></div>
+          <div class="page-heading"><div><div class="eyebrow">QR SMART</div><h1>QR Smart</h1><p>ตั้งค่าการใช้ QR ครุภัณฑ์และ Location QR · ติดตามยืม/เบิกเกินกำหนดที่แดชบอร์ด</p></div><div class="page-actions"><button class="button outline" type="button" data-go-view="dashboard">ไปที่แดชบอร์ด →</button></div></div>
           <p id="qrSmartStatus" role="status"></p>
-          <section class="panel qr-smart-standard" id="qrSmartStandard">
-            <h2>มาตรฐานการวาง QR</h2>
-            <ol>
-              <li><b>ฉลากครุภัณฑ์</b> ติดที่ตัวเครื่อง หนึ่งเครื่องหนึ่งฉลาก ด้านที่สแกนง่าย ไม่บังป้ายเลขทะเบียน สแกนแล้วดูข้อมูล แจ้งซ่อม ยืม–เบิก–คืน ของเครื่องนั้น พิมพ์จากทะเบียนหรือหน้าสติกเกอร์</li>
-              <li><b>Location QR</b> ติดที่ประตูห้อง เคาน์เตอร์ โถง หรือจุดบริการ ไม่ติดบนเครื่อง สแกนแล้วแจ้งปัญหาของพื้นที่ หรือเลือกเครื่องในรายการที่จุดนั้นอนุญาต สร้างจุดด้านล่างแล้วพิมพ์ฉลากจุด</li>
-              <li><b>ผู้ใช้หน้างาน</b> สแกนฉลากด้วยมือถืออย่างเดียว ไม่เข้าแอปเจ้าหน้าที่ การถือ QR ไม่ยืนยันตัวตนและไม่ยืนยันว่าอยู่ห้องนั้นจริง</li>
-              <li><b>เจ้าหน้าที่</b> ทำงานที่คอมพิวเตอร์ คัดกรองจริง/ไม่จริง มอบหมายช่าง บันทึกยืม–เบิก–คืน ลงพื้นที่แผนกนำร่องก่อน แล้วค่อยขยาย จุดชื่อว่าทดสอบใช้ซ้อม อย่าติดของจริง</li>
-            </ol>
-          </section>
-          <div class="notice" id="qrSmartSimpleNotice" hidden><span class="notice-icon">i</span><div><b>บริการบางรายการยังปิด</b><p>เปิด Location QR หรือยืม–เบิก–คืนด้านล่างเมื่อหน่วยงานพร้อมใช้งานจุดนั้น</p></div></div>
-          <form id="qrSmartFlagsForm" class="panel settings-panel">
-            <h2>บริการที่เปิดใช้งาน</h2>
-            <p class="field-hint">ติ๊กเปิดบริการที่หน่วยงานใช้ ปิดได้เมื่อยังไม่พร้อม โดยไม่ลบข้อมูลที่บันทึกไว้</p>
-            <div id="qrSmartFlagFields" class="qr-smart-flags"></div>
-            <button class="button primary" type="submit">บันทึกการเปิด-ปิดบริการ</button>
-          </form>
-          <section class="panel" id="qrSmartLocationsPanel">
-            <div class="panel-heading">
-              <div>
-                <h2>Location QR / จุดบริการ</h2>
-                <p>ติดฉลากที่จุดพื้นที่ ไม่ติดบนเครื่อง · เปลี่ยนชื่อได้ โทเคนเดิม · ปิดใช้งานแทนการลบ</p>
-              </div>
-              <button class="button primary" type="button" id="qrSmartNewLocation">＋ เพิ่มจุดบริการ</button>
+          <div class="qr-smart-tabs" role="tablist" aria-label="การตั้งค่า QR Smart">
+            <button type="button" class="qr-smart-tab active" id="qrSmartServicesTab" role="tab" aria-selected="true" aria-controls="qrSmartFlagsPanel" data-qr-smart-tab="services">
+              <span>บริการที่เปิดใช้งาน</span><small id="qrSmartFlagsSummary">กำลังโหลดสถานะบริการ…</small>
+            </button>
+            <button type="button" class="qr-smart-tab" id="qrSmartLocationsTab" role="tab" aria-selected="false" aria-controls="qrSmartLocationsPanel" data-qr-smart-tab="locations">
+              <span>Location QR / จุดบริการ</span><small id="qrSmartLocationsSummary">ยังไม่เปิดบริการ</small>
+            </button>
+          </div>
+          <section class="panel settings-panel qr-smart-collapsible qr-smart-tab-panel" id="qrSmartFlagsPanel" role="tabpanel" aria-labelledby="qrSmartServicesTab">
+            <div class="qr-smart-section-content">
+              <p class="field-hint">เปิดสวิตช์เพื่อให้บริการหรือเมนูนั้นใช้งานได้ และปิดเพื่อระงับชั่วคราว ระบบบันทึกทันที การปิดไม่ลบข้อมูล และไม่ได้สร้าง QR หรือรายการให้อัตโนมัติ</p>
+              <div id="qrSmartFlagFields" class="qr-smart-flags"></div>
+              <p class="qr-smart-flags-help">ตัวอย่าง: เปิด Location QR แล้วจึงเพิ่มจุดบริการ · สวิตช์สีเทาที่ยังไม่พร้อมใช้งานยังเปิดไม่ได้</p>
             </div>
-            <div id="qrSmartLocationList"></div>
-            <form id="qrSmartLocationForm" class="qr-smart-location-form" hidden></form>
           </section>
-          <section class="panel" id="qrSmartOverduePanel" hidden>
-            <h2>รายการยืม / เบิกเกินกำหนด</h2>
-            <div id="qrSmartOverdueList"></div>
+          <section class="panel qr-smart-collapsible qr-smart-tab-panel" id="qrSmartLocationsPanel" role="tabpanel" aria-labelledby="qrSmartLocationsTab" hidden>
+            <div class="qr-smart-section-content">
+              <div class="notice" id="qrSmartSimpleNotice" hidden><span class="notice-icon">i</span><div><b>Location QR ยังปิดอยู่</b><p>ไปที่แท็บ “บริการที่เปิดใช้งาน” แล้วเปิด Location QR ก่อนเพิ่มจุดและพิมพ์ป้าย</p></div></div>
+              <p class="qr-smart-location-workflow"><b>พิมพ์ป้าย:</b> เพิ่มจุดบริการ → บันทึก → เลือกจุดใน Sticker Studio เพื่อพิมพ์ตามขนาดเทมเพลต</p>
+              <div class="qr-smart-collapsible-actions">
+                <button class="button primary" type="button" id="qrSmartNewLocation">＋ เพิ่มจุดบริการ</button>
+              </div>
+              <div id="qrSmartLocationList"></div>
+              <form id="qrSmartLocationForm" class="qr-smart-location-form" hidden></form>
+            </div>
           </section>
         </section>
       </main>
@@ -716,16 +725,16 @@
   </form></dialog>
   <div id="toast" role="status" aria-live="polite" class="toast"></div>
   <script src="access.js?v=4"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=20"></script>
   <script src="action-buttons.js"></script>
   <script src="register-form.js?v=7"></script>
-  <script src="asset-tools.js?v=2"></script>
+  <script src="asset-tools.js?v=4"></script>
   <script src="master-data.js"></script>
-  <script src="smart.js?v=8"></script>
+  <script src="smart.js?v=10"></script>
   <script src="work.js"></script>
   <script src="notifications.js"></script>
   <script src="line-settings.js"></script>
-  <script src="asset-numbering.js"></script>
+  <script src="asset-numbering.js?v=2"></script>
   <script src="catalog-guidance.js?v=2"></script>
   <script src="governance.js"></script>
   <script src="account-registration.js?v=3"></script>
@@ -734,8 +743,8 @@
   <script src="operational-master.js"></script>
   <script src="supply.js?v=2"></script>
   <script src="equipment-workspace.js"></script>
-  <script src="qr-smart.js?v=2"></script>
-  <script src="dashboard-showcase.js?v=3"></script>
+  <script src="qr-smart.js?v=9"></script>
+  <script src="dashboard-showcase.js?v=9"></script>
 
   <!-- Loading Overlay (แสดงเมื่อเรียก API) -->
   <div id="app-loading">

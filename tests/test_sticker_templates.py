@@ -8,15 +8,20 @@ from asset_api import (
     _default_70x36_template,
     _preset_large_templates,
     ensure_default_template,
+    handle,
     render_sticker,
     save_template,
     sticker_settings,
 )
 
 
+class AccessAwareConnection(sqlite3.Connection):
+    pass
+
+
 class DefaultStickerTemplateTests(unittest.TestCase):
     def setUp(self):
-        self.db = sqlite3.connect(':memory:')
+        self.db = sqlite3.connect(':memory:', factory=AccessAwareConnection)
         self.db.row_factory = sqlite3.Row
         self.db.execute('''CREATE TABLE sticker_templates (
             id TEXT PRIMARY KEY,
@@ -59,7 +64,11 @@ class DefaultStickerTemplateTests(unittest.TestCase):
         self.assertEqual(legacy['name'], 'ฉลากเดิม 70 × 36 มม.')
         self.assertEqual(
             [template['name'] for template in _preset_large_templates()],
-            ['ป้าย QR A6 · 105 × 148 มม.', 'ป้าย QR A4 · 210 × 297 มม.'],
+            [
+                'สติกเกอร์แจ้งซ่อมประจำจุด · 50 × 70 มม.',
+                'ป้าย QR A6 · 105 × 148 มม.',
+                'ป้าย QR A4 · 210 × 297 มม.',
+            ],
         )
         elements = json.loads(new_default['elements_json'])
         self.assertFalse(any('{{Location}}' in element.get('content', '') for element in elements))
@@ -150,6 +159,91 @@ class DefaultStickerTemplateTests(unittest.TestCase):
         )
         self.assertNotIn('OTHER ORGANIZATION', rendered)
         self.assertNotIn('ที่อยู่จากการตั้งค่า', rendered)
+
+    def test_location_qr_uses_selected_template_dimensions_and_location_url(self):
+        self.db.executescript('''
+            CREATE TABLE app_feature_flags (
+                id INTEGER PRIMARY KEY, flags_json TEXT NOT NULL, revision INTEGER,
+                updated_at TEXT, updated_by TEXT
+            );
+            CREATE TABLE service_locations (
+                id INTEGER PRIMARY KEY, account_id INTEGER, branch_id INTEGER, kind TEXT,
+                code TEXT, name TEXT, public_name TEXT, public_info TEXT
+            );
+            CREATE TABLE location_qr_links (
+                location_id INTEGER PRIMARY KEY, token TEXT NOT NULL UNIQUE
+            );
+            CREATE TABLE app_branding (
+                id INTEGER PRIMARY KEY, app_name TEXT, organization TEXT, logo TEXT,
+                public_base_url TEXT, revision INTEGER
+            );
+        ''')
+        self.db.execute(
+            'INSERT INTO app_feature_flags(id,flags_json) VALUES(1,?)',
+            ('{"locationQr":true}',),
+        )
+        self.db.execute(
+            '''INSERT INTO service_locations
+               (id,account_id,branch_id,kind,code,name,public_name,public_info)
+               VALUES(1,7,2,'service_point','SRV-01','จุดรับบริการ','จุดรับบริการชั้น 1','ติดต่อเจ้าหน้าที่')'''
+        )
+        self.db.execute(
+            '''INSERT INTO app_branding(id,app_name,organization,logo,public_base_url,revision)
+               VALUES(1,'Smart Asset','หน่วยงานตัวอย่าง','','',1)'''
+        )
+        self.db.access = {'accountId': 7, 'branchId': 2}
+
+        with patch('asset_api._qr_data_uri', side_effect=lambda value: f'data:{value}'):
+            result = handle(self.db, 'POST', '/api/sticker/location-render', {}, {
+                'locationId': 1,
+                'templateId': 'medcenter-location-repair-50x70',
+                'baseUrl': 'https://example.test',
+            })
+
+        self.assertIn('https://example.test/l/', result['html'])
+        self.assertIn('data:https://example.test/l/', result['html'])
+        self.assertIn('ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์', result['html'])
+        self.assertIn('สแกนเพื่อแจ้งซ่อม\nครุภัณฑ์', result['html'])
+        self.assertIn('@page{size:50mm 70mm;margin:0}', result['html'])
+        self.assertEqual(
+            result['template']['canvas'],
+            {'width': 50.0, 'height': 70.0, 'unit': 'mm'},
+        )
+
+    def test_location_qr_print_rejects_locations_outside_the_access_scope(self):
+        self.db.executescript('''
+            CREATE TABLE app_feature_flags (
+                id INTEGER PRIMARY KEY, flags_json TEXT NOT NULL, revision INTEGER,
+                updated_at TEXT, updated_by TEXT
+            );
+            CREATE TABLE service_locations (
+                id INTEGER PRIMARY KEY, account_id INTEGER, branch_id INTEGER, kind TEXT,
+                code TEXT, name TEXT, public_name TEXT, public_info TEXT
+            );
+            CREATE TABLE location_qr_links (
+                location_id INTEGER PRIMARY KEY, token TEXT NOT NULL UNIQUE
+            );
+            CREATE TABLE app_branding (
+                id INTEGER PRIMARY KEY, app_name TEXT, organization TEXT, logo TEXT,
+                public_base_url TEXT, revision INTEGER
+            );
+        ''')
+        self.db.execute(
+            'INSERT INTO app_feature_flags(id,flags_json) VALUES(1,?)',
+            ('{"locationQr":true}',),
+        )
+        self.db.execute(
+            '''INSERT INTO service_locations
+               (id,account_id,branch_id,kind,code,name,public_name,public_info)
+               VALUES(1,99,2,'service_point','SRV-01','จุดบริการ','จุดบริการ','')'''
+        )
+        self.db.access = {'accountId': 7, 'branchId': 2}
+
+        result = handle(self.db, 'POST', '/api/sticker/location-render', {}, {
+            'locationId': 1, 'templateId': 'location-qr-template',
+        })
+
+        self.assertEqual(result, ({'error': 'ไม่พบจุดบริการในขอบเขตสิทธิ์'}, 404))
 
     def test_keeps_a_custom_active_template_when_adding_default(self):
         self.db.execute(
@@ -371,6 +465,7 @@ class DefaultStickerTemplateTests(unittest.TestCase):
         default['name'] = 'ฉลากครุภัณฑ์มาตรฐาน (70 × 36 มม.)'
         large_presets = _preset_large_templates()
         old_names = {
+            'medcenter-location-repair-50x70': 'สติกเกอร์แจ้งซ่อมประจำจุด · 50 × 70 มม.',
             'medcenter-qr-wall-a6': 'ป้าย QR Smart ติดจุดสังเกต / ผนังห้อง (A6 — 105 × 148 มม.)',
             'medcenter-qr-poster-a4': 'ป้าย QR Smart เต็มแผ่น A4 — อุปกรณ์บนฝ้า/เพดาน/สแกนระยะไกล (210 × 297 มม.)',
         }
@@ -410,6 +505,7 @@ class DefaultStickerTemplateTests(unittest.TestCase):
         }
         self.assertEqual(names['gov-asset-default-70x36'], 'ฉลากครุภัณฑ์ 70 × 36 มม.')
         self.assertEqual(names['medcenter-brother-36mm-70x36'], 'ฉลากเดิม 70 × 36 มม.')
+        self.assertEqual(names['medcenter-location-repair-50x70'], 'สติกเกอร์แจ้งซ่อมประจำจุด · 50 × 70 มม.')
         self.assertEqual(names['medcenter-qr-wall-a6'], 'ป้าย QR A6 · 105 × 148 มม.')
         self.assertEqual(names['medcenter-qr-poster-a4'], 'ป้าย QR A4 · 210 × 297 มม.')
         self.assertEqual(names['custom-label'], 'แบบเฉพาะของหน่วยงาน')

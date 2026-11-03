@@ -17,7 +17,7 @@ from asset_photos import primary_photo_sql
 
 TZ = timezone(timedelta(hours=7), "Asia/Bangkok")
 PATH = "/api/dashboard/showcase"
-CENTER = {"name": "ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์", "shortName": "ศูนย์แพทย์", "pattern": "ศูนย์แพทย์%"}
+CENTER = {"name": "ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์", "shortName": "ศูนย์แพทย์"}
 READY = ("พร้อมใช้", "ทะเบียนแล้ว")
 PENDING = ("รอตรวจสอบ", "รออนุมัติ", "สำรวจแล้ว")
 LOAN_BUSY = ("loaned", "issued")
@@ -37,15 +37,10 @@ def _int(query: dict, key: str, default: int, low: int, high: int) -> int:
 
 
 def _center_filter(db: sqlite3.Connection) -> tuple[str, list]:
-    ids = [int(r[0]) for r in db.execute("SELECT id FROM org_units WHERE name LIKE ?", (CENTER["pattern"],))]
-    parts = ["a.location LIKE ?"]
-    if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='asset_source_records'").fetchone():
-        parts.append("a.id IN (SELECT asset_id FROM asset_source_records WHERE source_key='medcenter_durable_xls')")
-    params: list = [CENTER["pattern"]]
-    if ids:
-        joined = ",".join(map(str, ids))
-        parts += [f"a.department_unit_id IN ({joined})", f"a.responsible_unit_id IN ({joined})"]
-    return "(" + " OR ".join(parts) + ")", params
+    account = db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER'").fetchone()
+    if not account:
+        return "0", []
+    return "a.numbering_account_id=?", [int(account["id"])]
 
 
 def _photo(asset_id: int, photo_id) -> dict:
@@ -168,6 +163,64 @@ def _categories(db, where, params) -> list[dict]:
              "name": r["label"], "count": r["n"]} for r in rows]
 
 
+def _monthly_trends(db: sqlite3.Connection, today: date, where: str, params: list) -> list[dict]:
+    from qr_smart import ticket_scope_sql
+
+    months = []
+    current = today.replace(day=1)
+    for _ in range(12):
+        months.append(current.strftime("%Y-%m"))
+        current = (current - timedelta(days=1)).replace(day=1)
+    months.reverse()
+    since = f"{months[0]}-01"
+    movement_counts = {
+        row["month"]: row
+        for row in db.execute(
+            f"""SELECT substr(m.created_at,1,7) AS month,
+                       SUM(m.kind='loan') AS loans,
+                       SUM(m.kind='issue') AS issues,
+                       SUM(m.kind='return') AS returns
+                FROM asset_movements m JOIN assets a ON a.id=m.asset_id
+                WHERE m.created_at>=? AND {where}
+                GROUP BY substr(m.created_at,1,7)""",
+            [since, *params],
+        )
+    }
+    tickets_scope = ticket_scope_sql(db)
+    repair_opened = {
+        row["month"]: row["total"]
+        for row in db.execute(
+            f"""SELECT substr(t.created_at,1,7) AS month,COUNT(*) AS total
+                FROM tickets t LEFT JOIN assets a ON a.id=t.asset_id
+                WHERE t.created_at>=? AND {tickets_scope}
+                GROUP BY substr(t.created_at,1,7)""",
+            [since],
+        )
+    }
+    repair_closed = {
+        row["month"]: row["total"]
+        for row in db.execute(
+            f"""SELECT substr(e.created_at,1,7) AS month,COUNT(*) AS total
+                FROM ticket_events e JOIN tickets t ON t.id=e.ticket_id
+                LEFT JOIN assets a ON a.id=t.asset_id
+                WHERE e.created_at>=? AND e.to_status='ปิดงาน' AND {tickets_scope}
+                GROUP BY substr(e.created_at,1,7)""",
+            [since],
+        )
+    }
+    return [
+        {
+            "month": month,
+            "repairsOpened": repair_opened.get(month, 0),
+            "repairsClosed": repair_closed.get(month, 0),
+            "loans": movement_counts[month]["loans"] if month in movement_counts else 0,
+            "issues": movement_counts[month]["issues"] if month in movement_counts else 0,
+            "returns": movement_counts[month]["returns"] if month in movement_counts else 0,
+        }
+        for month in months
+    ]
+
+
 def _cached(db, key: tuple, build):
     """Register-wide scans are reused for a minute unless assets, loans or tickets were added."""
     stamp = db.execute("SELECT (SELECT MAX(id) FROM assets),(SELECT MAX(id) FROM asset_movements),(SELECT MAX(id) FROM tickets)").fetchone()
@@ -229,6 +282,7 @@ def showcase(db: sqlite3.Connection, query: dict) -> dict:
         "focus": focus,
         "borrowEnabled": _borrow_enabled(db),
         "statusCounts": scan["statusCounts"],
+        "monthlyTrends": _monthly_trends(db, today, where, params),
         "topBorrowed": _top_borrowed(db, where, params, since, _int(query, "limit", 8, 1, 24), today),
         "onLoan": _on_loan(db, where, params, 12, today),
         "recentPhotos": _recent_photos(db, where, params, _int(query, "photos", 12, 1, 30), today),

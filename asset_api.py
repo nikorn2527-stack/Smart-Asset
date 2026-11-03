@@ -654,6 +654,18 @@ def _migrate_default_70x36_template(db: sqlite3.Connection) -> None:
 def _preset_large_templates() -> list[dict[str, Any]]:
     return [
         {
+            "id": "medcenter-location-repair-50x70",
+            "name": "สติกเกอร์แจ้งซ่อมประจำจุด · 50 × 70 มม.",
+            "isDefault": False,
+            "canvas": {"width": 50.0, "height": 70.0, "unit": "mm"},
+            "overflow": "clip",
+            "elements": [
+                {"id": "location-repair-org", "type": "text", "x": 3, "y": 3, "width": 44, "height": 10, "content": "{{orgName}}", "fontSize": 10, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#123d56", "align": "center", "valign": "center", "lineHeight": 1.2, "zIndex": 1},
+                {"id": "location-repair-qr", "type": "qr", "x": 8, "y": 15, "width": 34, "height": 34, "content": "{{LocationQrUrl}}", "zIndex": 2},
+                {"id": "location-repair-instruction", "type": "text", "x": 3, "y": 51, "width": 44, "height": 15, "content": "สแกนเพื่อแจ้งซ่อม\nครุภัณฑ์", "fontSize": 11, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#123d56", "align": "center", "valign": "center", "lineHeight": 1.25, "zIndex": 1},
+            ],
+        },
+        {
             "id": "medcenter-qr-wall-a6",
             "name": "ป้าย QR A6 · 105 × 148 มม.",
             "isDefault": False,
@@ -847,7 +859,9 @@ def render_sticker(template: dict[str, Any], asset: dict[str, Any], settings: di
             nodes.append(f'<div class="sticker-node sticker-rect" style="{html.escape(";".join(styles),quote=True)}"></div>')
         elif kind == "qr":
             content = str(element.get("content") or "{{QrUrl}}")
-            if re.search(r"\{\{\s*[Qq]rUrl\s*\}\}", content) and values.get("QrUrl"):
+            if values.get("LocationQrUrl"):
+                qr_text = str(values["LocationQrUrl"])
+            elif re.search(r"\{\{\s*[Qq]rUrl\s*\}\}", content) and values.get("QrUrl"):
                 qr_text = str(values["QrUrl"])
             else:
                 qr_text = _substitute(content, values) or str(asset.get("code") or "")
@@ -981,6 +995,61 @@ def _make_print_job(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tupl
     return {"jobId":job_id,"count":len(rendered),"template":template,"html":print_document(rendered,template,paper_layout=paper_layout)}
 
 
+def _make_location_print_job(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tuple[dict[str,str],int]:
+    from qr_smart import location_url, require_flag, visible_location_sql
+
+    require_flag(db, "locationQr", "ยังไม่ได้เปิด Location QR")
+    location_id = body.get("locationId")
+    if isinstance(location_id, bool):
+        return {"error": "รหัสจุดบริการไม่ถูกต้อง"}, 400
+    try:
+        location_id = int(location_id)
+    except (TypeError, ValueError):
+        return {"error": "รหัสจุดบริการไม่ถูกต้อง"}, 400
+    if location_id < 1:
+        return {"error": "รหัสจุดบริการไม่ถูกต้อง"}, 400
+
+    location = db.execute(
+        "SELECT s.* FROM service_locations s WHERE s.id=? AND " + visible_location_sql(db),
+        (location_id,),
+    ).fetchone()
+    if not location:
+        return {"error": "ไม่พบจุดบริการในขอบเขตสิทธิ์"}, 404
+
+    ensure_default_template(db)
+    template_id = str(body.get("templateId") or body.get("template_id") or "")
+    template_row = _read_template(db, template_id or None)
+    if not template_row or not template_id:
+        return {"error": "กรุณาเลือกและบันทึกเทมเพลตก่อนพิมพ์"}, 400
+    template = _template_dict(template_row)
+    if not any(element.get("type") == "qr" for element in template.get("elements", [])):
+        return {"error": "เทมเพลตนี้ยังไม่มีองค์ประกอบ QR Code กรุณาเพิ่ม QR Code แล้วบันทึกเทมเพลตก่อนพิมพ์"}, 400
+
+    url = location_url(db, location_id, str(body.get("baseUrl") or ""))
+    location_name = str(location["public_name"] or location["name"])
+    location_kind = str(location["kind"] or "")
+    item = {
+        "AssetNo": location["code"] or f"LOC-{location_id}",
+        "AssetName": location_name,
+        "Category": "Location QR",
+        "Location": location_name,
+        "LocationName": location_name,
+        "LocationCode": location["code"] or f"LOC-{location_id}",
+        "LocationType": location_kind,
+        "LocationInfo": location["public_info"] or "",
+        "LocationQrUrl": url,
+        "QrUrl": url,
+    }
+    rendered = render_sticker(template, item, sticker_settings(db))
+    html_doc = print_document([rendered], template, paper_layout="label")
+    return {
+        "count": 1,
+        "template": template,
+        "location": {"id": location_id, "name": location_name},
+        "html": html_doc,
+    }
+
+
 def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: dict):
     """Return None for unrelated routes; otherwise return API payload/status."""
     try:
@@ -1111,4 +1180,6 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
     if method=="POST" and path in {"/api/sticker/render","/api/sticker/bulk-render","/api/sticker/print"}:
         result=_make_print_job(db,body)
         return result
+    if method=="POST" and path=="/api/sticker/location-render":
+        return _make_location_print_job(db,body)
     return None
