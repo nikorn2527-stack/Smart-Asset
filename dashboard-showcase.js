@@ -22,6 +22,8 @@ window.govAssetRenderOrganizationName = (target, value) => {
   let focus = localStorage.getItem(FOCUS_KEY) === 'center' ? 'center' : 'all';
   let trendRange = 12;
   let data = null;
+  let realData = null;
+  let demoMode = false;
   let loadedAt = 0;
   let request = 0;
   let stale = true;
@@ -104,7 +106,11 @@ window.govAssetRenderOrganizationName = (target, value) => {
     <div class="dsc-stage">
       <div class="dsc-stage-title">
         <span class="dsc-eyebrow"><i class="dsc-live" aria-hidden="true"></i><span id="dscCenterName">ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์</span></span>
-        <h2>ครุภัณฑ์ที่ใช้งานจริง วันนี้</h2>
+        <h2 id="dscMainTitle">ครุภัณฑ์ที่ใช้งานจริง วันนี้</h2>
+      </div>
+      <div class="dsc-demo-switch" role="group" aria-label="ชุดข้อมูลแดชบอร์ด">
+        <button type="button" data-dsc-demo-mode="real" aria-pressed="true" disabled>ข้อมูลจริง</button>
+        <button type="button" data-dsc-demo-mode="sample" aria-pressed="false" disabled>ตัวอย่าง</button>
       </div>
       <div class="dsc-focus" role="group" aria-label="ขอบเขตข้อมูลที่แสดง" hidden>
         <button type="button" data-dsc-focus="all" aria-pressed="true">ทั้งหน่วยงาน</button>
@@ -120,6 +126,7 @@ window.govAssetRenderOrganizationName = (target, value) => {
         <button type="button" class="dsc-action a-register" data-dsc-action="register"><span class="dsc-action-ico">${svg('book')}</span><span><b>เปิดทะเบียน</b><small>ค้นหา · ออก QR</small></span></button>
       </nav>
     </div>
+    <p class="dsc-demo-notice" id="dscDemoNotice" role="status" hidden>โหมดตัวอย่าง · ข้อมูลจำลองเพื่อดูหน้าตาแดชบอร์ดเท่านั้น ไม่บันทึกหรือเปลี่ยนแปลงข้อมูลจริง</p>
     <section class="dsc-panel dsc-trends" aria-labelledby="dscTrendsTitle">
       <header class="dsc-head dsc-trends-head">
         <div><h3 id="dscTrendsTitle">แนวโน้มการใช้งาน</h3><p>เปรียบเทียบงานซ่อมกับการยืม เบิก และคืน</p></div>
@@ -244,7 +251,7 @@ window.govAssetRenderOrganizationName = (target, value) => {
 
   /* ---------- rendering ---------- */
   function card(item, index, mode) {
-    const key = remember(`top:${item.id}`, { ...item, mode });
+    const key = demoMode ? '' : remember(`top:${item.id}`, { ...item, mode });
     const max = Math.max(1, ...(data?.topBorrowed || []).map(i => i.borrowCount || 0));
     const share = mode === 'top' ? Math.max(0.08, (item.borrowCount || 0) / max) : 0;
     const label = mode === 'top'
@@ -253,17 +260,18 @@ window.govAssetRenderOrganizationName = (target, value) => {
     const foot = mode === 'top'
       ? `<span class="dsc-count"><b data-count="${item.borrowCount}">${num(item.borrowCount)}</b> ครั้ง${item.recentCount ? ` · ${num(item.recentCount)} ใน ${data.windowDays} วัน` : ''}</span><span class="dsc-meter"><i style="--p:${share.toFixed(3)}"></i></span>`
       : `<span class="dsc-count dsc-count-soft">${item.photoCount ? `${num(item.photoCount)} รูป · ` : ''}ยังไม่มีประวัติยืม</span>`;
-    return `<button type="button" class="dsc-card${index === 0 && mode === 'top' ? ' is-first' : ''}" role="listitem" data-smart-id="${item.id}" data-dsc-key="${key}" data-dsc-tilt aria-label="${esc(label)}" style="--i:${index}">
+    const tagName = demoMode ? 'div' : 'button';
+    return `<${tagName}${demoMode ? '' : ' type="button"'} class="dsc-card${index === 0 && mode === 'top' ? ' is-first' : ''}" role="listitem"${demoMode ? '' : ` data-smart-id="${item.id}" data-dsc-key="${key}" aria-label="${esc(label)}"`} data-dsc-tilt style="--i:${index}">
       <span class="dsc-card-media">${art(item)}${mode === 'top' ? `<span class="dsc-rank r-${Math.min(index + 1, 4)}">${index + 1}</span>` : ''}${chip(item)}</span>
       <span class="dsc-card-body"><span class="dsc-card-name">${esc(item.name)}</span><span class="dsc-card-code">${esc(item.code || 'ไม่ระบุเลข')}</span><span class="dsc-card-foot">${foot}</span></span>
-    </button>`;
+    </${tagName}>`;
   }
 
   function renderTop() {
     const top = data.topBorrowed || [];
     if (top.length) {
       $('#dscTopTitle').textContent = 'ยืมบ่อยที่สุด';
-      $('#dscTopSub').textContent = `${num(top.length)} รายการ · แตะเพื่อดูรายละเอียด`;
+      $('#dscTopSub').textContent = demoMode ? `${num(top.length)} รายการ · ข้อมูลจำลอง` : `${num(top.length)} รายการ · แตะเพื่อดูรายละเอียด`;
       $('#dscTrack').innerHTML = top.map((item, i) => card(item, i, 'top')).join('');
     } else {
       $('#dscTopTitle').textContent = 'ยืมบ่อยที่สุด';
@@ -300,12 +308,12 @@ window.govAssetRenderOrganizationName = (target, value) => {
     }
     $('#dscLoanList').innerHTML = summary + loans.items.map((item, i) => {
       const due = dueInfo(item);
-      const key = remember(`loan:${item.id}`, { ...item, mode: 'loan', dueText: due.text });
-      return `<button type="button" class="dsc-loan d-${due.cls}" role="listitem" data-smart-id="${item.id}" data-dsc-tab="custody" data-dsc-key="${key}" style="--i:${i}"
-        aria-label="${esc(`${item.name} ${item.state === 'issued' ? 'ผู้เบิก' : 'ผู้ยืม'} ${item.holder || 'ไม่ระบุ'} ${due.text} เปิดแท็บยืมเบิกคืน`)}">
+      const key = demoMode ? '' : remember(`loan:${item.id}`, { ...item, mode: 'loan', dueText: due.text });
+      const tagName = demoMode ? 'div' : 'button';
+      return `<${tagName}${demoMode ? '' : ' type="button"'} class="dsc-loan d-${due.cls}" role="listitem"${demoMode ? '' : ` data-smart-id="${item.id}" data-dsc-tab="custody" data-dsc-key="${key}" aria-label="${esc(`${item.name} ${item.state === 'issued' ? 'ผู้เบิก' : 'ผู้ยืม'} ${item.holder || 'ไม่ระบุ'} ${due.text} เปิดแท็บยืมเบิกคืน`)}`} style="--i:${i}">
         <span class="dsc-loan-art">${art(item)}</span>
         <span class="dsc-loan-text"><b>${esc(item.name)}</b><span class="dsc-loan-meta"><span class="dsc-due">${esc(due.text)}</span><small>${item.state === 'issued' ? 'เบิกโดย' : 'ยืมโดย'} ${esc(item.holder || 'ไม่ระบุ')}</small></span></span>
-      </button>`;
+      </${tagName}>`;
     }).join('') + (loans.total > loans.items.length ? `<p class="dsc-more">และอีก ${num(loans.total - loans.items.length)} รายการ</p>` : '');
   }
 
@@ -452,8 +460,9 @@ window.govAssetRenderOrganizationName = (target, value) => {
     $('#dscBubbles').innerHTML = list.map((c, i) => {
       const d = Math.round(40 + 44 * Math.sqrt(c.count / max));
       const categoryId = c.id == null ? '' : String(c.id);
-      return `<button type="button" class="dsc-bubble" data-dsc-category="${esc(categoryId)}" data-dsc-category-name="${esc(c.name)}" style="--d:${d}px;--c:${palette[i % palette.length]};--i:${i}" title="${esc(`ดู${c.name} ${num(c.count)} รายการ`)}" aria-label="ดูครุภัณฑ์หมวด ${esc(c.name)} จำนวน ${num(c.count)} รายการ">
-        <span class="dsc-bubble-dot"><b>${esc(short(c.count))}</b></span><small>${esc(c.name)}</small></button>`;
+      const tagName = demoMode ? 'div' : 'button';
+      return `<${tagName}${demoMode ? '' : ` type="button" data-dsc-category="${esc(categoryId)}" data-dsc-category-name="${esc(c.name)}"`} class="dsc-bubble" style="--d:${d}px;--c:${palette[i % palette.length]};--i:${i}"${demoMode ? '' : ` title="${esc(`ดู${c.name} ${num(c.count)} รายการ`)}" aria-label="ดูครุภัณฑ์หมวด ${esc(c.name)} จำนวน ${num(c.count)} รายการ"`}>
+        <span class="dsc-bubble-dot"><b>${esc(short(c.count))}</b></span><small>${esc(c.name)}</small></${tagName}>`;
     }).join('');
   }
 
@@ -469,6 +478,123 @@ window.govAssetRenderOrganizationName = (target, value) => {
   };
   const TICKET_LABEL = { 'รับแจ้งใหม่': 'รอคัดกรอง', 'รอมอบหมาย': 'รอมอบหมาย', 'กำลังซ่อม': 'กำลังซ่อม', 'รออะไหล่': 'รออะไหล่', 'รอผู้แจ้งยืนยัน': 'รอตรวจรับ', 'รออนุมัติ': 'รออนุมัติ', 'รออนุมัติค่าใช้จ่ายจริง': 'อนุมัติยอดจริง', 'รอแก้ไขค่าใช้จ่าย': 'แก้ไขยอด' };
   const age = days => (days == null ? '' : days <= 0 ? 'วันนี้' : `${num(days)} วัน`);
+
+  function createDemoData(source) {
+    const now = new Date();
+    const dateOffset = days => {
+      const date = new Date(now);
+      date.setDate(date.getDate() + days);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+    const demoAsset = (id, name, code, category, state, stateLabel, extra = {}) => ({
+      id, name, code, category, state, stateLabel, location: 'ห้องตรวจ 2 · ชั้น 1', ...extra
+    });
+    const assets = [
+      demoAsset(990001, 'เครื่องวัดความดันดิจิทัล', 'MED-DEMO-001', 'เครื่องมือแพทย์', 'ready', 'พร้อมใช้', { borrowCount: 28, photoCount: 3 }),
+      demoAsset(990002, 'เครื่องสำรองไฟคอมพิวเตอร์', 'IT-DEMO-014', 'คอมพิวเตอร์และอุปกรณ์', 'loaned', 'ถูกยืม', { borrowCount: 21, photoCount: 2, holder: 'ห้องเวชระเบียน', dueAt: dateOffset(2), daysLeft: 2 }),
+      demoAsset(990003, 'โปรเจกเตอร์ห้องประชุม', 'EDU-DEMO-008', 'โสตทัศนูปกรณ์', 'repair', 'อยู่ระหว่างซ่อม', { borrowCount: 17, photoCount: 1 }),
+      demoAsset(990004, 'เครื่องพิมพ์เลเซอร์', 'OFF-DEMO-031', 'เครื่องใช้สำนักงาน', 'ready', 'พร้อมใช้', { borrowCount: 14, photoCount: 4 }),
+      demoAsset(990005, 'รถเข็นผู้ป่วย', 'MED-DEMO-022', 'เครื่องมือแพทย์', 'issued', 'เบิกใช้', { borrowCount: 12, photoCount: 2, holder: 'หอผู้ป่วยใน' })
+    ];
+    const categories = [
+      { name: 'เครื่องมือแพทย์', count: 146 },
+      { name: 'คอมพิวเตอร์และอุปกรณ์', count: 108 },
+      { name: 'เครื่องใช้สำนักงาน', count: 84 },
+      { name: 'โสตทัศนูปกรณ์', count: 63 },
+      { name: 'เฟอร์นิเจอร์', count: 57 },
+      { name: 'อื่น ๆ', count: 42 }
+    ];
+    const months = [];
+    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthlyValues = [
+      [18, 12, 21, 17, 15], [21, 14, 18, 19, 16], [16, 11, 24, 21, 18],
+      [24, 18, 19, 23, 20], [20, 16, 27, 24, 21], [27, 20, 22, 25, 23],
+      [23, 19, 29, 27, 24], [30, 23, 25, 28, 26], [26, 21, 32, 30, 27],
+      [33, 25, 28, 32, 29], [29, 24, 35, 33, 30], [36, 28, 31, 35, 32]
+    ];
+    for (let index = 11; index >= 0; index--) {
+      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - index, 1);
+      const [repairsOpened, repairsClosed, loans, issues, returns] = monthlyValues[11 - index];
+      months.push({
+        month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+        repairsOpened, repairsClosed, loans, issues, returns
+      });
+    }
+    const ticket = (id, ticketNo, title, status, ageDays, extra = {}) => ({
+      id, ticketNo, title, status, ageDays, urgency: '', ...extra
+    });
+    const sampleCenter = source?.center || {};
+    return {
+      ...source,
+      generatedAt: now.toISOString(),
+      today: dateOffset(0),
+      windowDays: 30,
+      focus: 'all',
+      borrowEnabled: true,
+      statusCounts: { total: 500, ready: 374, loaned: 34, issued: 18, repair: 26, pending: 32, other: 16 },
+      monthlyTrends: months,
+      topBorrowed: assets.map((item, index) => ({
+        ...item, borrowCount: [28, 21, 17, 14, 12][index], recentCount: [8, 6, 5, 4, 3][index]
+      })),
+      onLoan: {
+        total: 52, overdue: 4,
+        items: [
+          { ...assets[1], dueAt: dateOffset(2), daysLeft: 2 },
+          { ...assets[4], dueAt: dateOffset(-3), daysLeft: -3, overdue: true },
+          { ...demoAsset(990006, 'แท็บเล็ตสำหรับให้บริการ', 'IT-DEMO-019', 'คอมพิวเตอร์และอุปกรณ์', 'loaned', 'ถูกยืม', { holder: 'จุดประชาสัมพันธ์' }), dueAt: dateOffset(5), daysLeft: 5 }
+        ]
+      },
+      recentPhotos: { total: 0, items: [] },
+      center: {
+        ...sampleCenter,
+        shortName: sampleCenter.shortName || 'ศูนย์แพทย์',
+        total: 500,
+        isScoped: false,
+        categoriesScope: 'all',
+        categories
+      },
+      todayWork: {
+        approvals: {
+          total: 2, tickets: 1, assets: 1,
+          items: [
+            ticket(991001, 'REP-DEMO-024', 'เครื่องวัดออกซิเจนปลายนิ้วอ่านค่าไม่ได้', 'รออนุมัติ', 1),
+            { id: 991002, kind: 'asset', title: 'เครื่องวัดอุณหภูมิอินฟราเรด', code: 'MED-DEMO-040' }
+          ]
+        },
+        repairs: {
+          total: 8,
+          byStatus: { 'รับแจ้งใหม่': 2, 'กำลังซ่อม': 3, 'รออะไหล่': 1, 'รอผู้แจ้งยืนยัน': 2 },
+          items: [
+            ticket(991003, 'REP-DEMO-023', 'เครื่องพิมพ์ฉลากพิมพ์ไม่ชัด', 'รับแจ้งใหม่', 0),
+            ticket(991004, 'REP-DEMO-021', 'เครื่องสำรองไฟส่งเสียงเตือน', 'กำลังซ่อม', 2, { assignedTo: 'ช่างสมชาย' }),
+            ticket(991005, 'REP-DEMO-018', 'โปรเจกเตอร์เปิดไม่ติด', 'รออะไหล่', 4, { assignedTo: 'ช่างวิชัย' })
+          ]
+        },
+        maintenance: {
+          total: 3, overdue: 1, dueToday: 2,
+          items: [
+            { id: 991006, title: 'ตรวจเช็กเครื่องปรับอากาศ', kind: 'pm', assignee: 'ช่างอาคาร', daysLate: 2 },
+            { id: 991007, title: 'ตรวจนับครุภัณฑ์ห้องตรวจ 2', kind: 'count', assignee: 'เจ้าหน้าที่พัสดุ', daysLate: 0 }
+          ]
+        },
+        overdueLoans: {
+          total: 4,
+          items: [
+            { id: 991008, assetId: 990005, title: 'รถเข็นผู้ป่วย', state: 'loaned', holder: 'หอผู้ป่วยใน', daysLate: 3 },
+            { id: 991009, assetId: 990006, title: 'แท็บเล็ตสำหรับให้บริการ', state: 'loaned', holder: 'จุดประชาสัมพันธ์', daysLate: 1 }
+          ]
+        }
+      },
+      featured: assets.slice(0, 3).map((item, index) => ({
+        ...item,
+        note: ['ใช้งานประจำจุดบริการ', 'ตรวจสอบก่อนส่งคืน', 'รออะไหล่จากผู้จำหน่าย'][index],
+        pinnedBy: 'ตัวอย่าง',
+        pinnedAt: dateOffset(-index),
+        borrowCount: [28, 21, 17][index]
+      })),
+      featuredMax: 12
+    };
+  }
 
   function job(item, type, mine) {
     let meta = '';
@@ -494,10 +620,11 @@ window.govAssetRenderOrganizationName = (target, value) => {
       cls = 't-late';
       attrs = `data-smart-id="${item.assetId}" data-dsc-tab="custody"`;
     }
-    return `<button type="button" class="dsc-job ${cls}${mine ? ' is-mine' : ''}" ${attrs}>
+    const tagName = demoMode ? 'div' : 'button';
+    return `<${tagName}${demoMode ? '' : ' type="button"'} class="dsc-job ${cls}${mine ? ' is-mine' : ''}" ${demoMode ? '' : attrs}>
       <span class="dsc-job-text"><b>${esc(item.title || 'ไม่ระบุชื่อ')}</b><small>${meta}</small></span>
       <span class="dsc-job-tag">${esc(tag)}</span>
-    </button>`;
+    </${tagName}>`;
   }
 
   function renderToday() {
@@ -551,24 +678,25 @@ window.govAssetRenderOrganizationName = (target, value) => {
           <span class="dsc-tw-count" data-count="${t.total}" data-count-key="today-${t.key}">${num(t.total)}</span></header>
         ${t.mine ? `<span class="dsc-tw-mine">งานของบทบาทนี้ · ${num(t.mine)}</span>` : ''}
         <div class="dsc-tw-list">${t.total ? t.items.slice(0, 3).join('') : `<p class="dsc-tw-clear">${svg('check')} เรียบร้อย ไม่มีรายการค้าง</p>`}</div>
-        ${t.total ? `<button type="button" class="dsc-link-btn dsc-tw-more" data-dsc-action="${t.go}">${esc(t.goLabel)}${t.total > 3 ? ` (${num(t.total)})` : ''} →</button>` : ''}
+        ${t.total && !demoMode ? `<button type="button" class="dsc-link-btn dsc-tw-more" data-dsc-action="${t.go}">${esc(t.goLabel)}${t.total > 3 ? ` (${num(t.total)})` : ''} →</button>` : ''}
       </section>`).join('');
   }
 
   /* ---------- featured equipment ---------- */
   function featureCard(item, index, count, staff) {
-    const key = remember(`feat:${item.id}`, { ...item, mode: 'feature' });
+    const key = demoMode ? '' : remember(`feat:${item.id}`, { ...item, mode: 'feature' });
     const live = item.state === 'loaned' || item.state === 'issued'
       ? `${item.state === 'issued' ? 'เบิกใช้' : 'ยืมโดย'} ${item.holder || 'ไม่ระบุ'}${item.dueAt ? ` · ${dueInfo(item).text}` : ''}`
       : item.state === 'repair' ? 'อยู่ระหว่างซ่อม' : item.state === 'ready' ? 'พร้อมให้ยืมใช้' : item.stateLabel;
-    const tools = staff ? `<div class="dsc-feat-tools" role="group" aria-label="${esc(`จัดการ ${item.name}`)}">
+    const tools = staff && !demoMode ? `<div class="dsc-feat-tools" role="group" aria-label="${esc(`จัดการ ${item.name}`)}">
         <button type="button" data-dsc-move="-1" data-id="${item.id}" aria-label="เลื่อนไปทางซ้าย" ${index === 0 ? 'disabled' : ''}>${svg('chevronL')}</button>
         <button type="button" data-dsc-move="1" data-id="${item.id}" aria-label="เลื่อนไปทางขวา" ${index === count - 1 ? 'disabled' : ''}>${svg('chevronR')}</button>
         <button type="button" data-dsc-edit-pin="${item.id}" aria-label="แก้บันทึกย่อ">${svg('pencil')}</button>
         <button type="button" data-dsc-unpin="${item.id}" aria-label="เลิกปักหมุด">${svg('close')}</button>
       </div>` : '';
-    return `<div class="dsc-card dsc-feat" role="listitem" data-dsc-key="${key}" data-dsc-tilt style="--i:${index}">
-      <button type="button" class="dsc-feat-open" data-smart-id="${item.id}" aria-label="${esc(`${item.name} สถานะ ${item.stateLabel}${item.note ? ` · ${item.note}` : ''}`)}">
+    const openTag = demoMode ? 'div' : 'button';
+    return `<div class="dsc-card dsc-feat" role="listitem"${demoMode ? '' : ` data-dsc-key="${key}"`} data-dsc-tilt style="--i:${index}">
+      <${openTag}${demoMode ? '' : ` type="button" data-smart-id="${item.id}" aria-label="${esc(`${item.name} สถานะ ${item.stateLabel}${item.note ? ` · ${item.note}` : ''}`)}`} class="dsc-feat-open">
         <span class="dsc-card-media">${art(item)}${chip(item)}<span class="dsc-feat-star" aria-hidden="true">${svg('star')}</span></span>
         <span class="dsc-card-body">
           <span class="dsc-card-name">${esc(item.name)}</span>
@@ -576,7 +704,7 @@ window.govAssetRenderOrganizationName = (target, value) => {
           ${item.note ? `<span class="dsc-feat-note">${esc(item.note)}</span>` : ''}
           <span class="dsc-feat-meta"><span class="dsc-feat-live s-${esc(item.overdue ? 'late' : item.state)}">${esc(live)}</span>${item.location ? `<span class="dsc-feat-loc">📍 ${esc(item.location)}</span>` : ''}</span>
         </span>
-      </button>${tools}
+      </${openTag}>${tools}
     </div>`;
   }
 
@@ -584,7 +712,7 @@ window.govAssetRenderOrganizationName = (target, value) => {
     const list = data.featured || [];
     const max = data.featuredMax || 12;
     const staff = isStaff();
-    $('[data-dsc-action="pin-add"]').hidden = !staff || list.length >= max;
+    $('[data-dsc-action="pin-add"]').hidden = demoMode || !staff || list.length >= max;
     $('#dscFeatSub').textContent = list.length
       ? `${num(list.length)} / ${num(max)} รายการ`
       : `0 / ${num(max)} รายการ`;
@@ -594,7 +722,7 @@ window.govAssetRenderOrganizationName = (target, value) => {
     } else {
       track.innerHTML = `<div class="dsc-inline-empty" role="status">
         <span>${svg('star')}</span><b>ยังไม่มีอุปกรณ์เด่น</b>
-        ${staff ? '<button type="button" class="dsc-link-btn" data-dsc-action="pin-add">＋ เพิ่มอุปกรณ์เด่น</button>' : ''}
+        ${staff && !demoMode ? '<button type="button" class="dsc-link-btn" data-dsc-action="pin-add">＋ เพิ่มอุปกรณ์เด่น</button>' : ''}
       </div>`;
     }
     requestAnimationFrame(updateNav);
@@ -607,6 +735,11 @@ window.govAssetRenderOrganizationName = (target, value) => {
     if (center?.name) {
       window.govAssetRenderOrganizationName($('#dscCenterName'),center.name);
       document.querySelectorAll('.dsc-heading-org').forEach(el => window.govAssetRenderOrganizationName(el,center.name));
+    }
+    if (demoMode) {
+      group.hidden = true;
+      if (pill) pill.hidden = true;
+      return;
     }
     if (center?.isScoped) {
       group.hidden = true;
@@ -644,8 +777,24 @@ window.govAssetRenderOrganizationName = (target, value) => {
   function renderAll() {
     items.clear();
     root.classList.remove('is-loading', 'is-error');
+    root.classList.toggle('is-demo', demoMode);
+    $('#dscMainTitle').textContent = demoMode ? 'ตัวอย่างภาพรวมครุภัณฑ์' : 'ครุภัณฑ์ที่ใช้งานจริง วันนี้';
+    root.querySelectorAll('.dsc-actions button').forEach(button => { button.disabled = demoMode; });
+    $('.dsc-demo-switch').querySelectorAll('[data-dsc-demo-mode]').forEach(button => {
+      button.disabled = !realData;
+      button.setAttribute('aria-pressed', String(button.dataset.dscDemoMode === (demoMode ? 'sample' : 'real')));
+    });
+    $('#dscDemoNotice').hidden = !demoMode;
     renderFocus(); renderToday(); renderFeatured(); renderTop(); renderLoans(); renderRing(); renderTrends(); renderPhotos(); renderBubbles();
     animateCounts();
+  }
+
+  function setDemoMode(enabled) {
+    if (!realData || demoMode === enabled) return;
+    demoMode = enabled;
+    if (demoMode && pinDialog.open) pinDialog.close();
+    data = demoMode ? createDemoData(realData) : realData;
+    renderAll();
   }
 
   function renderLoading() {
@@ -669,7 +818,8 @@ window.govAssetRenderOrganizationName = (target, value) => {
       const result = await api(`/api/dashboard/showcase?focus=${focus}`);
       if (id !== request) return;
       if (focus === 'center' && !result.center?.total) { focus = 'all'; localStorage.removeItem(FOCUS_KEY); return load(); }
-      data = result;
+      realData = result;
+      data = demoMode ? createDemoData(realData) : realData;
       loadedAt = Date.now();
       renderAll();
     } catch (error) {
@@ -1022,6 +1172,11 @@ window.govAssetRenderOrganizationName = (target, value) => {
     const categoryButton = event.target.closest('[data-dsc-category]');
     if (categoryButton && root.contains(categoryButton)) {
       app.openCategory?.(categoryButton.dataset.dscCategory, categoryButton.dataset.dscCategoryName);
+      return;
+    }
+    const demoButton = event.target.closest('[data-dsc-demo-mode]');
+    if (demoButton && root.contains(demoButton)) {
+      setDemoMode(demoButton.dataset.dscDemoMode === 'sample');
       return;
     }
     const tabTarget = event.target.closest('[data-dsc-tab]');

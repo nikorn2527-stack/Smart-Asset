@@ -107,7 +107,7 @@ def new_session(db,handler,user):
 def authenticate(db,handler,method,path,body):
     if not required():db.access=None;return None
     # Branding (name, logo) is printed on every QR label, so the login screen and QR pages may read it.
-    if path=='/api/health' or path=='/api/qr/public-config' or (path=='/api/branding' and method=='GET') or re.fullmatch(r'/api/(scan|receipts)/[A-Za-z0-9_-]{32}(?:/repairs|/action)?',path) or re.fullmatch(r'/api/places/[A-Za-z0-9_-]{32}(?:/reports)?',path):return None
+    if path=='/api/health' or path=='/api/qr/public-config' or (path=='/api/branding' and method=='GET') or re.fullmatch(r'/api/(scan|receipts)/[A-Za-z0-9_-]{32}(?:/repairs|/action)?',path) or (method=='GET' and re.fullmatch(r'/api/tracking/[A-Za-z0-9_-]{32}',path)) or re.fullmatch(r'/api/places/[A-Za-z0-9_-]{32}(?:/reports)?',path):return None
     user,session=session_user(db,handler)
     if method not in ('GET','HEAD'):
         origin_check(handler)
@@ -283,6 +283,9 @@ def authorize(db,ctx,method,path,query,body):
     if path=='/api/governance/preview':return
     if path=='/api/notifications/read':return
     if path.startswith('/api/sticker/'):
+        if not perms['export']:fail('ไม่ได้รับสิทธิ์ส่งออกหรือพิมพ์')
+        return
+    if re.fullmatch(r'/api/tickets/\d+/tracking-link',path):
         if not perms['export']:fail('ไม่ได้รับสิทธิ์ส่งออกหรือพิมพ์')
         return
     if path.startswith(('/api/operational-master','/api/supply/settings','/api/governance/branches','/api/governance/profiles','/api/governance/catalog','/api/governance/bindings','/api/workspace/categories','/api/features')):

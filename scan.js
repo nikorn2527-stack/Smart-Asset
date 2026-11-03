@@ -10,7 +10,7 @@
     {id:'track',label:'ติดตามคำแจ้งของฉัน',enabled:true}
   ];
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const route = location.pathname.match(/^\/(q|t|l)\/([A-Za-z0-9_-]{32})$/);
+  const route = location.pathname.match(/^\/(q|t|l|r)\/([A-Za-z0-9_-]{32})$/);
   const date = v => new Date(v).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Bangkok'});
   const honeypot = () => `<label class="scan-honeypot" aria-hidden="true">เว็บไซต์<input name="website" autocomplete="off" tabindex="-1" aria-hidden="true"></label>`;
   let config = {flags:{},authenticated:false,actor:'',permissions:{},services:{guest:DEFAULT_GUEST,staff:[]},csrf:''};
@@ -485,6 +485,28 @@
     });
   }
 
+  async function trackingPage(token) {
+    const ticket = await api(`/api/tracking/${token}`);
+    document.title = `${ticket.ticketNo} · ตรวจสอบงานซ่อม`;
+    main.innerHTML = `<div class="scan-breadcrumb">ตรวจสอบความคืบหน้างานซ่อม</div>
+      <section class="scan-card">
+        <span class="scan-kicker">REPAIR STATUS</span>
+        <h1>${esc(ticket.ticketNo)}</h1>
+        <p>${esc(ticket.assetName)}${ticket.assetCode ? ` · ${esc(ticket.assetCode)}` : ''}</p>
+        <span class="scan-badge">${esc(ticket.status)}</span>
+        ${noticeCard()}
+        <p class="scan-notice">หน้านี้แสดงสถานะและประวัติงานเท่านั้น ไม่แสดงข้อมูลผู้แจ้ง และไม่สามารถเปลี่ยนแปลงงานได้</p>
+        <dl class="scan-details">
+          <div><dt>วันที่รับแจ้ง</dt><dd>${esc(date(ticket.createdAt))}</dd></div>
+          <div><dt>อัปเดตล่าสุด</dt><dd>${esc(date(ticket.updatedAt))}</dd></div>
+        </dl>
+        <h2>ความคืบหน้าของงาน</h2>
+        <ol class="scan-timeline">${(ticket.events || []).map((event, index) => `<li class="${index === ticket.events.length - 1 ? 'current' : ''}"><b>${esc(event.status)}</b><small>${esc(date(event.createdAt))}</small></li>`).join('') || '<li>ยังไม่มีประวัติการดำเนินงาน</li>'}</ol>
+        <button class="scan-button secondary" type="button" id="refreshTracking">อัปเดตสถานะ</button>
+      </section>`;
+    document.querySelector('#refreshTracking').onclick = () => trackingPage(token).catch(e => error(e.message));
+  }
+
   async function loadConfig() {
     try {
       config = {...config, ...await api('/api/qr/public-config')};
@@ -524,6 +546,7 @@
       if (!route) throw new Error('เปิดหน้านี้ด้วยการสแกน QR บนครุภัณฑ์ จุดบริการ หรือลิงก์ใบรับแจ้ง');
       if (route[1] === 'q') await assetPage(route[2]);
       else if (route[1] === 'l') await locationPage(route[2]);
+      else if (route[1] === 'r') await trackingPage(route[2]);
       else await receiptPage(route[2]);
     } catch (e) { error(e.message); }
   }

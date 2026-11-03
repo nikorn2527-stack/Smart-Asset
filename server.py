@@ -513,6 +513,53 @@ class Handler(BaseHTTPRequestHandler):
                 return {**ticket_dict(row), "events": events, "photos": ticket_photos.list_photos(db, ticket_id)}
             if method == "POST" and path == "/api/tickets":
                 return self.create_ticket(db, body)
+            tracking_link = re.fullmatch(r"/api/tickets/(\d+)/tracking-link", path)
+            if method == "POST" and tracking_link:
+                ticket_id = int(tracking_link[1])
+                if db.execute("SELECT 1 FROM tickets WHERE id=?", (ticket_id,)).fetchone() is None:
+                    raise ApiError("ไม่พบ Ticket นี้", 404)
+                actor = body.get("actor", "")
+                if actor == ROLE_REQUESTER:
+                    raise ApiError("พิมพ์ QR ติดตามงานได้เฉพาะเจ้าหน้าที่", 403)
+                candidate = secrets.token_urlsafe(24)
+                db.execute(
+                    "INSERT OR IGNORE INTO ticket_tracking_links(ticket_id,token) VALUES(?,?)",
+                    (ticket_id, candidate),
+                )
+                row = db.execute("SELECT token FROM ticket_tracking_links WHERE ticket_id=?", (ticket_id,)).fetchone()
+                if row is None:
+                    raise ApiError("ไม่สามารถสร้าง QR ติดตามงานได้ กรุณาลองอีกครั้ง", 500)
+                token = row["token"]
+                configured = db.execute("SELECT public_base_url FROM app_branding WHERE id=1").fetchone()
+                origin = configured["public_base_url"] if configured else ""
+                url = f"{base_url(origin or self.qr_origin())}/r/{token}"
+                from asset_api import _qr_data_uri
+                return {"url": url, "qrImage": _qr_data_uri(url)}
+            tracking = re.fullmatch(r"/api/tracking/([A-Za-z0-9_-]{32})", path)
+            if method == "GET" and tracking:
+                row = db.execute(
+                    "SELECT r.ticket_id,t.ticket_no,t.asset_name,t.asset_code,t.status,t.created_at,t.updated_at "
+                    "FROM ticket_tracking_links r JOIN tickets t ON t.id=r.ticket_id WHERE r.token=?",
+                    (tracking[1],),
+                ).fetchone()
+                if row is None:
+                    raise ApiError("ไม่พบลิงก์ติดตามงานนี้", 404)
+                events = [
+                    {"status": event["to_status"], "createdAt": event["created_at"]}
+                    for event in db.execute(
+                        "SELECT to_status,created_at FROM ticket_events WHERE ticket_id=? ORDER BY id",
+                        (row["ticket_id"],),
+                    )
+                ]
+                return {
+                    "ticketNo": row["ticket_no"],
+                    "assetName": row["asset_name"],
+                    "assetCode": row["asset_code"],
+                    "status": row["status"],
+                    "createdAt": row["created_at"],
+                    "updatedAt": row["updated_at"],
+                    "events": events,
+                }
             if method == "POST" and path == "/api/assets":
                 return self.create_asset(db, body)
             if method == "POST" and path == "/api/survey":
@@ -988,7 +1035,7 @@ class Handler(BaseHTTPRequestHandler):
             except (ApiError, GovernanceError) as exc:
                 self.send_json({"error": str(exc)}, exc.status)
             return
-        if re.fullmatch(r"/(q|t|l)/[A-Za-z0-9_-]{32}", path):
+        if re.fullmatch(r"/(q|t|l|r)/[A-Za-z0-9_-]{32}", path):
             path = "/scan.html"
         if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
             folder = None
@@ -1051,7 +1098,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
-        if re.fullmatch(r"/(q|t|l)/[A-Za-z0-9_-]{32}", path):
+        if re.fullmatch(r"/(q|t|l|r)/[A-Za-z0-9_-]{32}", path):
             path = "/scan.html"
         if path == "/api/backups/download" or path.startswith("/api/backups/prepared/"):
             folder = None

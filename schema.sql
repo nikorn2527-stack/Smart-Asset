@@ -377,6 +377,11 @@ CREATE TABLE IF NOT EXISTS ticket_receipts (
   token TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS ticket_tracking_links (
+  ticket_id INTEGER PRIMARY KEY REFERENCES tickets(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 CREATE INDEX IF NOT EXISTS idx_tickets_asset_status ON tickets(asset_id,status);
 
 CREATE TABLE IF NOT EXISTS sticker_templates (

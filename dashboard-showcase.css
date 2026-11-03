@@ -79,6 +79,11 @@
 
 .dsc-focus { display: inline-flex; flex: none; padding: 3px; gap: 2px; border-radius: 999px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .18); }
 .dsc-focus[hidden] { display: none; }
+.dsc-demo-switch { display: inline-flex; flex: none; padding: 3px; gap: 2px; border-radius: 999px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .18); }
+.dsc-demo-switch button { padding: 6px 11px; border: 0; border-radius: 999px; background: transparent; color: #d8eff1 !important; font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.dsc-demo-switch button[aria-pressed="true"] { background: #fff; color: var(--dsc-navy) !important; font-weight: 600; box-shadow: 0 4px 12px -6px rgba(0, 0, 0, .4); }
+.dsc-demo-switch button:disabled { opacity: .6; cursor: wait; }
+.dsc-demo-switch button:focus-visible { outline: 2px solid var(--dsc-warm); outline-offset: 1px; }
 .dsc-focus button { border: 0; background: transparent; padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 500; color: #d8eff1 !important; cursor: pointer; white-space: nowrap; }
 .dsc-focus button span { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 11px; background: rgba(255, 255, 255, .16); }
 .dsc-focus button[aria-pressed="true"] { background: #fff; color: var(--dsc-navy) !important; font-weight: 600; box-shadow: 0 4px 12px -6px rgba(0, 0, 0, .4); }
@@ -87,6 +92,10 @@
 .dsc-scope-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 999px; font-size: 12.5px; color: #e2f6f5; background: rgba(255, 255, 255, .11); border: 1px solid rgba(255, 255, 255, .2); white-space: nowrap; }
 .dsc-scope-pill[hidden] { display: none; }
 .dsc-scope-pill b { font-weight: 600; color: #fff; }
+.dsc-demo-notice { margin: 0; padding: 8px 12px; border: 1px solid #f0d397; border-radius: 12px; background: #fff8e8; color: #76520e; font-size: 12.5px; line-height: 1.45; }
+.dsc-demo-notice[hidden] { display: none; }
+.dsc.is-demo .dsc-card, .dsc.is-demo .dsc-loan, .dsc.is-demo .dsc-job, .dsc.is-demo .dsc-bubble { cursor: default; }
+.dsc.is-demo .dsc-feat-open { cursor: default; }
 
 .dsc-actions { display: grid; grid-template-columns: repeat(6, minmax(0, auto)); gap: 7px; flex: 0 1 auto; min-width: 0; }
 .dsc-action {
@@ -623,6 +632,7 @@
   .dsc-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dsc-lower { grid-template-columns: minmax(0, 1fr); }
   .dsc-focus { width: 100%; }
+  .dsc-demo-switch { width: max-content; }
   .dsc-focus button { flex: 1 1 0; }
   .dsc-guide { flex-basis: 230px; }
 }

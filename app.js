@@ -662,6 +662,7 @@ function openRepairPrintDialog(id) {
 async function printTicket(id,format='work-order',slipSize='80mm') {
   const summary=repairs.find(item=>item.id===id); if(!summary){showError(new Error('ไม่พบ Ticket สำหรับพิมพ์'));return;}
   const ticket=await api(`/api/tickets/${id}`);
+  const tracking=await api(`/api/tickets/${id}/tracking-link`,{method:'POST',body:JSON.stringify({actor:currentRole})});
   format=['work-order','slip','both'].includes(format)?format:'work-order';
   slipSize=slipSize==='58mm'?'58mm':'80mm';
   const slip=slipSize==='58mm'?{page:'58mm 210mm',margin:'3mm'}:{page:'80mm 297mm',margin:'4mm'};
@@ -695,6 +696,7 @@ async function printTicket(id,format='work-order',slipSize='80mm') {
       <ol class="work-order-timeline">${(ticket.events||[]).map(event=>`<li><b>${esc(event.action)} · ${esc(event.actor)}</b><span>${esc(fmtDate(event.createdAt))} · ${esc(event.note||`${event.from_status||'เริ่ม'} → ${event.to_status}`)}</span></li>`).join('')||'<li>ยังไม่มีประวัติการดำเนินงาน</li>'}</ol>
     </section>
     <div class="work-order-signatures"><div><span>ผู้แจ้ง / ผู้ส่งมอบงาน</span><i></i><small>วันที่ ____ / ____ / ______</small></div><div><span>ผู้ปฏิบัติงาน</span><i></i><small>วันที่ ____ / ____ / ______</small></div><div><span>ผู้ตรวจรับงาน</span><i></i><small>วันที่ ____ / ____ / ______</small></div></div>
+    <div class="work-order-tracking"><img src="${esc(tracking.qrImage)}" alt="QR สำหรับตรวจสอบงาน ${esc(ticket.ticketNo)}"><span><b>สแกนเพื่อตรวจสอบสถานะงาน</b><small>${esc(tracking.url)}</small></span></div>
     <footer class="work-order-footer"><span>${organization}</span><span>เอกสารอ้างอิง ${esc(ticket.ticketNo)}</span></footer>
   </article></section>`;
   const receiptSlip=()=>`<section class="repair-slip"><header class="slip-header"><span>${organization}</span><small>${appName}</small><h1>ใบรับแจ้งซ่อมครุภัณฑ์</h1><div class="slip-ticket-label">เลขที่ Ticket</div><b class="slip-ticket-number">${esc(ticket.ticketNo)}</b>
@@ -706,7 +708,7 @@ async function printTicket(id,format='work-order',slipSize='80mm') {
     <section class="slip-section slip-issue"><small>อาการที่แจ้ง</small><p>${esc(ticket.issue)}</p></section>
     ${ticket.assignedTo?`<section class="slip-section"><small>ผู้รับผิดชอบ</small><b>${esc(ticket.assignedTo)}</b></section>`:''}
     ${(ticket.events||[]).length?`<section class="slip-section slip-history"><small>ประวัติการดำเนินงาน</small><ol>${ticket.events.slice(-3).reverse().map(event=>`<li><b>${esc(event.action)} · ${esc(event.actor)}</b><span>${esc(fmtDate(event.createdAt))}</span></li>`).join('')}</ol></section>`:''}
-    <footer class="slip-footer"><b>โปรดเก็บสลิปนี้ไว้ติดตามงาน</b><span>แจ้งเลข Ticket เมื่อติดต่อเจ้าหน้าที่</span><small>พิมพ์เมื่อ ${esc(new Date().toLocaleString('th-TH'))}</small></footer></section>`;
+    <footer class="slip-footer"><img src="${esc(tracking.qrImage)}" alt="QR สำหรับตรวจสอบงาน ${esc(ticket.ticketNo)}"><b>สแกนเพื่อตรวจสอบสถานะงาน</b><span>Ticket ${esc(ticket.ticketNo)}</span><small>พิมพ์เมื่อ ${esc(new Date().toLocaleString('th-TH'))}</small></footer></section>`;
   const defaultPage=format==='slip'?`size:${slip.page};margin:${slip.margin}`:'size:A4 portrait;margin:12mm';
   const root=$('#repairPrintArea'),markup=`<div id="repairPrintArea" class="repair-print-sheet format-${format} slip-${slipSize}">${format==='slip'?receiptSlip():workOrder()}${format==='both'?receiptSlip():''}</div>`;
   const printFrame=document.createElement('iframe');
