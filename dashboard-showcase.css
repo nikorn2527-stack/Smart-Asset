@@ -753,6 +753,7 @@
   color: rgba(230, 246, 247, .78) !important;
   font-size: 11.5px !important;
   margin: 0 !important;
+  min-width: 100%;
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
