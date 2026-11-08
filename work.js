@@ -4,8 +4,26 @@
   const day=v=>new Date(v+'T12:00:00+07:00').toLocaleDateString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'numeric'});
   const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
   const status={pending:'รอดำเนินการ',in_progress:'กำลังดำเนินการ',completed:'เสร็จแล้ว'},results={normal:'ปกติ',needs_repair:'ต้องซ่อม',found:'พบและถูกต้อง',not_found:'ไม่พบ',moved:'พบต่างสถานที่',damaged:'พบชำรุด'};
-  let items=[],plans=[],selected=new Map(),candidates=[],offset=0,candidateTotal=0,queryEpoch=0;
-  const view=document.createElement('section');view.id='view-work';view.className='view';view.innerHTML=`<div class="page-heading"><div><div class="eyebrow">PREVENTIVE MAINTENANCE & INVENTORY</div><h1>งาน PM และตรวจนับครุภัณฑ์</h1><p>ตั้งรอบรายวัน รายสัปดาห์ รายเดือน หรือทุกจำนวนที่กำหนด พร้อมมอบหมายและติดตามผล</p></div><button class="button primary" id="newWorkPlan">＋ สร้างแผนงาน</button></div><div class="work-scheduler" id="workScheduler" role="status">กำลังตรวจตัวตั้งรอบ…</div><div class="work-filters panel"><label>ประเภทงาน<select id="workKind"><option value="">ทุกประเภท</option><option value="pm">บำรุงรักษา PM</option><option value="inventory">ตรวจนับครุภัณฑ์</option></select></label><label>ผู้รับผิดชอบ<select id="workAssignee"><option value="">ทุกคน</option></select></label><label>สถานะ<select id="workStatus"><option value="">ทุกสถานะ</option><option value="pending">รอดำเนินการ</option><option value="in_progress">กำลังดำเนินการ</option><option value="completed">เสร็จแล้ว</option></select></label><label>แผน<select id="workPlanFilter"><option value="">ทุกแผน</option></select></label><label>กำหนดเสร็จ<input id="workDueFilter" type="date"></label><button class="button outline" id="refreshWork">อัปเดต</button><button class="text-button" id="clearWorkFilters">ล้างตัวกรอง</button></div><div id="workTotals" class="work-totals"></div><div class="work-tabs-bar" role="tablist" aria-label="แถบงาน PM และตรวจนับ"><button type="button" class="work-tab-btn active" role="tab" aria-selected="true" data-work-tab="rows"><span class="tab-icon">📋</span> รายการงานตามรอบ <span class="tab-badge" id="workTabBadgeRows">0</span></button><button type="button" class="work-tab-btn" role="tab" aria-selected="false" data-work-tab="summary"><span class="tab-icon">📊</span> สรุปยอดตามผู้รับผิดชอบ</button><button type="button" class="work-tab-btn" role="tab" aria-selected="false" data-work-tab="plans"><span class="tab-icon">⚙️</span> แผนและรอบอัตโนมัติ <span class="tab-badge" id="workTabBadgePlans">0</span></button></div><div class="work-scroll-body"><div class="work-tab-pane active" id="workPaneRows" role="tabpanel"><section class="panel work-section"><div class="panel-heading"><h2>รายการงาน</h2><span class="item-meta" id="workItemCount"></span></div><div class="table-wrap"><table><thead><tr><th>ครุภัณฑ์ / แผน</th><th>ประเภท</th><th>กำหนดเสร็จ</th><th>ผู้รับผิดชอบ</th><th>สถานะ / ผล</th><th>จัดการ</th></tr></thead><tbody id="workRows"></tbody></table></div></section></div><div class="work-tab-pane" id="workPaneSummary" role="tabpanel" hidden><section class="panel work-section"><h2>ยอดตามผู้รับผิดชอบ</h2><p class="field-hint">ยอดด้านล่างคำนวณตามตัวกรองที่เลือก งานที่เสร็จแล้วจะนับเมื่อบันทึกผลตรวจเท่านั้น</p><div class="table-wrap"><table><thead><tr><th>ผู้รับผิดชอบ</th><th>ทั้งหมด</th><th>เสร็จ</th><th>คงเหลือ</th><th>เกินกำหนด</th><th>ตรวจนับพบ</th><th>ไม่พบ</th><th>ต้องซ่อม</th></tr></thead><tbody id="workSummary"></tbody></table></div></section></div><div class="work-tab-pane" id="workPanePlans" role="tabpanel" hidden><section class="panel work-section"><h2>แผนและรอบอัตโนมัติ</h2><div id="workPlans" class="work-plan-list"></div></section></div></div>`;
+  let items=[],plans=[],reviews=[],selected=new Map(),candidates=[],offset=0,candidateTotal=0,queryEpoch=0,cameraStream=null,cameraTimer=null;
+  const canReview=()=>window.govAssetAccess?.session?.required?Boolean(window.govAssetAccess.session.isAdmin||window.govAssetAccess.session.permissions?.approve):app.getRole()==='ผู้อนุมัติ';
+  const view=document.createElement('section');view.id='view-work';view.className='view';
+  view.innerHTML=`
+    <div class="page-heading"><div><div class="eyebrow">PREVENTIVE MAINTENANCE & INVENTORY</div><h1>งาน PM และตรวจนับครุภัณฑ์</h1><p>ตั้งรอบรายวัน รายสัปดาห์ รายเดือน หรือทุกจำนวนที่กำหนด พร้อมมอบหมายและติดตามผล</p></div><button class="button primary" id="newWorkPlan">＋ สร้างแผนงาน</button></div>
+    <div class="work-scheduler" id="workScheduler" role="status">กำลังตรวจตัวตั้งรอบ…</div>
+    <div class="work-filters panel"><label>ประเภทงาน<select id="workKind"><option value="">ทุกประเภท</option><option value="pm">บำรุงรักษา PM</option><option value="inventory">ตรวจนับครุภัณฑ์</option></select></label><label>ผู้รับผิดชอบ<select id="workAssignee"><option value="">ทุกคน</option></select></label><label>สถานะ<select id="workStatus"><option value="">ทุกสถานะ</option><option value="pending">รอดำเนินการ</option><option value="in_progress">กำลังดำเนินการ</option><option value="completed">เสร็จแล้ว</option></select></label><label>แผน<select id="workPlanFilter"><option value="">ทุกแผน</option></select></label><label>กำหนดเสร็จ<input id="workDueFilter" type="date"></label><button class="button outline" id="refreshWork">อัปเดต</button><button class="text-button" id="clearWorkFilters">ล้างตัวกรอง</button></div>
+    <div id="workTotals" class="work-totals"></div>
+    <div class="work-tabs-bar" role="tablist" aria-label="แถบงาน PM และตรวจนับ">
+      <button type="button" class="work-tab-btn active" role="tab" aria-selected="true" data-work-tab="rows"><span class="tab-icon">📋</span> รายการงานตามรอบ <span class="tab-badge" id="workTabBadgeRows">0</span></button>
+      <button type="button" class="work-tab-btn" role="tab" aria-selected="false" data-work-tab="summary"><span class="tab-icon">📊</span> สรุปยอดตามผู้รับผิดชอบ</button>
+      <button type="button" class="work-tab-btn" role="tab" aria-selected="false" data-work-tab="reviews" ${canReview()?'':'hidden'}><span class="tab-icon">✓</span> ทวนสอบผลตรวจนับ <span class="tab-badge" id="workTabBadgeReviews">0</span></button>
+      <button type="button" class="work-tab-btn" role="tab" aria-selected="false" data-work-tab="plans"><span class="tab-icon">⚙️</span> แผนและรอบอัตโนมัติ <span class="tab-badge" id="workTabBadgePlans">0</span></button>
+    </div>
+    <div class="work-scroll-body">
+      <div class="work-tab-pane active" id="workPaneRows" role="tabpanel"><section class="panel work-section"><div class="panel-heading"><h2>รายการงาน</h2><span class="item-meta" id="workItemCount"></span></div><div class="table-wrap"><table><thead><tr><th>ครุภัณฑ์ / แผน</th><th>ประเภท</th><th>กำหนดเสร็จ</th><th>ผู้รับผิดชอบ</th><th>สถานะ / ผล</th><th>จัดการ</th></tr></thead><tbody id="workRows"></tbody></table></div></section></div>
+      <div class="work-tab-pane" id="workPaneSummary" role="tabpanel" hidden><section class="panel work-section"><h2>ยอดตามผู้รับผิดชอบ</h2><p class="field-hint">งานเสร็จแล้วนับเฉพาะผลที่ไม่ต้องทวนสอบหรือได้รับอนุมัติ งานรอทวนสอบแสดงแยก</p><div class="table-wrap"><table><thead><tr><th>ผู้รับผิดชอบ</th><th>ทั้งหมด</th><th>เสร็จแล้ว</th><th>รอทวนสอบ</th><th>คงเหลือ</th><th>เกินกำหนด</th><th>ตรวจนับพบ</th><th>ไม่พบ</th><th>ต้องซ่อม</th></tr></thead><tbody id="workSummary"></tbody></table></div></section></div>
+      <div class="work-tab-pane" id="workPaneReviews" role="tabpanel" hidden><section class="panel work-section"><div class="panel-heading"><h2>ผลคลาดเคลื่อนที่รอทวนสอบ</h2><span class="item-meta" id="workReviewCount"></span></div><div class="table-wrap"><table><thead><tr><th>ครุภัณฑ์ / แผน</th><th>ผลตรวจ</th><th>สถานที่ในทะเบียน</th><th>สถานที่ที่พบ</th><th>ผู้ตรวจ</th><th>จัดการ</th></tr></thead><tbody id="workReviews"></tbody></table></div></section></div>
+      <div class="work-tab-pane" id="workPanePlans" role="tabpanel" hidden><section class="panel work-section"><h2>แผนและรอบอัตโนมัติ</h2><div id="workPlans" class="work-plan-list"></div></section></div>
+    </div>`;
   $('#main').append(view);
   const dialog=document.createElement('dialog');dialog.className='asset-dialog work-dialog';dialog.setAttribute('aria-label','จัดการแผนงานและผลตรวจ');document.body.append(dialog);
   dialog.addEventListener('click',e=>{if(e.target===dialog||e.target.closest('[data-close-work]'))dialog.close();});
@@ -15,17 +33,18 @@
   async function load(){
     const epoch=++queryEpoch;
     try{
-      const [data,p,scheduler]=await Promise.all([app.api('/api/work/items?'+filters()),app.api('/api/work/plans'),app.api('/api/work/status')]);if(epoch!==queryEpoch)return;
-      items=data.items;plans=p;
+      const reviewRequest=canReview()?app.api('/api/work/reviews'):Promise.resolve({items:[],total:0});
+      const [data,p,scheduler,reviewData]=await Promise.all([app.api('/api/work/items?'+filters()),app.api('/api/work/plans'),app.api('/api/work/status'),reviewRequest]);if(epoch!==queryEpoch)return;
+      items=data.items;plans=p;reviews=reviewData.items;
       const names=[...new Set(plans.flatMap(p=>p.assignees).concat(data.summary.map(s=>s.assignee)))].sort();
       const assigned=$('#workAssignee'),old=assigned.value;assigned.innerHTML='<option value="">ทุกคน</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');assigned.value=old;
       const planFilter=$('#workPlanFilter'),pid=planFilter.value;planFilter.innerHTML='<option value="">ทุกแผน</option>'+plans.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');planFilter.value=pid;
       $('#workScheduler').textContent=scheduler.running&&!scheduler.lastError?`● ตั้งรอบอัตโนมัติทำงาน · เขตเวลาไทย · ตรวจล่าสุด ${scheduler.lastRun?new Date(scheduler.lastRun).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Bangkok'}):'กำลังเริ่ม'}`:'ตัวตั้งรอบยังไม่พร้อม กรุณาตรวจสถานะเซิร์ฟเวอร์';
-      const completed=items.filter(w=>w.status==='completed').length,overdue=items.filter(w=>w.overdue).length;
+      const completed=items.filter(w=>w.status==='completed'&&w.review_status!=='pending').length,overdue=items.filter(w=>w.overdue).length;
       const cards = [
         { label: 'งานทั้งหมด', val: data.total, icon: '📋', color: 'blue', foot: 'รวมทุกแผนงาน' },
         { label: 'เสร็จแล้ว', val: completed, icon: '✓', color: 'green', foot: 'บันทึกผลตรวจแล้ว' },
-        { label: 'คงเหลือ', val: data.total - completed, icon: '◷', color: 'amber', foot: 'รอดำเนินการ / กำลังตรวจ' },
+        { label: 'คงเหลือ', val: data.total - completed, icon: '◷', color: 'amber', foot: 'รวมรายการที่รอทวนสอบ' },
         { label: 'เกินกำหนด', val: overdue, icon: '⚠', color: 'red', foot: 'เลยวันกำหนดเสร็จ' }
       ];
       $('#workTotals').innerHTML = cards.map(c => `
@@ -35,11 +54,12 @@
           <div class="stat-foot">${c.foot}</div>
         </article>
       `).join('');
-      $('#workSummary').innerHTML=data.summary.map(s=>`<tr><td><button class="link-button" data-work-assignee="${esc(s.assignee)}">${esc(s.assignee)}</button></td><td>${s.total}</td><td>${s.completed}</td><td>${s.total-s.completed}</td><td>${s.overdue}</td><td>${s.found}</td><td>${s.notFound}</td><td>${s.needsRepair}</td></tr>`).join('')||'<tr><td colspan="8" class="empty-cell">ยังไม่มีงานตามตัวกรองนี้</td></tr>';
+      $('#workSummary').innerHTML=data.summary.map(s=>`<tr><td><button class="link-button" data-work-assignee="${esc(s.assignee)}">${esc(s.assignee)}</button></td><td>${s.total}</td><td>${s.completed}</td><td>${s.reviewPending}</td><td>${s.total-s.completed-s.reviewPending}</td><td>${s.overdue}</td><td>${s.found}</td><td>${s.notFound}</td><td>${s.needsRepair}</td></tr>`).join('')||'<tr><td colspan="9" class="empty-cell">ยังไม่มีงานตามตัวกรองนี้</td></tr>';
       $('#workItemCount').textContent=`${data.total} รายการ`;
       if($('#workTabBadgeRows'))$('#workTabBadgeRows').textContent=data.total;
       if($('#workTabBadgePlans'))$('#workTabBadgePlans').textContent=plans.length;
-      $('#workRows').innerHTML=items.map(w=>`<tr><td><button class="link-button" data-smart-id="${w.asset_id}">${esc(w.asset_name)}</button><div class="item-meta">${esc(w.code)} · ${esc(w.plan_name)}</div></td><td><span class="badge ${w.kind==='pm'?'blue':'violet'}">${w.kind==='pm'?'PM':'ตรวจนับ'}</span></td><td>${esc(day(w.due_on))}${w.overdue?'<div class="work-overdue">เกินกำหนด</div>':''}</td><td>${esc(w.assignee)}</td><td><span class="badge ${w.status==='completed'?'green':'amber'}">${esc(status[w.status])}</span><div class="item-meta">${esc(results[w.result]||'')}</div></td><td><button class="button outline mini-action" data-work-id="${w.id}">${w.status==='completed'?'ดูผลตรวจ':'เปิดงาน'}</button>${w.repair_ticket_id?` <button class="link-button" data-work-ticket="${w.repair_ticket_id}">ใบแจ้งซ่อม ↗</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6" class="empty-cell">ยังไม่มีงาน สร้างแผนและเลือกครุภัณฑ์เพื่อเริ่มต้น</td></tr>';
+      $('#workRows').innerHTML=items.map(w=>`<tr><td><button class="link-button" data-smart-id="${w.asset_id}">${esc(w.asset_name)}</button><div class="item-meta">${esc(w.code)} · ${esc(w.plan_name)}</div></td><td><span class="badge ${w.kind==='pm'?'blue':'violet'}">${w.kind==='pm'?'PM':'ตรวจนับ'}</span></td><td>${esc(day(w.due_on))}${w.overdue?'<div class="work-overdue">เกินกำหนด</div>':''}</td><td>${esc(w.assignee)}</td><td><span class="badge ${w.review_status==='pending'?'amber':w.status==='completed'?'green':'amber'}">${w.review_status==='pending'?'รอทวนสอบ':esc(status[w.status])}</span><div class="item-meta">${esc(results[w.result]||'')}</div></td><td><button class="button outline mini-action" data-work-id="${w.id}">${w.status==='completed'?'ดูผลตรวจ':'เปิดงาน'}</button>${w.repair_ticket_id?` <button class="link-button" data-work-ticket="${w.repair_ticket_id}">ใบแจ้งซ่อม ↗</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6" class="empty-cell">ยังไม่มีงาน สร้างแผนและเลือกครุภัณฑ์เพื่อเริ่มต้น</td></tr>';
+      if($('#workReviews')){$('#workReviewCount').textContent=`${reviewData.total} รายการ`;$('#workTabBadgeReviews').textContent=reviewData.total;$('#workReviews').innerHTML=reviews.map(w=>`<tr><td><b>${esc(w.asset_name)}</b><div class="item-meta">${esc(w.code)} · ${esc(w.plan_name)}</div></td><td><span class="badge amber">${esc(results[w.result]||w.result)}</span><div class="item-meta">${esc(w.note)}</div></td><td>${esc(w.location||'ไม่ระบุ')}</td><td>${esc(w.observed_location||'—')}</td><td>${esc(w.completed_by)}</td><td><button class="button outline mini-action" data-review-id="${w.id}">ทวนสอบ</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty-cell">ไม่มีผลตรวจนับที่รอทวนสอบ</td></tr>';$('#workTabReviews').hidden=!canReview();$('[data-work-tab="reviews"]').hidden=!canReview();}
       $('#workPlans').innerHTML=plans.map(p=>`<article><div><b>${esc(p.name)}</b><div class="item-meta">${p.kind==='pm'?'PM':'ตรวจนับ'} · ${p.assetIds.length} ครุภัณฑ์ · ${p.schedule_mode==='auto'?`อัตโนมัติทุก ${p.interval_count} ${{day:'วัน',week:'สัปดาห์',month:'เดือน'}[p.schedule_unit]} · รอบถัดไป ${esc(day(p.next_due))}`:'สร้างรอบเอง'} · ${p.assignment_mode==='auto'?'กระจายตามภาระงาน':'มอบหมายเอง'}: ${esc(p.assignees.join(', '))}</div><span class="badge ${p.is_active?'green':'amber'}">${p.is_active?'เปิดใช้งาน':'พักแผน'}</span></div><div class="work-plan-actions">${p.schedule_mode==='manual'&&p.is_active?`<label>กำหนดรอบ<input data-round-date="${p.id}" type="date" value="${today()}"></label><button class="button outline mini-action" data-generate-plan="${p.id}">สร้างรอบนี้</button>`:''}<button class="button outline mini-action" data-toggle-plan="${p.id}">${p.is_active?'พักแผน':'เปิดแผน'}</button></div></article>`).join('')||'<p class="field-hint">แผนอัตโนมัติสร้างงานแม้ไม่มีผู้เปิดหน้าเว็บ เมื่อเซิร์ฟเวอร์ทำงานอยู่ รอบที่พลาดระหว่างปิดเซิร์ฟเวอร์จะถูกสร้างเมื่อกลับมาเปิด ไม่สร้างงานซ้ำสำหรับครุภัณฑ์และวันเดียวกันในแผนเดียวกัน</p>';
     }catch(error){
       if(epoch!==queryEpoch)return;
@@ -50,8 +70,9 @@
       $('#workTotals').textContent='';
       $('#workTabBadgeRows').textContent='—';
       $('#workTabBadgePlans').textContent='—';
+      if($('#workTabBadgeReviews'))$('#workTabBadgeReviews').textContent='—';
       $('#workRows').innerHTML=`<tr><td colspan="6" class="empty-cell">โหลดรายการงานไม่สำเร็จ: ${esc(message)} · กด “อัปเดต” เพื่อลองอีกครั้ง</td></tr>`;
-      $('#workSummary').innerHTML=`<tr><td colspan="8" class="empty-cell">โหลดสรุปไม่สำเร็จ: ${esc(message)}</td></tr>`;
+      $('#workSummary').innerHTML=`<tr><td colspan="9" class="empty-cell">โหลดสรุปไม่สำเร็จ: ${esc(message)}</td></tr>`;
       $('#workPlans').innerHTML=`<p class="field-hint" role="alert">โหลดแผนงานไม่สำเร็จ: ${esc(message)}</p>`;
       app.showError(error);
     }
@@ -61,11 +82,12 @@
     if(b.dataset.workTab){
       const tabKey=b.dataset.workTab;
       view.querySelectorAll('.work-tab-btn').forEach(btn=>{const act=btn.dataset.workTab===tabKey;btn.classList.toggle('active',act);btn.setAttribute('aria-selected',String(act));});
-      const panes={rows:$('#workPaneRows'),summary:$('#workPaneSummary'),plans:$('#workPanePlans')};
+      const panes={rows:$('#workPaneRows'),summary:$('#workPaneSummary'),reviews:$('#workPaneReviews'),plans:$('#workPanePlans')};
       Object.entries(panes).forEach(([k,p])=>{if(!p)return;const cur=k===tabKey;p.classList.toggle('active',cur);p.hidden=!cur;});
       return;
     }
     if(b.dataset.workId)return openWork(Number(b.dataset.workId));
+    if(b.dataset.reviewId)return openReview(Number(b.dataset.reviewId));
     if(b.dataset.workTicket)return app.openTicket(Number(b.dataset.workTicket));
     if(b.dataset.workAssignee){$('#workAssignee').value=b.dataset.workAssignee;return load();}
     try{
@@ -103,22 +125,85 @@
   async function repairFromWork(w,note){
     const t=await app.api('/api/tickets',{method:'POST',body:JSON.stringify({scheduledWorkId:w.id,assetId:w.asset_id,assetName:w.asset_name,assetCode:w.code,location:w.observed_location||w.location||'ไม่ระบุสถานที่',issue:note||w.note,requester:w.assignee,contact:'',urgency:'ปกติ'})});dialog.close();await app.refreshData();await load();app.switchView('repairs');await app.openTicket(t.id);
   }
+  function stopCamera(){
+    if(cameraTimer)clearTimeout(cameraTimer);
+    cameraTimer=null;
+    cameraStream?.getTracks().forEach(track=>track.stop());
+    cameraStream=null;
+    const video=$('#workScanVideo');
+    if(video){video.srcObject=null;video.hidden=true;}
+  }
+  dialog.addEventListener('close',stopCamera);
+  async function confirmScan(id){
+    const input=$('#workScanRef'),statusText=$('#workScanStatus'),button=$('#workScanConfirm');
+    button.disabled=true;statusText.textContent='กำลังตรวจสอบ QR กับรายการในแผน…';
+    try{
+      const result=await post(`/api/work/items/${id}/scan`,{ref:input.value});
+      const w=items.find(item=>item.id===id);
+      if(w){w.status='in_progress';w.scanned_asset_id=w.asset_id;w.scanned_at=result.scannedAt;}
+      statusText.textContent=`ยืนยันครุภัณฑ์ ${$('#workScanExpected').textContent} แล้ว`;
+      input.readOnly=true;button.hidden=true;stopCamera();
+      return true;
+    }catch(error){statusText.textContent=error.message;statusText.setAttribute('role','alert');button.disabled=false;return false;}
+  }
+  async function startCamera(id){
+    const out=$('#workScanStatus');
+    if(!('BarcodeDetector' in window)||!navigator.mediaDevices?.getUserMedia){
+      out.textContent='อุปกรณ์นี้สแกนในหน้าเว็บไม่ได้ ให้ใช้กล้องมือถือสแกน QR แล้ววางลิงก์ หรือพิมพ์เลขครุภัณฑ์';
+      return;
+    }
+    try{
+      cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+      const video=$('#workScanVideo');video.srcObject=cameraStream;video.hidden=false;await video.play();
+      const detector=new BarcodeDetector({formats:['qr_code']});
+      const tick=async()=>{
+        if(!cameraStream)return;
+        try{
+          const codes=await detector.detect(video);
+          if(codes.length){$('#workScanRef').value=codes[0].rawValue;const matched=await confirmScan(id);if(!matched&&cameraStream)cameraTimer=setTimeout(tick,400);return;}
+        }catch(error){stopCamera();out.textContent=`อ่าน QR ไม่สำเร็จ: ${error.message}`;out.setAttribute('role','alert');return;}
+        cameraTimer=setTimeout(tick,400);
+      };
+      tick();
+    }catch(error){stopCamera();out.textContent=`เปิดกล้องไม่ได้: ${error.message} · อนุญาตการใช้กล้องหรือพิมพ์เลขครุภัณฑ์แทน`;out.setAttribute('role','alert');}
+  }
   function openWork(id){
     const w=items.find(w=>w.id===id);if(!w)return;const completed=w.status==='completed';
-    dialog.innerHTML=`${header(w.asset_name,w.kind==='pm'?'PREVENTIVE MAINTENANCE':'PHYSICAL INVENTORY')}<p class="code-text">${esc(w.code)} · ${esc(w.plan_name)}</p><div class="work-detail-meta"><span>ผู้รับผิดชอบ <b>${esc(w.assignee)}</b></span><span>กำหนดเสร็จ <b>${esc(day(w.due_on))}</b></span><span>สถานะ <b>${esc(status[w.status])}</b></span></div>${!completed?`<div class="work-reassign"><label>เปลี่ยนผู้รับผิดชอบ<input id="workNewAssignee" value="${esc(w.assignee)}" maxlength="160"></label><button class="button outline" id="workReassign">บันทึกมอบหมาย</button>${w.status==='pending'?'<button class="button outline" id="startScheduledWork">เริ่มงาน</button>':''}</div>`:''}<form id="completeScheduledWork"><div class="work-checklist">${w.checklist.map((c,i)=>`<label><input type="checkbox" name="check-${i}" ${w.checks[i]?'checked':''} ${completed?'disabled':'required'}><span>${esc(c)}</span></label>`).join('')}</div><div class="work-form-grid"><label>ผลตรวจ<select name="result" ${completed?'disabled':''}>${(w.kind==='pm'?['normal','needs_repair']:['found','not_found','moved','damaged']).map(r=>`<option value="${r}" ${r===w.result?'selected':''}>${results[r]}</option>`).join('')}</select></label><label>สถานที่ที่ตรวจพบ<input name="observedLocation" value="${esc(w.observed_location)}" maxlength="300" ${completed?'disabled':''}></label><label class="work-wide">รายละเอียด / ข้อสังเกต<textarea name="note" maxlength="3000" rows="4" ${completed?'disabled':''}>${esc(w.note)}</textarea></label></div>${completed?`<p class="field-hint">บันทึกโดย ${esc(w.completed_by)} · ${esc(app.fmtDate(w.completed_at))}</p>${w.repair_ticket_id?'<button class="button primary" id="openWorkRepairTicket" type="button">🛠️ ติดตามใบแจ้งซ่อม ↗</button>':['needs_repair','damaged'].includes(w.result)?'<button class="button primary" id="createWorkRepair" type="button">🛠️ สร้างใบแจ้งซ่อมทันที (ส่งต่อเสาที่ 4)</button>':''}`:'<label class="work-inline-check" id="workCreateRepairLabel" hidden><input id="workCreateRepair" type="checkbox" checked> 🛠️ สร้างใบแจ้งซ่อมจากผลตรวจนี้ทันที (ส่งต่อเสาที่ 4)</label><div class="dialog-actions"><button class="button primary" type="submit">ยืนยันบันทึกผลตรวจ</button></div>'}<p id="workDetailError" role="alert"></p></form>`;
+    const scanBox=w.kind==='inventory'&&!completed?`<section class="work-scan-box"><div><b>ยืนยันครุภัณฑ์ด้วย QR</b><p class="field-hint">สแกน QR หรือลงเลขครุภัณฑ์เพื่อยืนยันว่าตรงกับรายการนี้ก่อนบันทึกผล</p></div><div class="work-scan-controls"><input id="workScanRef" autocomplete="off" placeholder="วางลิงก์ QR หรือพิมพ์เลขครุภัณฑ์"><button type="button" class="button outline" id="workScanConfirm">ยืนยัน QR</button><button type="button" class="button outline" id="workScanCamera">เปิดกล้อง</button></div><video id="workScanVideo" playsinline muted hidden></video><p id="workScanStatus" role="status">${w.scanned_at?`ยืนยันแล้ว ${esc(w.code)} · ${esc(app.fmtDate(w.scanned_at))}`:'ยังไม่ได้สแกน QR'}</p><span id="workScanExpected" hidden>${esc(w.code)}</span></section>`:'';
+    dialog.innerHTML=`${header(w.asset_name,w.kind==='pm'?'PREVENTIVE MAINTENANCE':'PHYSICAL INVENTORY')}<p class="code-text">${esc(w.code)} · ${esc(w.plan_name)}</p><div class="work-detail-meta"><span>ผู้รับผิดชอบ <b>${esc(w.assignee)}</b></span><span>กำหนดเสร็จ <b>${esc(day(w.due_on))}</b></span><span>สถานะ <b>${w.review_status==='pending'?'รอทวนสอบ':esc(status[w.status])}</b></span></div>${w.review_status==='revision_requested'?`<p class="work-review-return" role="note">ผู้ทวนสอบส่งกลับให้แก้ไข: ${esc(w.review_note)}</p>`:''}${scanBox}${!completed?`<div class="work-reassign"><label>เปลี่ยนผู้รับผิดชอบ<input id="workNewAssignee" value="${esc(w.assignee)}" maxlength="160"></label><button class="button outline" id="workReassign">บันทึกมอบหมาย</button>${w.status==='pending'?'<button class="button outline" id="startScheduledWork">เริ่มงาน</button>':''}</div>`:''}<form id="completeScheduledWork"><div class="work-checklist">${w.checklist.map((c,i)=>`<label><input type="checkbox" name="check-${i}" ${w.checks[i]?'checked':''} ${completed?'disabled':'required'}><span>${esc(c)}</span></label>`).join('')}</div><div class="work-form-grid"><label>ผลตรวจ<select name="result" ${completed?'disabled':''}>${(w.kind==='pm'?['normal','needs_repair']:['found','not_found','moved','damaged']).map(r=>`<option value="${r}" ${r===w.result?'selected':''}>${results[r]}</option>`).join('')}</select></label><label>สถานที่ที่ตรวจพบ<input name="observedLocation" value="${esc(w.observed_location)}" maxlength="300" ${completed?'disabled':''}></label><label class="work-wide">รายละเอียด / ข้อสังเกต<textarea name="note" maxlength="3000" rows="4" ${completed?'disabled':''}>${esc(w.note)}</textarea></label></div>${completed?`<p class="field-hint">บันทึกโดย ${esc(w.completed_by)} · ${esc(app.fmtDate(w.completed_at))}${w.reviewed_at?` · ${w.review_status==='approved'?'ทวนสอบโดย':'ส่งกลับโดย'} ${esc(w.reviewed_by)} ${esc(app.fmtDate(w.reviewed_at))}`:''}</p>${w.review_status==='pending'?'<p class="field-hint">ผลคลาดเคลื่อนนี้จะยังไม่เปลี่ยนที่ตั้งในทะเบียนจนกว่าจะได้รับอนุมัติ</p>':''}${w.review_note?`<p class="field-hint">หมายเหตุผู้ทวนสอบ: ${esc(w.review_note)}</p>`:''}${w.repair_ticket_id?'<button class="button primary" id="openWorkRepairTicket" type="button">🛠️ ติดตามใบแจ้งซ่อม ↗</button>':['needs_repair','damaged'].includes(w.result)&&(!w.review_status||w.review_status==='approved')?'<button class="button primary" id="createWorkRepair" type="button">🛠️ สร้างใบแจ้งซ่อมทันที (ส่งต่อเสาที่ 4)</button>':''}`:'<label class="work-inline-check" id="workCreateRepairLabel" hidden><input id="workCreateRepair" type="checkbox" checked> 🛠️ สร้างใบแจ้งซ่อมจากผลตรวจนี้ทันที (ส่งต่อเสาที่ 4)</label><div class="dialog-actions"><button class="button primary" type="submit">ยืนยันบันทึกผลตรวจ</button></div>'}<p id="workDetailError" role="alert"></p></form>`;
     if(!completed){
+      if(w.kind==='inventory'){
+        if(w.scanned_at){$('#workScanRef').value=w.code;$('#workScanRef').readOnly=true;$('#workScanConfirm').hidden=true;}
+        $('#workScanConfirm').onclick=()=>confirmScan(id);
+        $('#workScanCamera').onclick=()=>{if(cameraStream)stopCamera();else startCamera(id);};
+        $('#workScanRef').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();confirmScan(id);}};
+      }
       $('#completeScheduledWork').elements.result.onchange=e=>$('#workCreateRepairLabel').hidden=!['needs_repair','damaged'].includes(e.target.value);
       $('#workReassign').onclick=async()=>{try{await post(`/api/work/items/${id}/assign`,{assignee:$('#workNewAssignee').value});dialog.close();await load();app.toast('บันทึกผู้รับผิดชอบแล้ว');}catch(error){$('#workDetailError').textContent=error.message;}};
       if($('#startScheduledWork'))$('#startScheduledWork').onclick=async()=>{try{await post(`/api/work/items/${id}/start`);dialog.close();await load();app.toast('เริ่มงานแล้ว');}catch(error){$('#workDetailError').textContent=error.message;}};
       $('#completeScheduledWork').onsubmit=async event=>{
-        event.preventDefault();const b=event.submitter;b.disabled=true;const form=event.target,raw=Object.fromEntries(new FormData(form)),createRepair=['needs_repair','damaged'].includes(raw.result)&&$('#workCreateRepair').checked;
-        try{await post(`/api/work/items/${id}/complete`,{...raw,checks:w.checklist.map((_,i)=>form.elements['check-'+i].checked)});if(createRepair){try{await repairFromWork({...w,observed_location:raw.observedLocation},raw.note);}catch(error){dialog.close();await load();app.toast('บันทึกผลตรวจแล้ว แต่สร้างใบซ่อมไม่สำเร็จ: '+error.message+' · เปิดผลตรวจเพื่อส่งใหม่');}}else{dialog.close();await load();app.toast('บันทึกผลตรวจและอัปเดตยอดแล้ว');}}catch(error){$('#workDetailError').textContent=error.message;b.disabled=false;}
+        event.preventDefault();const b=event.submitter;b.disabled=true;const form=event.target,raw=Object.fromEntries(new FormData(form)),createRepair=w.kind==='pm'&&raw.result==='needs_repair'&&$('#workCreateRepair').checked;
+        try{await post(`/api/work/items/${id}/complete`,{...raw,checks:w.checklist.map((_,i)=>form.elements['check-'+i].checked)});if(createRepair){try{await repairFromWork({...w,observed_location:raw.observedLocation},raw.note);}catch(error){dialog.close();await load();app.toast('บันทึกผลตรวจแล้ว แต่สร้างใบซ่อมไม่สำเร็จ: '+error.message+' · เปิดผลตรวจเพื่อส่งใหม่');}}else{dialog.close();await load();app.toast(w.kind==='inventory'&&['not_found','moved','damaged'].includes(raw.result)?'ส่งผลตรวจนับเข้าคิวทวนสอบแล้ว':'บันทึกผลตรวจและอัปเดตยอดแล้ว');}}catch(error){$('#workDetailError').textContent=error.message;b.disabled=false;}
       };
     }
     if($('#openWorkRepairTicket'))$('#openWorkRepairTicket').onclick=()=>{dialog.close();app.openTicket(w.repair_ticket_id);};
     if($('#createWorkRepair'))$('#createWorkRepair').onclick=async()=>{try{await repairFromWork(w,w.note);}catch(error){$('#workDetailError').textContent=error.message;}};
     dialog.showModal();
   }
+  function openReview(id){
+    const w=reviews.find(item=>item.id===id);if(!w)return;
+    dialog.innerHTML=`${header('ทวนสอบผลตรวจนับ','INVENTORY REVIEW')}<p class="code-text">${esc(w.code)} · ${esc(w.plan_name)}</p><div class="work-detail-meta"><span>ครุภัณฑ์ <b>${esc(w.asset_name)}</b></span><span>ผู้ตรวจ <b>${esc(w.completed_by)}</b></span><span>ผลตรวจ <b>${esc(results[w.result])}</b></span></div><section class="work-review-evidence"><p><b>ที่ตั้งในทะเบียน:</b> ${esc(w.location||'ไม่ระบุ')}</p><p><b>สถานที่ที่พบ:</b> ${esc(w.observed_location||'—')}</p><p><b>รายละเอียด:</b> ${esc(w.note)}</p><p><b>ยืนยัน QR:</b> ${w.scanned_at?`${esc(w.code)} · ${esc(app.fmtDate(w.scanned_at))}`:'ไม่มีการสแกน (ผลไม่พบ)'}</p></section><label>หมายเหตุผู้ทวนสอบ<textarea id="workReviewNote" maxlength="3000" rows="3" placeholder="ระบุเหตุผลเมื่อส่งกลับแก้ไข"></textarea></label><p id="workDetailError" role="alert"></p><div class="dialog-actions"><button type="button" class="button outline" id="workReviewReturn">ส่งกลับให้ผู้ตรวจแก้ไข</button><button type="button" class="button primary" id="workReviewApprove">อนุมัติผลตรวจ</button></div>`;
+    const decide=async decision=>{
+      const button=$(`#workReview${decision==='approve'?'Approve':'Return'}`),note=$('#workReviewNote').value;
+      button.disabled=true;
+      try{await post(`/api/work/items/${id}/review`,{decision,note});dialog.close();await app.refreshData();await load();app.toast(decision==='approve'?'อนุมัติผลตรวจนับแล้ว':'ส่งกลับให้ผู้ตรวจแก้ไขแล้ว');}
+      catch(error){$('#workDetailError').textContent=error.message;button.disabled=false;}
+    };
+    $('#workReviewApprove').onclick=()=>decide('approve');
+    $('#workReviewReturn').onclick=()=>decide('return');
+    dialog.showModal();
+  }
+  document.addEventListener('govasset:authenticated',()=>{if(canReview())load();});
   app.openWork=async id=>{app.switchView('work');const work=await app.api(`/api/work/items/${id}`);items=items.filter(item=>item.id!==work.id).concat(work);openWork(work.id);};
   setInterval(()=>{if(view.classList.contains('active')&&!dialog.open)load();},60000);
 })();

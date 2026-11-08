@@ -290,11 +290,15 @@ def authorize(db,ctx,method,path,query,body):
         return
     if path.startswith(('/api/operational-master','/api/supply/settings','/api/governance/branches','/api/governance/profiles','/api/governance/catalog','/api/governance/bindings','/api/workspace/categories','/api/features')):
         needed='manage'
+    elif re.fullmatch(r'/api/work/items/\d+/review',path):
+        needed='approve'
     elif body.get('action') in ('approve','reject','approve_final_cost','reject_final_cost') or path.endswith('/action') and body.get('action') in ('approve','reject'):
         needed='approve'
-    elif path.startswith('/api/work/items/') or re.fullmatch(r'/api/tickets/\d+/items(?:/\d+)?',path) or path.endswith('/action') and body.get('action') in ('complete','resume','wait_parts'):
+    elif path.startswith('/api/work/items/') or re.fullmatch(r'/api/tickets/\d+/items(?:/\d+)?',path) or path.endswith('/action') and body.get('action') in ('assess','complete','resume','wait_parts'):
         if not (perms['work'] or perms['edit']):fail('ไม่ได้รับสิทธิ์ดำเนินงาน')
         return
+    elif path.endswith('/action') and body.get('action') in ('cancel','confirm','send_back'):
+        needed='create'
     elif path in ('/api/assets','/api/tickets','/api/supply/documents','/api/work/plans','/api/imports/preview','/api/imports/commit','/api/qr/locations'):needed='create'
     else:needed='edit'
     if not perms[needed]:fail('ไม่ได้รับสิทธิ์'+{'manage':'จัดการตั้งค่า','approve':'อนุมัติ','create':'เพิ่มข้อมูล','edit':'แก้ไขข้อมูล'}[needed])

@@ -8,6 +8,7 @@ import calendar
 TZ = timezone(timedelta(hours=7))
 OFFICER = 'เจ้าหน้าที่พัสดุ'
 TECH = 'ช่าง'
+APPROVER = 'ผู้อนุมัติ'
 
 class WorkError(Exception):
     def __init__(self, message, status=400):
@@ -181,10 +182,69 @@ def handle(db, method, path, query, body):
         items=[work_dict(r) for r in rows]
         summaries={}
         for w in items:
-            s=summaries.setdefault(w['assignee'],{'assignee':w['assignee'],'total':0,'completed':0,'overdue':0,'found':0,'notFound':0,'needsRepair':0})
-            s['total']+=1;s['completed']+=int(w['status']=='completed');s['overdue']+=int(w['overdue'])
+            s=summaries.setdefault(w['assignee'],{'assignee':w['assignee'],'total':0,'completed':0,'reviewPending':0,'overdue':0,'found':0,'notFound':0,'needsRepair':0})
+            s['total']+=1;s['completed']+=int(w['status']=='completed' and w['review_status']!='pending');s['reviewPending']+=int(w['review_status']=='pending');s['overdue']+=int(w['overdue'])
             s['found']+=int(w['result'] in ('found','moved','damaged'));s['notFound']+=int(w['result']=='not_found');s['needsRepair']+=int(w['result'] in ('needs_repair','damaged'))
         return {'items':items,'summary':list(summaries.values()),'total':len(items)}
+    if path == '/api/work/reviews' and method == 'GET':
+        ctx=getattr(db,'access',None)
+        if ctx and not (ctx['isAdmin'] or ctx['permissions']['approve']):
+            raise WorkError('ไม่ได้รับสิทธิ์ทวนสอบผลตรวจนับ',403)
+        rows=db.execute("SELECT w.*,p.kind,p.name AS plan_name,a.code,a.name AS asset_name,a.location FROM scheduled_work w JOIN work_plans p ON p.id=w.plan_id JOIN assets a ON a.id=w.asset_id WHERE "+scope_sql(db)+" AND p.kind='inventory' AND w.review_status='pending' ORDER BY w.due_on,w.id").fetchall()
+        return {'items':[work_dict(r) for r in rows],'total':len(rows)}
+    scan_match=re.fullmatch(r'/api/work/items/(\d+)/scan',path)
+    if scan_match and method=='POST':
+        actor=role(body,(OFFICER,TECH))
+        ref=text(body.get('ref'),'QR หรือเลขครุภัณฑ์',500)
+        token_match=re.search(r'(?:/q/|/api/scan/)([A-Za-z0-9_-]{32})(?:[?#].*)?$',ref)
+        token=token_match.group(1) if token_match else ref
+        db.execute('BEGIN IMMEDIATE')
+        row=db.execute('SELECT w.*,p.kind FROM scheduled_work w JOIN work_plans p ON p.id=w.plan_id WHERE w.id=?',(int(scan_match[1]),)).fetchone()
+        if row is None:
+            raise WorkError('ไม่พบงาน',404)
+        if row['kind']!='inventory':
+            raise WorkError('ใช้การสแกน QR ได้เฉพาะงานตรวจนับ',400)
+        if row['status']=='completed':
+            raise WorkError('งานนี้บันทึกผลเสร็จแล้ว',409)
+        scanned=db.execute('SELECT id,code FROM assets a WHERE '+scope_sql(db)+' AND (a.code=? OR EXISTS(SELECT 1 FROM asset_qr_links q WHERE q.asset_id=a.id AND q.token=?))',(token,token)).fetchone()
+        if scanned is None:
+            raise WorkError('ไม่พบ QR หรือเลขครุภัณฑ์ในขอบเขตที่ได้รับสิทธิ์',404)
+        if scanned['id']!=row['asset_id']:
+            raise WorkError('QR นี้ไม่ตรงกับครุภัณฑ์ของงานที่เปิดอยู่',409)
+        now=stamp()
+        db.execute("UPDATE scheduled_work SET status='in_progress',scanned_asset_id=?,scanned_at=?,scanned_by=? WHERE id=?",(scanned['id'],now,actor,row['id']))
+        event(db,row['plan_id'],actor,'สแกนยืนยันครุภัณฑ์',scanned['code'],row['id'])
+        return {'ok':True,'scannedAt':now}
+    review_match=re.fullmatch(r'/api/work/items/(\d+)/review',path)
+    if review_match and method=='POST':
+        ctx=getattr(db,'access',None)
+        actor=ctx['user']['name'] if ctx and (ctx['isAdmin'] or ctx['permissions']['approve']) else role(body,(APPROVER,))
+        decision=body.get('decision')
+        if decision not in ('approve','return'):
+            raise WorkError('คำสั่งทวนสอบไม่ถูกต้อง')
+        note=body.get('note','')
+        if not isinstance(note,str) or len(note)>3000 or (decision=='return' and not note.strip()):
+            raise WorkError('กรุณาระบุเหตุผลในการส่งกลับไม่เกิน 3000 ตัวอักษร')
+        db.execute('BEGIN IMMEDIATE')
+        row=db.execute('SELECT w.*,p.kind FROM scheduled_work w JOIN work_plans p ON p.id=w.plan_id WHERE w.id=?',(int(review_match[1]),)).fetchone()
+        if row is None:
+            raise WorkError('ไม่พบงาน',404)
+        if row['kind']!='inventory' or row['review_status']!='pending' or row['status']!='completed':
+            raise WorkError('รายการนี้ไม่ได้อยู่ระหว่างรอทวนสอบ',409)
+        now=stamp()
+        if decision=='approve':
+            if row['result']=='moved':
+                asset=db.execute('SELECT location FROM assets WHERE id=?',(row['asset_id'],)).fetchone()
+                old_location=asset['location']
+                db.execute('UPDATE assets SET location=? WHERE id=?',(row['observed_location'],row['asset_id']))
+                db.execute('INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)',
+                    (row['asset_id'],actor,'ปรับที่ตั้งจากผลตรวจนับ',old_location,row['observed_location'],note.strip(),now))
+            db.execute("UPDATE scheduled_work SET review_status='approved',review_note=?,reviewed_at=?,reviewed_by=? WHERE id=?",(note.strip(),now,actor,row['id']))
+            event(db,row['plan_id'],actor,'อนุมัติผลตรวจนับ',row['result']+(': '+note.strip() if note.strip() else ''),row['id'])
+        else:
+            db.execute("UPDATE scheduled_work SET status='in_progress',review_status='revision_requested',review_note=?,reviewed_at=?,reviewed_by=?,scanned_asset_id=NULL,scanned_at='',scanned_by='' WHERE id=?",(note.strip(),now,actor,row['id']))
+            event(db,row['plan_id'],actor,'ส่งผลตรวจนับกลับแก้ไข',note.strip(),row['id'])
+        return {'ok':True}
     match=re.fullmatch(r'/api/work/items/(\d+)/(start|assign|complete)',path)
     if match and method=='POST':
         actor=role(body,(OFFICER,TECH) if match[2]!='assign' else (OFFICER,))
@@ -192,7 +252,7 @@ def handle(db, method, path, query, body):
         row=db.execute('SELECT w.*,p.kind FROM scheduled_work w JOIN work_plans p ON p.id=w.plan_id WHERE w.id=?',(int(match[1]),)).fetchone()
         if row is None:
             raise WorkError('ไม่พบงาน',404)
-        if row['status']=='completed':
+        if row['status']=='completed' and not (match[2]=='complete' and row['kind']=='inventory' and row['review_status']=='revision_requested'):
             raise WorkError('งานนี้บันทึกผลเสร็จแล้ว',409)
         if match[2]=='assign':
             assigned=text(body.get('assignee'),'ชื่อผู้รับผิดชอบ',160)
@@ -213,6 +273,10 @@ def handle(db, method, path, query, body):
                 raise WorkError('หมายเหตุยาวเกิน 3000 ตัวอักษร')
             if result in ('needs_repair','not_found','moved','damaged') and not notes.strip():
                 raise WorkError('กรุณาระบุรายละเอียดของผลตรวจ')
+            if row['kind']=='inventory' and result in ('found','moved','damaged') and row['scanned_asset_id']!=row['asset_id']:
+                raise WorkError('กรุณาสแกน QR ของครุภัณฑ์ชิ้นนี้ก่อนบันทึกผล')
+            if row['kind']=='inventory' and result=='not_found' and row['scanned_asset_id']:
+                raise WorkError('สแกนพบครุภัณฑ์นี้แล้ว จึงบันทึกผลว่าไม่พบไม่ได้')
             observed=body.get('observedLocation','')
             if not isinstance(observed,str) or len(observed)>300 or (result=='moved' and not observed.strip()):
                 raise WorkError('กรุณาระบุสถานที่ที่พบให้ถูกต้อง')
@@ -221,7 +285,8 @@ def handle(db, method, path, query, body):
             if row['kind']=='pm' and (not isinstance(checks,list) or len(checks)!=len(expected) or any(type(c) is not bool for c in checks) or not all(checks)):
                 raise WorkError('กรุณาตรวจครบทุกหัวข้อก่อนบันทึกผล PM')
             if row['kind']!='pm':checks=[]
-            db.execute("UPDATE scheduled_work SET status='completed',result=?,note=?,observed_location=?,checks_json=?,completed_at=?,completed_by=? WHERE id=?",(result,notes.strip(),observed.strip(),json.dumps(checks),stamp(),row['assignee'],row['id']))
+            review_status='pending' if row['kind']=='inventory' and result in ('not_found','moved','damaged') else ''
+            db.execute("UPDATE scheduled_work SET status='completed',result=?,note=?,observed_location=?,checks_json=?,completed_at=?,completed_by=?,review_status=?,review_note='',reviewed_at='',reviewed_by=? WHERE id=?",(result,notes.strip(),observed.strip(),json.dumps(checks),stamp(),actor,review_status,'',row['id']))
             event(db,row['plan_id'],actor,'บันทึกผลตรวจ',result+': '+notes.strip(),row['id'])
         return {'ok':True}
     raise WorkError('ไม่พบคำสั่งงานตามรอบ',404)

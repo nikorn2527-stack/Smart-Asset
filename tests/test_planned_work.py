@@ -37,14 +37,43 @@ class PlannedWork(fixture.HTTPFixture):
     def test_inventory_results_count_by_assignee(self):
         p=self.create_plan(kind='inventory',checklist=[],assignees=['ผู้ตรวจนับ'])
         rows=self.items(p)['items']
+        self.work_action(rows[0],'scan',ref=rows[0]['code'])
         self.work_action(rows[0],'complete',result='found',note='',checks=[])
         self.call(f'/api/work/items/{rows[1]["id"]}/complete',{'actor':fixture.OFFICER,'result':'not_found'},expected=400)
         self.work_action(rows[1],'complete',result='not_found',note='ตรวจทุกห้องแล้วไม่พบ')
+        self.work_action(rows[2],'scan',ref=rows[2]['code'])
         self.work_action(rows[2],'complete',result='moved',note='ย้ายไปห้อง B',observedLocation='ห้อง B')
         summary=self.items(p)['summary'][0]
-        self.assertEqual((summary['total'],summary['completed'],summary['found'],summary['notFound']),(4,3,2,1))
+        self.assertEqual((summary['total'],summary['completed'],summary['reviewPending'],summary['found'],summary['notFound']),(4,1,2,2,1))
         self.call(f'/api/work/items/{rows[0]["id"]}/complete',{'actor':fixture.OFFICER,'result':'found'},expected=409)
-        self.assertEqual(self.items(p)['items'][2]['observed_location'],'ห้อง B')
+        moved=self.items(p)['items'][2]
+        self.assertEqual(moved['observed_location'],'ห้อง B')
+        self.assertEqual(moved['review_status'],'pending')
+
+    def test_inventory_qr_scope_review_and_location_update(self):
+        first_asset=self.asset('INVENTORY-REVIEW-001')
+        second_asset=self.asset('INVENTORY-REVIEW-002')
+        p=self.create_plan(kind='inventory',checklist=[],assetIds=[first_asset,second_asset])
+        first,second=self.items(p)['items']
+        smart=self.smart(first_asset)
+        self.call(f'/api/work/items/{first["id"]}/scan',{'actor':fixture.OFFICER,'ref':smart['qrUrl']})
+        self.call(f'/api/work/items/{first["id"]}/scan',{'actor':fixture.OFFICER,'ref':second['code']},expected=409)
+        self.work_action(first,'complete',result='moved',note='พบอีกห้อง',observedLocation='ห้อง B')
+        self.assertEqual(self.smart(first_asset)['asset']['location'],'ห้อง A')
+        self.call(f'/api/work/items/{first["id"]}/review',{'actor':fixture.TECH,'decision':'approve'},expected=403)
+        self.call(f'/api/work/items/{first["id"]}/review',{'actor':fixture.APPROVER,'decision':'approve','note':'ตรวจสอบแล้ว'})
+        self.assertEqual(self.smart(first_asset)['asset']['location'],'ห้อง B')
+        self.assertEqual(self.items(p)['items'][0]['review_status'],'approved')
+        with sqlite3.connect(self.db) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM asset_events WHERE asset_id=? AND action='ปรับที่ตั้งจากผลตรวจนับ'",(first_asset,)).fetchone()[0],1)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM work_events WHERE work_id=? AND action='สแกนยืนยันครุภัณฑ์'",(first['id'],)).fetchone()[0],1)
+        self.work_action(second,'complete',result='not_found',note='ตรวจครบทุกพื้นที่แล้ว')
+        self.call(f'/api/work/items/{second["id"]}/review',{'actor':fixture.APPROVER,'decision':'return','note':'ขอระบุพื้นที่ที่ตรวจเพิ่ม'},expected=200)
+        returned=self.items(p)['items'][1]
+        self.assertEqual((returned['status'],returned['review_status']),('in_progress','revision_requested'))
+        self.work_action(second,'complete',result='not_found',note='ตรวจครบทุกพื้นที่และอาคารแล้ว')
+        self.call(f'/api/work/items/{second["id"]}/review',{'actor':fixture.APPROVER,'decision':'approve','note':'ยืนยันไม่พบ'},expected=200)
+        self.assertEqual(self.items(p)['items'][1]['review_status'],'approved')
 
     def test_pm_checklist_and_repair_handoff(self):
         p=self.create_plan(assetIds=[1])

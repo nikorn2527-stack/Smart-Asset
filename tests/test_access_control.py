@@ -3,7 +3,8 @@ import json,uuid,sqlite3
 from http.cookiejar import CookieJar
 from urllib.request import build_opener,HTTPCookieProcessor,Request
 from urllib.error import HTTPError
-from test_smart_workflow import HTTPFixture,OFFICER
+from test_smart_workflow import HTTPFixture,OFFICER,TECH
+from work_api import today
 
 class Client:
     def __init__(self,base):self.base=base;self.opener=build_opener(HTTPCookieProcessor(CookieJar()));self.csrf=''
@@ -88,6 +89,18 @@ class AccessControl(HTTPFixture):
         self.assertIn(self.ids[2],[a['id'] for a in c.call('/api/assets')])
         c.call('/api/assets/'+str(self.ids[0])+'/smart',{'actor':OFFICER},method='PUT',expected=403)
         c.call('/api/auth/users',expected=403)
+    def test_inventory_review_requires_approval_permission_and_updates_scoped_asset(self):
+        plan=self.admin.call('/api/work/plans',{'name':'ตรวจนับสิทธิ์','kind':'inventory','scheduleMode':'manual','intervalDays':30,'dueOn':today().isoformat(),'assignmentMode':'manual','assignees':['ผู้ตรวจ'],'checklist':[],'assetIds':[self.ids[0]],'actor':OFFICER},expected=201)
+        work=self.admin.call('/api/work/items?planId='+str(plan['id']))['items'][0]
+        self.admin.call(f'/api/work/items/{work["id"]}/scan',{'actor':OFFICER,'ref':work['code']})
+        self.admin.call(f'/api/work/items/{work["id"]}/complete',{'actor':OFFICER,'result':'moved','note':'พบห้องใหม่','observedLocation':'ห้องใหม่'})
+        reviewer,_=self.user(approve=True)
+        self.assertEqual(reviewer.call('/api/work/reviews')['total'],1)
+        reviewer.call(f'/api/work/items/{work["id"]}/review',{'actor':OFFICER,'decision':'approve','note':'ตรวจแล้ว'})
+        self.assertEqual(reviewer.call(f'/api/assets/{self.ids[0]}/smart')['asset']['location'],'ห้องใหม่')
+        worker,_=self.user(work=True)
+        worker.call('/api/work/reviews',expected=403)
+        worker.call(f'/api/work/items/{work["id"]}/review',{'actor':'ผู้อนุมัติ','decision':'approve'},expected=403)
     def test_organization_manager_cannot_grant_other_organizations_or_global_roles(self):
         c,s=self.user(branch=False,create=True,edit=True,manage=True)
         c.call('/api/auth/users',{'username':'forged.'+uuid.uuid4().hex[:8],'name':'ปลอม','password':'Test-only-pass-2026','globalRole':'admin'},expected=403)
@@ -166,6 +179,25 @@ class AccessControl(HTTPFixture):
         body['reporterNote']='ใช้งานที่ห้องเวชระเบียน ขอให้เพิ่มที่ตั้งในทะเบียน'
         self.assertEqual(c.call('/api/tickets',body,expected=201)['location'],'ยังไม่ระบุที่ตั้งในทะเบียน')
         c.call('/api/tickets',{'assetName':'ไม่มีในทะเบียน','location':'ห้อง','requester':'ผู้แจ้ง','issue':'เสีย'},expected=400)
+
+    def test_work_and_reporter_permissions_cover_ticket_lifecycle_actions(self):
+        reporter,_=self.user(create=True)
+        reporter.call('/api/auth/scope',{'accountId':self.aid,'branchId':self.bid,'actor':'ผู้แจ้ง'})
+        ticket=reporter.call('/api/tickets',{'assetId':self.ids[0],'assetName':'ของสาขาหนึ่ง','assetCode':'ทดสอบ','location':'ที่ตั้ง','requester':'ผู้แจ้งทดสอบ','issue':'ทดสอบวงจรงานซ่อม'},expected=201)
+        tid=ticket['id']
+
+        self.admin.call(f'/api/tickets/{tid}/action',{'action':'review','actor':OFFICER,'estimateCost':0,'requiresPurchase':False})
+        self.admin.call(f'/api/tickets/{tid}/action',{'action':'assign','actor':OFFICER,'assignedTo':'ช่างทดสอบ'})
+
+        technician,_=self.user(work=True)
+        technician.call('/api/auth/scope',{'accountId':self.aid,'branchId':self.bid,'actor':TECH})
+        technician.call(f'/api/tickets/{tid}/action',{'action':'assess','actor':TECH,'inspectionNotes':'ตรวจประเมินแล้ว'})
+        technician.call(f'/api/tickets/{tid}/action',{'action':'complete','actor':TECH,'workNotes':'ซ่อมเสร็จ','actualCost':0})
+
+        reporter.call(f'/api/tickets/{tid}/action',{'action':'send_back','actor':'ผู้แจ้ง','note':'ขอให้ตรวจซ้ำ'})
+        technician.call(f'/api/tickets/{tid}/action',{'action':'complete','actor':TECH,'workNotes':'ตรวจซ้ำและแก้ไขแล้ว','actualCost':0})
+        result=reporter.call(f'/api/tickets/{tid}/action',{'action':'confirm','actor':'ผู้แจ้ง','note':'ยืนยันรับงาน'})
+        self.assertEqual(result['status'],'ปิดงาน')
 
     def test_public_qr_repair_keeps_registry_location_and_discrepancy_note(self):
         token=self.admin.call(f'/api/assets/{self.ids[0]}/smart')['qrUrl'].rsplit('/',1)[1]

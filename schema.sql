@@ -515,6 +515,13 @@ CREATE TABLE IF NOT EXISTS scheduled_work (
   note TEXT NOT NULL DEFAULT '',
   completed_at TEXT NOT NULL DEFAULT '',
   completed_by TEXT NOT NULL DEFAULT '',
+  scanned_asset_id INTEGER REFERENCES assets(id) ON DELETE SET NULL,
+  scanned_at TEXT NOT NULL DEFAULT '',
+  scanned_by TEXT NOT NULL DEFAULT '',
+  review_status TEXT NOT NULL DEFAULT '' CHECK(review_status IN ('','pending','approved','revision_requested')),
+  review_note TEXT NOT NULL DEFAULT '',
+  reviewed_at TEXT NOT NULL DEFAULT '',
+  reviewed_by TEXT NOT NULL DEFAULT '',
   repair_ticket_id INTEGER REFERENCES tickets(id),
   UNIQUE(plan_id,asset_id,due_on)
 );

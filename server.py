@@ -209,6 +209,18 @@ def initialize() -> None:
                 db.execute(f"ALTER TABLE work_plans ADD COLUMN {column} {definition}")
                 if column == "interval_count":
                     db.execute("UPDATE work_plans SET interval_count=interval_days")
+        scheduled_columns = {r["name"] for r in db.execute("PRAGMA table_info(scheduled_work)")}
+        for column, definition in {
+            "scanned_asset_id": "INTEGER REFERENCES assets(id) ON DELETE SET NULL",
+            "scanned_at": "TEXT NOT NULL DEFAULT ''",
+            "scanned_by": "TEXT NOT NULL DEFAULT ''",
+            "review_status": "TEXT NOT NULL DEFAULT ''",
+            "review_note": "TEXT NOT NULL DEFAULT ''",
+            "reviewed_at": "TEXT NOT NULL DEFAULT ''",
+            "reviewed_by": "TEXT NOT NULL DEFAULT ''",
+        }.items():
+            if column not in scheduled_columns:
+                db.execute(f"ALTER TABLE scheduled_work ADD COLUMN {column} {definition}")
         master_data_extensions = {
             "asset_categories": {
                 "is_active": "INTEGER NOT NULL DEFAULT 1",

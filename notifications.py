@@ -88,8 +88,9 @@ FEED = """WITH feed AS (
  CASE WHEN w.status='completed' THEN 'followup' WHEN w.due_on<:today THEN 'overdue'
       WHEN w.due_on<=:upcoming THEN 'due' ELSE 'assigned' END,
  'work',w.id,a.code,a.name,w.status,COALESCE(e.created_at,p.created_at),'work',
- CASE WHEN w.status='completed' THEN 80 WHEN w.due_on<:today THEN 85 WHEN w.due_on<=:upcoming THEN 65 ELSE 30 END,
- CASE WHEN w.status='completed' AND w.result='not_found' THEN 'ผลตรวจนับไม่พบครุภัณฑ์'
+ CASE WHEN :role='ผู้อนุมัติ' AND w.review_status='pending' THEN 90 WHEN w.status='completed' THEN 80 WHEN w.due_on<:today THEN 85 WHEN w.due_on<=:upcoming THEN 65 ELSE 30 END,
+ CASE WHEN :role='ผู้อนุมัติ' AND w.review_status='pending' THEN 'ผลตรวจนับรอทวนสอบ'
+      WHEN w.status='completed' AND w.result='not_found' THEN 'ผลตรวจนับไม่พบครุภัณฑ์'
       WHEN w.status='completed' THEN 'ผลตรวจต้องติดตาม / แจ้งซ่อม'
       WHEN w.due_on<:today THEN 'งานเกินกำหนด'
       WHEN w.due_on<=:upcoming THEN 'งานใกล้ครบกำหนด' ELSE 'งานที่ได้รับมอบหมาย' END,
@@ -97,6 +98,7 @@ FEED = """WITH feed AS (
  FROM scheduled_work w JOIN work_plans p ON p.id=w.plan_id JOIN assets a ON a.id=w.asset_id
  LEFT JOIN work_events e ON e.id=(SELECT MAX(id) FROM work_events WHERE work_id=w.id)
  WHERE (:role IN ('เจ้าหน้าที่พัสดุ','ช่าง') AND w.status!='completed')
+    OR (:role='ผู้อนุมัติ' AND w.review_status='pending')
     OR (:role='เจ้าหน้าที่พัสดุ' AND w.status='completed' AND
        ((w.result IN ('needs_repair','damaged') AND w.repair_ticket_id IS NULL) OR (w.result='not_found' AND datetime(w.completed_at)>=datetime(:cutoff))))
  UNION ALL

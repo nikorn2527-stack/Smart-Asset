@@ -71,9 +71,13 @@ class Notifications(HTTPFixture):
         self.call(f'/api/work/items/{work["id"]}/assign',{'actor':OFFICER,'assignee':'ผู้ตรวจ ข'})
         self.assertIsNone(self.entry(TECH,'work',work['id'])['readAt'])
         self.assertEqual(self.call(f'/api/work/items/{work["id"]}')['assignee'],'ผู้ตรวจ ข')
+        self.call(f'/api/work/items/{work["id"]}/scan',{'actor':OFFICER,'ref':work['code']})
         self.call(f'/api/work/items/{work["id"]}/complete',{'actor':OFFICER,'result':'damaged','checks':[],'note':'พบชำรุด'})
         self.assertIsNone(self.entry(TECH,'work',work['id']))
         self.assertIn('ติดตาม',self.entry(OFFICER,'work',work['id'])['title'])
+        self.assertEqual(self.entry(APPROVER,'work',work['id'])['title'],'ผลตรวจนับรอทวนสอบ')
+        self.call(f'/api/work/items/{work["id"]}/review',{'actor':APPROVER,'decision':'approve','note':'ทวนสอบแล้ว'})
+        self.assertIsNone(self.entry(APPROVER,'work',work['id']))
 
     def test_configuration_revision_and_threshold_snapshot(self):
         before=self.call('/api/workflow/settings')
