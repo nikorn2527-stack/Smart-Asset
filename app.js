@@ -1228,3 +1228,164 @@ refreshData();
     if (dialog.open) { event.preventDefault(); dialog.close(); }
   });
 })();
+
+(() => {
+  const app = window.govAssetApp;
+  const sidebar = document.querySelector('.sidebar');
+  if (!app || typeof app.switchView !== 'function' || !sidebar) {
+    throw new Error('ไม่สามารถเริ่มเมนูมือถือได้');
+  }
+
+  const primaryViews = [
+    { key: 'dashboard', label: 'หน้าหลัก' },
+    { key: 'assets', label: 'ทะเบียน' },
+    { key: 'work', label: 'PM / ตรวจนับ' },
+    { key: 'repairs', label: 'งานซ่อม' }
+  ];
+  const sourceFor = key => sidebar.querySelector(`.nav-item[data-view="${key}"]`);
+  const nav = document.createElement('nav');
+  nav.className = 'mobile-bottom-nav';
+  nav.setAttribute('aria-label', 'เมนูหลักบนมือถือ');
+
+  const makeIcon = source => {
+    const icon = document.createElement('span');
+    icon.className = 'mobile-nav-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = source?.querySelector('.nav-icon')?.textContent?.trim() || '•';
+    return icon;
+  };
+  const primaryButtons = new Map();
+  for (const item of primaryViews) {
+    const source = sourceFor(item.key);
+    if (!source) throw new Error(`ไม่พบเมนู ${item.key}`);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'mobile-nav-button';
+    button.dataset.mobileView = item.key;
+    button.setAttribute('aria-label', item.label);
+    button.append(makeIcon(source));
+    const label = document.createElement('span');
+    label.className = 'mobile-nav-label';
+    label.textContent = item.label;
+    button.append(label);
+    button.addEventListener('click', () => app.switchView(item.key));
+    nav.append(button);
+    primaryButtons.set(item.key, button);
+  }
+
+  const moreButton = document.createElement('button');
+  moreButton.type = 'button';
+  moreButton.className = 'mobile-nav-button mobile-nav-more';
+  moreButton.setAttribute('aria-haspopup', 'dialog');
+  moreButton.setAttribute('aria-expanded', 'false');
+  moreButton.setAttribute('aria-label', 'เมนูเพิ่มเติม');
+  const moreIcon = document.createElement('span');
+  moreIcon.className = 'mobile-nav-icon';
+  moreIcon.setAttribute('aria-hidden', 'true');
+  moreIcon.textContent = '•••';
+  moreButton.append(moreIcon);
+  const moreLabel = document.createElement('span');
+  moreLabel.className = 'mobile-nav-label';
+  moreLabel.textContent = 'เพิ่มเติม';
+  moreButton.append(moreLabel);
+  nav.append(moreButton);
+
+  const dialog = document.createElement('dialog');
+  dialog.className = 'mobile-more-dialog';
+  dialog.setAttribute('aria-label', 'เมนูเพิ่มเติม');
+  const dialogHeader = document.createElement('div');
+  dialogHeader.className = 'mobile-more-header';
+  const title = document.createElement('h2');
+  title.textContent = 'เมนูทั้งหมด';
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'mobile-more-close';
+  closeButton.setAttribute('aria-label', 'ปิดเมนู');
+  closeButton.textContent = '×';
+  closeButton.addEventListener('click', () => dialog.close());
+  dialogHeader.append(title, closeButton);
+  const links = document.createElement('div');
+  links.className = 'mobile-more-links';
+  dialog.append(dialogHeader, links);
+
+  const helpSource = sidebar.querySelector('#helpBtn');
+  const isAvailable = source => Boolean(source && !source.hidden && source.getAttribute('aria-hidden') !== 'true');
+  const addMoreLink = (source, key, label) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'mobile-more-link';
+    button.dataset.mobileMoreView = key || 'help';
+    button.hidden = !isAvailable(source);
+    button.append(makeIcon(source));
+    const text = document.createElement('span');
+    text.textContent = label;
+    button.append(text);
+    button.addEventListener('click', () => {
+      if (key) app.switchView(key);
+      else source.click();
+      dialog.close();
+    });
+    links.append(button);
+  };
+  const buildMoreLinks = () => {
+    links.replaceChildren();
+    sidebar.querySelectorAll('.nav-item[data-view]').forEach(source => {
+      if (primaryButtons.has(source.dataset.view)) return;
+      addMoreLink(source, source.dataset.view, source.getAttribute('aria-label') || source.textContent.trim());
+    });
+    if (helpSource) addMoreLink(helpSource, '', helpSource.textContent.trim());
+  };
+
+  const syncNavigation = () => {
+    const active = sidebar.querySelector('.nav-item[data-view].active');
+    const activeKey = active?.dataset.view || '';
+    primaryButtons.forEach((button, key) => {
+      const source = sourceFor(key);
+      button.hidden = !isAvailable(source);
+      const selected = key === activeKey;
+      button.classList.toggle('active', selected);
+      if (selected) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    const moreActive = Boolean(activeKey && !primaryButtons.has(activeKey));
+    moreButton.classList.toggle('active', moreActive);
+    if (moreActive) moreButton.setAttribute('aria-current', 'page');
+    else moreButton.removeAttribute('aria-current');
+    moreButton.hidden = ![...links.querySelectorAll('.mobile-more-link')].some(button => !button.hidden);
+    links.querySelectorAll('.mobile-more-link').forEach(button => {
+      const source = button.dataset.mobileMoreView === 'help'
+        ? helpSource
+        : sourceFor(button.dataset.mobileMoreView);
+      button.hidden = !isAvailable(source);
+      const selected = button.dataset.mobileMoreView === activeKey;
+      button.classList.toggle('active', selected);
+      if (selected) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+  };
+
+  buildMoreLinks();
+  moreButton.addEventListener('click', () => {
+    buildMoreLinks();
+    syncNavigation();
+    dialog.showModal();
+    moreButton.setAttribute('aria-expanded', 'true');
+  });
+  dialog.addEventListener('close', () => {
+    moreButton.setAttribute('aria-expanded', 'false');
+    moreButton.focus();
+  });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) dialog.close();
+  });
+  document.body.append(nav, dialog);
+
+  const observer = new MutationObserver(syncNavigation);
+  observer.observe(sidebar, {
+    attributes: true,
+    subtree: true,
+    attributeFilter: ['class', 'aria-current', 'aria-hidden', 'hidden']
+  });
+  document.addEventListener('govasset:authenticated', syncNavigation);
+  syncNavigation();
+})();

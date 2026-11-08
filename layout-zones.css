@@ -4203,3 +4203,210 @@ footer.footer {
     min-height: 44px !important;
   }
 }
+
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media screen and (max-width: 780px) {
+  .sidebar {
+    display: none !important;
+  }
+
+  .main-column {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  header.topbar {
+    flex-shrink: 0 !important;
+  }
+
+  main#main {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    padding: 8px 12px 0 !important;
+  }
+
+  .view.active {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+  }
+
+  footer.footer {
+    display: none !important;
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    z-index: 120;
+    inset: auto 0 0;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    min-height: 64px;
+    padding: 5px 8px calc(5px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--line, #dce5ea);
+    background: rgba(255, 255, 255, .98);
+    box-shadow: 0 -4px 16px rgba(16, 49, 67, .08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .mobile-nav-button {
+    display: grid;
+    min-width: 0;
+    min-height: 48px;
+    align-content: center;
+    justify-items: center;
+    gap: 2px;
+    padding: 3px 2px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #647687;
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-nav-button[hidden],
+  .mobile-more-link[hidden] {
+    display: none !important;
+  }
+
+  .mobile-nav-button.active {
+    background: #e8f5f3;
+    color: #0c6d68;
+  }
+
+  .mobile-nav-icon {
+    min-height: 22px;
+    font-size: 19px;
+    line-height: 22px;
+  }
+
+  .mobile-nav-more .mobile-nav-icon {
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+
+  .mobile-nav-label {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-nav-button:focus-visible,
+  .mobile-more-link:focus-visible,
+  .mobile-more-close:focus-visible {
+    outline: 3px solid #45a8ae;
+    outline-offset: 2px;
+  }
+
+  .mobile-more-dialog {
+    position: fixed;
+    inset: auto 8px calc(72px + env(safe-area-inset-bottom, 0px)) 8px;
+    width: auto;
+    max-width: none;
+    max-height: min(70dvh, 560px);
+    flex-direction: column;
+    gap: 12px;
+    margin: 0;
+    padding: 14px;
+    overflow: hidden;
+    border: 1px solid var(--line, #dce5ea);
+    border-radius: 18px;
+    background: #fff;
+    color: var(--ink, #172b3a);
+    box-shadow: 0 16px 48px rgba(16, 49, 67, .2);
+  }
+
+  .mobile-more-dialog[open] {
+    display: flex;
+  }
+
+  .mobile-more-dialog::backdrop {
+    background: rgba(10, 28, 40, .42);
+  }
+
+  .mobile-more-header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .mobile-more-header h2 {
+    margin: 0;
+    color: var(--navy, #123d56);
+    font-size: 17px;
+  }
+
+  .mobile-more-close {
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: #f1f5f7;
+    color: var(--navy, #123d56);
+    font-size: 24px;
+  }
+
+  .mobile-more-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .mobile-more-link {
+    display: flex;
+    min-width: 0;
+    min-height: 56px;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--line, #dce5ea);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--ink, #172b3a);
+    font: inherit;
+    text-align: left;
+  }
+
+  .mobile-more-link .mobile-nav-icon {
+    flex: none;
+    color: var(--teal, #147d78);
+  }
+
+  .mobile-more-link > span:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .mobile-more-link.active {
+    border-color: var(--teal, #147d78);
+    background: var(--teal-soft, #e8f5f3);
+  }
+}
