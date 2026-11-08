@@ -1114,7 +1114,7 @@ function updateFormReadiness(form) {
   if(messages.length)buttons.forEach(button=>button.setAttribute('aria-describedby',status.id));
 }
 function guardRequiredForm(form) {
-  if(!form||form.dataset.readinessGuard==='true'||form.noValidate||!form.querySelector('button[type="submit"],input[type="submit"]'))return;
+  if(!form||form.id==='accessLogin'||form.dataset.readinessGuard==='true'||form.noValidate||!form.querySelector('button[type="submit"],input[type="submit"]'))return;
   form.dataset.readinessGuard='true';
   updateFormReadiness(form);
 }
