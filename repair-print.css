@@ -2,7 +2,7 @@
 
 @page workorder {
   size: A4 portrait;
-  margin: 12mm;
+  margin: 8mm;
 }
 
 @page slip {
@@ -36,6 +36,7 @@
   overflow-wrap: normal;
   font-size: 11pt;
   line-height: 1.45;
+  transform-origin: top center;
 }
 
 .work-order-header {
@@ -540,7 +541,7 @@
 @media print {
   @page workorder {
     size: A4 portrait;
-    margin: 12mm;
+    margin: 8mm;
   }
 
   @page slip {
@@ -584,10 +585,20 @@
   }
 
   .work-order-paper {
-    width: 100% !important;
-    max-width: 186mm !important;
+    width: 186mm !important;
+    max-width: 100% !important;
     min-height: 0 !important;
+    margin: 0 !important;
+  }
+
+  .repair-work-order {
+    width: 186mm !important;
+    max-width: 100% !important;
+    height: 280mm !important;
     margin: 0 auto !important;
+    overflow: hidden !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .repair-slip {

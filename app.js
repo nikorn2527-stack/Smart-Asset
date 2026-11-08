@@ -746,7 +746,7 @@ async function printTicket(id,format='work-order',slipSize='80mm') {
     ${ticket.assignedTo?`<section class="slip-section"><small>ผู้รับผิดชอบ</small><b>${esc(ticket.assignedTo)}</b></section>`:''}
     ${(ticket.events||[]).length?`<section class="slip-section slip-history"><small>ประวัติการดำเนินงาน</small><ol>${ticket.events.slice(-3).reverse().map(event=>`<li><b>${esc(event.action)} · ${esc(event.actor)}</b><span>${esc(fmtDate(event.createdAt))}</span></li>`).join('')}</ol></section>`:''}
     <footer class="slip-footer"><img src="${esc(tracking.qrImage)}" alt="QR สำหรับตรวจสอบงาน ${esc(ticket.ticketNo)}"><b>สแกนเพื่อตรวจสอบสถานะงาน</b><span>Ticket ${esc(ticket.ticketNo)}</span><small>พิมพ์เมื่อ ${esc(new Date().toLocaleString('th-TH'))}</small></footer></section>`;
-  const defaultPage=format==='slip'?`size:${slip.page};margin:${slip.margin}`:'size:A4 portrait;margin:12mm';
+  const defaultPage=format==='slip'?`size:${slip.page};margin:${slip.margin}`:'size:A4 portrait;margin:8mm';
   const root=$('#repairPrintArea'),markup=`<div id="repairPrintArea" class="repair-print-sheet format-${format} slip-${slipSize}">${format==='slip'?receiptSlip():workOrder()}${format==='both'?receiptSlip():''}</div>`;
   const printFrame=document.createElement('iframe');
   printFrame.title='เอกสารสำหรับพิมพ์';
@@ -759,7 +759,8 @@ async function printTicket(id,format='work-order',slipSize='80mm') {
   });
   const printCss=document.querySelector('link[href*="repair-print.css"]')?.href;
   if(!printCss)throw new Error('ไม่พบรูปแบบเอกสารสำหรับพิมพ์');
-  printFrame.srcdoc=`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet"><link rel="stylesheet" href="${printCss}"><style>@media print{@page{${defaultPage}}@page workorder{size:A4 portrait;margin:12mm}@page slip{size:${slip.page};margin:${slip.margin}}}</style></head><body data-printing="ticket">${markup}</body></html>`;
+  const screenFitStyle=format==='slip'?'':`body[data-printing="ticket"] #repairPrintArea{display:block!important;position:static;width:186mm;margin:0 auto;padding:0}.repair-work-order{display:block!important;width:186mm;margin:0 auto}.work-order-paper{display:flex!important;width:186mm;max-width:none;margin:0}`;
+  printFrame.srcdoc=`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet"><link rel="stylesheet" href="${printCss}"><style>${screenFitStyle}</style><style>@media print{@page{${defaultPage}}@page workorder{size:A4 portrait;margin:8mm}@page slip{size:${slip.page};margin:${slip.margin}}}</style></head><body data-printing="ticket">${markup}</body></html>`;
   document.body.append(printFrame);
   let printDocument,printWindow;
   try{
@@ -769,6 +770,15 @@ async function printTicket(id,format='work-order',slipSize='80mm') {
     if(!printDocument||!printWindow)throw new Error('เปิดเอกสารสำหรับพิมพ์ไม่สำเร็จ');
     await printDocument.fonts.ready;
     await Promise.all([...printDocument.querySelectorAll('img')].map(image=>image.decode()));
+    if(format!=='slip'){
+      await new Promise(resolve=>printWindow.requestAnimationFrame(()=>printWindow.requestAnimationFrame(resolve)));
+      const paper=printDocument.querySelector('.work-order-paper');
+      if(!paper)throw new Error('ไม่พบใบงานสำหรับจัดหน้า');
+      const printableHeight=280*96/25.4;
+      const contentHeight=Math.max(paper.scrollHeight,paper.getBoundingClientRect().height);
+      const scale=Math.min(1,printableHeight/contentHeight);
+      paper.style.transform=`scale(${scale})`;
+    }
   }catch(error){
     printFrame.remove();
     throw error;
