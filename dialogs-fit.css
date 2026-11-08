@@ -23,7 +23,7 @@ dialog .notification-header h2 { overflow-wrap: anywhere; }
 dialog .dialog-actions { flex-wrap: wrap !important; }
 
 /* Toast is shown as a manual popover so it sits above an open modal; size it to the text. */
-#toast.toast { margin: 0; overflow: visible; width: max-content; max-width: min(90vw, 560px); pointer-events: none; }
+#toast.toast { margin: 0; overflow: visible; width: max-content; max-width: min(calc(90 * var(--vw, 1vw)), 560px); pointer-events: none; }
 
 /* ---------- Manual (คู่มือ): content was clipped at 740px with no scroll ---------- */
 .asset-dialog.manual-dialog > .ticket-dialog-inner > .manual-content {
@@ -119,7 +119,7 @@ dialog .dialog-actions { flex-wrap: wrap !important; }
 
 /* ---------- Asset workspace (smart.js openAsset) ---------- */
 /* Fixed height so the tab row does not jump when switching to a short tab. */
-.asset-dialog.smart-dialog:not(.qr-simulator-modal) { height: min(92vh, 840px) !important; }
+.asset-dialog.smart-dialog:not(.qr-simulator-modal) { height: min(calc(92 * var(--vh, 1vh)), 840px) !important; }
 .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-tabs {
   flex-wrap: nowrap !important;
   overflow-x: auto !important;
@@ -184,13 +184,13 @@ dialog .dialog-actions { flex-wrap: wrap !important; }
   dialog .dialog-close { min-width: 44px !important; min-height: 44px !important; }
 
   .asset-dialog:not(.smart-dialog), .ticket-dialog, .access-dialog, .equipment-dialog, .om-dialog, .master-data-dialog {
-    width: calc(100vw - 16px) !important;
+    width: calc(calc(100 * var(--vw, 1vw)) - 16px) !important;
     max-width: none !important;
-    max-height: calc(100dvh - 16px) !important;
+    max-height: calc(calc(100 * var(--vh, 1dvh)) - 16px) !important;
   }
   .asset-dialog:not(.smart-dialog) > form, .asset-dialog:not(.smart-dialog) > div, .asset-dialog > .ticket-dialog-inner,
   .equipment-dialog > form, .om-dialog > form, .master-data-dialog > form, .access-dialog > form {
-    max-height: calc(100dvh - 16px) !important;
+    max-height: calc(calc(100 * var(--vh, 1dvh)) - 16px) !important;
   }
   .asset-dialog.work-dialog > form, .asset-dialog.work-dialog > div,
   .asset-dialog.notification-dialog > div { max-height: none !important; }
@@ -207,9 +207,9 @@ dialog .dialog-actions { flex-wrap: wrap !important; }
   .asset-dialog.notification-dialog > #notificationItems { padding: 0 12px !important; }
   .asset-dialog.notification-dialog > .notification-scope { margin: 6px 16px 12px; }
   .asset-dialog.smart-dialog:not(.qr-simulator-modal) {
-    width: calc(100vw - 16px) !important;
-    height: calc(100dvh - 16px) !important;
-    max-height: calc(100dvh - 16px) !important;
+    width: calc(calc(100 * var(--vw, 1vw)) - 16px) !important;
+    height: calc(calc(100 * var(--vh, 1dvh)) - 16px) !important;
+    max-height: calc(calc(100 * var(--vh, 1dvh)) - 16px) !important;
     border-radius: 14px !important;
   }
   .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-dialog-head { padding: 12px 8px 10px 16px !important; gap: 8px; }
@@ -262,12 +262,12 @@ dialog .dialog-actions { flex-wrap: wrap !important; }
 
 /* Keep Ticket printing reachable while its details and workflow remain scrollable. */
 #ticketDialog {
-  width: min(1120px, calc(100vw - 28px)) !important;
-  max-height: min(94vh, 900px) !important;
+  width: min(1120px, calc(calc(100 * var(--vw, 1vw)) - 28px)) !important;
+  max-height: min(calc(94 * var(--vh, 1vh)), 900px) !important;
 }
 #ticketDialog > #ticketDialogContent {
-  height: min(94vh, 900px) !important;
-  max-height: min(94vh, 900px) !important;
+  height: min(calc(94 * var(--vh, 1vh)), 900px) !important;
+  max-height: min(calc(94 * var(--vh, 1vh)), 900px) !important;
   overflow: hidden !important;
 }
 #ticketDialog .ticket-dialog-inner {
@@ -324,17 +324,50 @@ form[data-readiness-guard] :is(input, select, textarea)[aria-invalid="true"] {
 
 @media (max-width: 540px) {
   #ticketDialog {
-    width: calc(100vw - 16px) !important;
-    max-height: calc(100dvh - 16px) !important;
+    width: calc(calc(100 * var(--vw, 1vw)) - 16px) !important;
+    max-height: calc(calc(100 * var(--vh, 1dvh)) - 16px) !important;
   }
   #ticketDialog > #ticketDialogContent {
-    height: calc(100dvh - 16px) !important;
-    max-height: calc(100dvh - 16px) !important;
+    height: calc(calc(100 * var(--vh, 1dvh)) - 16px) !important;
+    max-height: calc(calc(100 * var(--vh, 1dvh)) - 16px) !important;
   }
   #ticketDialog .ticket-dialog-scroll {
     padding: 0 12px 14px;
   }
   #ticketDialog .dialog-head {
     padding: 10px 12px !important;
+  }
+}
+
+/* The scope/password dialog uses a plain form, so preserve the form's intended
+   inset after the shared dialog reset removes padding from the dialog itself. */
+.access-dialog {
+  box-sizing: border-box;
+  width: min(550px, calc(calc(100 * var(--vw, 1vw)) - 32px)) !important;
+}
+.access-dialog > form {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 24px !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+.access-dialog > form > *,
+.access-dialog label {
+  min-width: 0;
+  max-width: 100%;
+}
+.access-dialog input,
+.access-dialog select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 540px) {
+  .access-dialog {
+    width: calc(calc(100 * var(--vw, 1vw)) - 16px) !important;
+  }
+  .access-dialog > form {
+    padding: 20px 16px !important;
   }
 }

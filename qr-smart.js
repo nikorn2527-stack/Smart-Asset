@@ -13,6 +13,8 @@
     let editingId = null;
     let activeTab = 'services';
     let initializedTab = false;
+    let locationPage = 0;
+    const locationPageSize = 25;
 
     function selectQrTab(tabName) {
       activeTab = tabName === 'locations' ? 'locations' : 'services';
@@ -160,33 +162,75 @@
       const notice = $('#qrSmartSimpleNotice');
       if (notice) notice.hidden = on;
       $('#qrSmartNewLocation').disabled = !on || !canWrite();
+      $('#qrLocationRegisterSearch').disabled = !on;
+      $('#qrLocationKindFilter').disabled = !on;
+      $('#qrLocationStatusFilter').disabled = !on;
+      $('.qr-location-register-wrap').hidden = !on;
+      $('.qr-location-register-toolbar').hidden = !on;
+      $('.qr-location-register-foot').hidden = !on;
       if (!on) {
         list.innerHTML = '';
         $('#qrSmartLocationForm').hidden = true;
         view.classList.remove('location-form-open');
         return;
       }
-      list.innerHTML = locations.length ? locations.map(item => {
+      const kindFilter = $('#qrLocationKindFilter').value || 'all';
+      const statusFilter = $('#qrLocationStatusFilter').value || 'all';
+      const query = $('#qrLocationRegisterSearch').value.trim().toLocaleLowerCase();
+      const byId = new Map(locations.map(item => [String(item.id), item]));
+      const areaPath = item => {
+        const parts = [];
+        const seen = new Set([String(item.id)]);
+        let parentId = item.parent_id || item.parentId;
+        while (parentId && !seen.has(String(parentId))) {
+          seen.add(String(parentId));
+          const parent = byId.get(String(parentId));
+          if (!parent) break;
+          parts.unshift(parent.name);
+          parentId = parent.parent_id || parent.parentId;
+        }
+        return parts;
+      };
+      const filtered = locations.filter(item => {
         const active = item.isActive !== false && item.is_active !== 0;
-        return `<article class="qr-smart-location panel">
-        <div>
-          <strong>${esc(item.name)}</strong>
-          <span>${esc(KIND_LABELS[item.kind] || item.kind)} · ${active ? 'พร้อมใช้งาน' : 'ปิดชั่วคราว'}</span>
-          <small>ผู้สแกนเห็น: ${esc(item.public_name || item.publicName || item.name)}</small>
-        </div>
-        <div class="qr-smart-location-actions">
-          <div class="qr-smart-location-buttons">
-            <button type="button" class="button primary" data-use-location-template="${item.id}">ใช้เทมเพลตพิมพ์ QR</button>
-            <button type="button" class="button outline" data-edit-location="${item.id}" ${canWrite() ? '' : 'disabled'}>แก้ไขข้อมูล</button>
-          </div>
-        </div>
-        <details class="qr-smart-location-details">
-          <summary>ข้อมูล QR สำหรับเปิดหรือเชื่อมต่อ</summary>
-          <label>URL ของ Location QR<input readonly value="${esc(item.qrUrl || '')}"></label>
-          <label>โทเคนประจำจุด (คงเดิมเมื่อเปลี่ยนชื่อ)<input readonly value="${esc(item.qrToken || '')}"></label>
-        </details>
-      </article>`;
-      }).join('') : '<p class="field-hint">ยังไม่มีจุด Location เพิ่มตำแหน่ง แล้วพิมพ์ป้ายไปติด ณ จุดที่ต้องการให้สแกนดูครุภัณฑ์</p>';
+        const haystack = [item.code, item.name, item.public_name, item.publicName, KIND_LABELS[item.kind], ...areaPath(item)].join(' ').toLocaleLowerCase();
+        return (kindFilter === 'all' || item.kind === kindFilter)
+          && (statusFilter === 'all' || (statusFilter === 'active' ? active : !active))
+          && (!query || haystack.includes(query));
+      });
+      const pages = Math.max(1, Math.ceil(filtered.length / locationPageSize));
+      locationPage = Math.min(locationPage, pages - 1);
+      const shown = filtered.slice(locationPage * locationPageSize, (locationPage + 1) * locationPageSize);
+      list.innerHTML = shown.length ? shown.map(item => {
+        const active = item.isActive !== false && item.is_active !== 0;
+        const path = areaPath(item);
+        const locationCode = item.code || `LOC-${String(item.id).padStart(6, '0')}`;
+        const assetCount = (item.guestAssetIds || []).length;
+        return `<tr>
+          <td><code class="asset-code-badge">${esc(locationCode)}</code></td>
+          <td><div class="asset-info-cell"><div class="asset-primary-name">${esc(item.name)}</div><div class="asset-secondary-meta">ผู้สแกนเห็น: ${esc(item.public_name || item.publicName || item.name)}</div></div></td>
+          <td><span class="category-badge-chip">${esc(KIND_LABELS[item.kind] || item.kind)}</span></td>
+          <td>${path.length ? esc(path.join(' › ')) : '<span class="field-hint">พื้นที่หลัก</span>'}</td>
+          <td>${assetCount.toLocaleString('th-TH')} รายการ</td>
+          <td><span class="gov-badge ${active ? 'ready' : 'inactive'}">${active ? 'พร้อมใช้งาน' : 'ปิดชั่วคราว'}</span></td>
+          <td><div class="table-action-group">
+            <button type="button" class="btn-more-action" data-use-location-template="${item.id}" title="เลือกเทมเพลตและพิมพ์ Location QR">🏷️</button>
+            <button type="button" class="btn-dossier" data-edit-location="${item.id}" ${canWrite() ? '' : 'disabled'}>แก้ไข</button>
+            <button type="button" class="btn-dossier" data-view-location-qr="${item.id}" aria-label="ดูข้อมูล QR ของ ${esc(item.name)}">QR</button>
+          </div></td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="7" class="empty-cell">${locations.length ? 'ไม่พบจุดที่ตรงกับเงื่อนไข' : 'ยังไม่มี Location เพิ่มพื้นที่แรกเพื่อเริ่มจัดทำทะเบียนและพิมพ์ QR'}</td></tr>`;
+      const count = $('#qrLocationRegisterCount');
+      count.textContent = filtered.length
+        ? `แสดง ${locationPage * locationPageSize + 1}–${Math.min((locationPage + 1) * locationPageSize, filtered.length)} จาก ${filtered.length} จุด${filtered.length !== locations.length ? ` · ทั้งหมด ${locations.length}` : ''}`
+        : `ไม่พบรายการ · ทั้งหมด ${locations.length} จุด`;
+      $('#qrLocationRegisterPage').textContent = `หน้า ${locationPage + 1}/${pages}`;
+      $('#qrLocationPrevPage').disabled = locationPage === 0;
+      $('#qrLocationNextPage').disabled = locationPage >= pages - 1;
+      const kindSelect = $('#qrLocationKindFilter');
+      const currentKind = kindSelect.value || 'all';
+      kindSelect.innerHTML = '<option value="all">ทุกประเภท</option>' + kinds.map(kind => `<option value="${esc(kind)}">${esc(KIND_LABELS[kind] || kind)}</option>`).join('');
+      kindSelect.value = kinds.includes(currentKind) ? currentKind : 'all';
     }
 
     function showLocationForm(item = null) {
@@ -216,7 +260,7 @@
         <label><span class="qr-location-field-label">อยู่ภายใต้พื้นที่</span><select name="parentId"><option value="">ไม่มี / เป็นพื้นที่หลัก</option>${locationOptions(item?.id)}</select></label>
         <label class="qr-location-field-wide"><span class="qr-location-field-label">ชื่อในระบบ <span class="required">*</span></span><input name="name" required maxlength="200" value="${esc(item?.name || '')}" placeholder="เช่น อาคารศูนย์แพทยศาสตรศึกษา ชั้น 3 ห้องบรรยาย 1"><small>ใช้สำหรับค้นหาและจัดการในระบบ</small></label>
         <label><span class="qr-location-field-label">ชื่อที่ผู้สแกนเห็น</span><input name="publicName" maxlength="200" value="${esc(publicName)}" placeholder="เช่น ห้องบรรยาย 1 ชั้น 3"><small>เว้นว่างเพื่อใช้ชื่อในระบบ</small></label>
-        <label><span class="qr-location-field-label">รหัสจุด (ถ้ามี)</span><input name="code" maxlength="80" value="${esc(item?.code || '')}" placeholder="เช่น MED-FL3-RM01"></label>
+        <label><span class="qr-location-field-label">รหัสจุด</span><input name="code" maxlength="80" value="${esc(item?.code || '')}" placeholder="${item ? '' : 'ระบบออกให้อัตโนมัติเมื่อบันทึก'}" ${item ? '' : 'readonly'}><small>${item ? 'แก้ไขรหัสอ้างอิงได้' : 'ระบบจะสร้างรหัส Location อัตโนมัติ'}</small></label>
         </div>
       </section>
       <section class="qr-location-form-step">
@@ -357,6 +401,11 @@
     }
 
     $('#qrSmartNewLocation').onclick = () => showLocationForm();
+    $('#qrLocationRegisterSearch').addEventListener('input', () => { locationPage = 0; renderLocations(); });
+    $('#qrLocationKindFilter').addEventListener('change', () => { locationPage = 0; renderLocations(); });
+    $('#qrLocationStatusFilter').addEventListener('change', () => { locationPage = 0; renderLocations(); });
+    $('#qrLocationPrevPage').addEventListener('click', () => { locationPage = Math.max(0, locationPage - 1); renderLocations(); });
+    $('#qrLocationNextPage').addEventListener('click', () => { locationPage += 1; renderLocations(); });
     view.querySelectorAll('[data-qr-smart-tab]').forEach(button => {
       button.addEventListener('click', () => selectQrTab(button.dataset.qrSmartTab));
       button.addEventListener('keydown', event => {
@@ -386,10 +435,21 @@
         return;
       }
       const button = event.target.closest('[data-edit-location]');
-      if (!button) return;
-      const item = locations.find(row => String(row.id) === button.dataset.editLocation);
-      if (item) showLocationForm(item);
+      if (button) {
+        const item = locations.find(row => String(row.id) === button.dataset.editLocation);
+        if (item) showLocationForm(item);
+        return;
+      }
+      const qrButton = event.target.closest('[data-view-location-qr]');
+      if (!qrButton) return;
+      const item = locations.find(row => String(row.id) === qrButton.dataset.viewLocationQr);
+      if (!item) return;
+      $('#qrLocationInfoTitle').textContent = `ข้อมูล QR ของ ${item.name}`;
+      $('#qrLocationInfoUrl').value = item.qrUrl || '';
+      $('#qrLocationInfoToken').value = item.qrToken || '';
+      $('#qrLocationInfoDialog').showModal();
     };
+    $('#qrLocationInfoClose').addEventListener('click', () => $('#qrLocationInfoDialog').close());
 
     $('#qrSmartLocationForm').onsubmit = async event => {
       event.preventDefault();
@@ -420,7 +480,7 @@
         editingId = null;
         view.classList.remove('location-form-open');
         await loadLocations();
-        app.toast('บันทึกจุดบริการแล้ว · เลือกเทมเพลตในหน้า Sticker Studio เพื่อพิมพ์');
+        app.toast(`บันทึก Location ${saved.code || `LOC-${String(id).padStart(6, '0')}`} แล้ว`);
       } catch (error) {
         note.setAttribute('role', 'alert');
         note.textContent = error.message;

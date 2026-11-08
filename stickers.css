@@ -8,6 +8,7 @@
 .register-source-details{margin:12px 0;padding:11px 14px;background:#fff;border:1px solid #dfe8eb;border-radius:7px;color:#425d6a}.register-source-details summary{cursor:pointer;font-size:10px;font-weight:700}.register-source-json{max-height:360px;overflow:auto;margin-top:10px;padding:10px;background:#f5f8f9;border-radius:5px;white-space:pre-wrap;word-break:break-word;font:10px/1.5 ui-monospace,Consolas,monospace;color:#355160}.sticker-asset-results .empty-cell{padding:18px;text-align:center;font-size:10px;color:#81919a}@media print{body[data-printing="register"] .register-source-details{display:none!important}}
 
 /* --- Sticker Studio Zero-Scroll & Interactive Canvas Handles --- */
+.sticker-text-fit-warning{margin:4px 12px;color:#a33b20;font-size:12px}
 .sticker-studio-header {
   display: flex;
   flex-direction: column;

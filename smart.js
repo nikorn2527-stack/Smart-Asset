@@ -82,7 +82,7 @@
               <td>${esc(app.fmtDate(rw.acquired_on || rw.date || asset.acquiredOn))}</td>
               <td>${esc(rw.document_no || rw.po_no || asset.poNo || '—')}</td>
               <td><b>${esc(rw.item_description || spec || asset.name)}</b></td>
-              <td style="text-align:center">${esc(rw.quantity || 1)}</td>
+              <td style="text-align:center">${esc(app.formatQuantity(rw.quantity || 1))}</td>
               <td style="text-align:right">${rw.unit_price ? Number(rw.unit_price).toLocaleString('th-TH', {minimumFractionDigits:2}) : '—'}</td>
               <td style="text-align:right">${rw.total_price ? Number(rw.total_price).toLocaleString('th-TH', {minimumFractionDigits:2}) : '—'}</td>
               <td style="text-align:center">${esc(rw.useful_life_years || asset.usefulLifeYears || '—')}</td>
@@ -147,7 +147,7 @@
       ['ผู้ดูแล', a.custodian || life?.state?.custodian],
       ['วัน เดือน ปี', dateShown(acq.acquired_on || book.acquiredOn)],
       ['ที่เอกสาร', acq.document_no],
-      ['จำนวนหน่วย', acq.quantity == null || acq.quantity === '' ? '' : acq.quantity],
+      ['จำนวนหน่วย', acq.quantity == null || acq.quantity === '' ? '' : app.formatQuantity(acq.quantity)],
       ['ราคาต่อหน่วย', money(acq.unit_price ?? book.purchasePrice)],
       ['มูลค่ารวม', money(acq.total_price ?? book.purchasePrice)],
       ['อายุใช้งาน (ปี)', dep.useful_life_years ?? book.usefulLifeYears],
@@ -281,7 +281,7 @@
         app.api('/api/catalog/categories'),
         app.api(`/api/governance/assets/${id}`),
         app.api(`/api/assets/${id}/register`).catch(() => null),
-        app.api(`/api/lifecycle/assets/${id}`).catch(() => ({state:{}, history:[]})),
+        app.api(`/api/lifecycle/assets/${id}`).catch(error => ({state:{}, history:[], error:error.message})),
         app.api(`/api/assets/${id}/photos`).catch(() => ({items:[], max:12}))
       ]);
       const canPhoto = app.getRole() !== 'ผู้แจ้ง';
@@ -321,6 +321,18 @@
           <section data-smart-panel="custody" hidden>
             <h3>ยืม เบิก คืน</h3>
             <p class="field-hint">สถานะถือครอง ${esc(life.state?.loan_status || 'ยังไม่บันทึก')}${life.state?.overdue ? ' · เกินกำหนด' : ''} · ผู้ถือ ${esc(life.state?.custodian || '—')}</p>
+            ${life.error ? `<p role="alert">โหลดสถิติและประวัติไม่สำเร็จ: ${esc(life.error)}</p>` : life.usageStats ? `
+              <div class="smart-usage-summary">
+                <span>ยืม <b>${life.usageStats.loanCount}</b> ครั้ง</span>
+                <span>เบิก <b>${life.usageStats.issueCount}</b> ครั้ง</span>
+                <span>ใช้งานสะสม <b>${life.usageStats.totalDays.toLocaleString('th-TH')}</b> วัน</span>
+                <span>เฉลี่ยรายการที่คืนแล้ว <b>${life.usageStats.averageDays == null ? '—' : life.usageStats.averageDays.toLocaleString('th-TH')}</b> วัน/ครั้ง</span>
+                ${life.usageStats.currentDays == null ? '' : `<span>รายการปัจจุบัน <b>${life.usageStats.currentDays.toLocaleString('th-TH')}</b> วัน</span>`}
+              </div>
+              <p class="field-hint">นับรวมวันเริ่มและวันคืน รายการที่ยังไม่คืนคิดถึงวันนี้${life.usageStats.incompleteCount ? ` · ประวัติไม่ครบ ${life.usageStats.incompleteCount} รายการ ไม่รวมวันที่คำนวณไม่ได้` : ''}</p>
+              <details><summary>ระยะเวลายืม / เบิกแต่ละครั้ง (${life.usageStats.periods.length})</summary>
+                <ol class="smart-history">${life.usageStats.periods.map(p => `<li><b>${p.kind === 'loan' ? 'ยืม' : 'เบิก'} · ${p.days == null ? 'ระยะเวลาไม่ทราบ' : `${p.days.toLocaleString('th-TH')} วัน`}</b><span>${esc(app.fmtDate(p.startAt))} – ${p.endAt ? esc(app.fmtDate(p.endAt)) : p.current ? 'ยังไม่คืน (ถึงวันนี้)' : 'ไม่ทราบวันคืน'}</span></li>`).join('') || '<li>ยังไม่มีรายการที่คำนวณได้</li>'}</ol>
+              </details>` : ''}
             <form id="smartCustodyForm" class="smart-form">
               <div class="form-grid">
                 <label>ประเภทงาน<select name="kind" required><option value="loan">ยืม</option><option value="issue">เบิก</option><option value="return">คืน</option></select></label>

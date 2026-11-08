@@ -1,3 +1,13 @@
+function formatQuantity(value) {
+  if (value == null || value === '') return value;
+  const text = String(value);
+  if (typeof value === 'number' && Number.isFinite(value) && /e/i.test(text)) {
+    return value.toLocaleString('th-TH', {maximumFractionDigits: 20});
+  }
+  return /^-?\d+(?:\.\d+)?$/.test(text)
+    ? text.replace(/^(-?\d+)(?=\.|$)/, integer => integer.replace(/\B(?=(\d{3})+(?!\d))/g, ','))
+    : value;
+}
 const defaultAssets = [
   { id: 'a1', name: 'ตู้เหล็กเก็บเอกสาร 4 ลิ้นชัก', detail: 'ขนาดมาตรฐาน · เหล็กพ่นสี', code: '7110-002-0001', group: 'เครื่องตกแต่งสำนักงาน', location: 'งานสารบรรณ · ชั้น 2', date: '12 ต.ค. 2569', status: 'พร้อมใช้', icon: '▤' },
   { id: 'a2', name: 'ตู้เหล็กเก็บเอกสาร 2 ลิ้นชัก', detail: 'ขนาดมาตรฐาน · เหล็กพ่นสี', code: '7110-002-0002', group: 'เครื่องตกแต่งสำนักงาน', location: 'กองคลัง · ชั้น 1', date: '10 ต.ค. 2569', status: 'สำรวจแล้ว', icon: '▤' },
@@ -79,6 +89,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&a
 const ROLE_REQUESTER='ผู้แจ้ง', ROLE_OFFICER='เจ้าหน้าที่พัสดุ', ROLE_APPROVER='ผู้อนุมัติ', ROLE_TECHNICIAN='ช่าง';
 let assets=[], approvalAssets=[], sheet=[], repairs=[], appConfig={approvalThreshold:5000};
 let inventoryRows=null, inventoryTotal=0, inventoryOffset=0, inventoryLimit=50;
+const selectedPrintAssets = new Map();
 let fsnRows=null, fsnTotal=0, fsnOffset=0, fsnLimit=50, liveCategories=null, liveDepreciationRows=null;
 let inventorySearchTimer=null, fsnSearchTimer=null, inventoryRequest=0;
 const smartFilterMultiKeys=['fiscalYear','category','status','building','floor','room'];
@@ -284,12 +295,13 @@ function assetNameCell(item, withPhoto=false) {
   const text = `<div class="asset-info-cell"><div class="asset-primary-name" title="${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}">${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}</div><div class="asset-secondary-meta" title="${esc(modelText || item.detail || '—')}">${esc(modelText || item.detail || '—')}</div></div>`;
   if(!withPhoto) return text;
   const photo = item.photoUrl
-    ? `<button type="button" class="asset-thumb" data-smart-id="${item.id}" title="ดูรูปและรายละเอียด"><img src="${esc(item.photoUrl)}" alt="รูป ${esc(item.name || '')}" loading="lazy"></button>`
+    ? `<button type="button" class="asset-thumb" data-asset-photo-preview title="ดูรูปขนาดใหญ่" aria-label="ดูรูปขนาดใหญ่ ${esc(item.name || '')}"><img src="${esc(item.photoUrl)}" alt="รูป ${esc(item.name || '')}" loading="lazy"></button>`
     : `<button type="button" class="asset-thumb empty" data-smart-id="${item.id}" title="ยังไม่มีรูป · เปิดรายละเอียดเพื่อเพิ่มรูป" aria-label="ยังไม่มีรูป เปิดรายละเอียดเพื่อเพิ่มรูป"><span aria-hidden="true">📷</span></button>`;
   return `<div class="asset-name-with-photo">${photo}${text}</div>`;
 }
 function renderAssets() {
   const can=permission=>!window.govAssetAccess?.session?.required||Boolean(window.govAssetAccess.session.permissions?.[permission]);
+  const canPrint=can('export');
 
   queueMicrotask(()=>document.dispatchEvent(new CustomEvent('govasset:inventory-rendered')));
   document.dispatchEvent(new CustomEvent('govasset:inventory-rendering'));
@@ -303,6 +315,7 @@ function renderAssets() {
       const netVal = (item.depreciationEstimate?.netBookValue ?? item.netBookValue) != null ? Number(item.depreciationEstimate?.netBookValue ?? item.netBookValue).toLocaleString('th-TH') + ' บาท' : '—';
       const deptDisplay = [item.location, item.accountName].filter(Boolean).join(' · ');
       return `<tr>
+        <td class="asset-select-column"><input type="checkbox" data-print-select-asset="${item.id}" aria-label="เลือก ${esc(item.name)} สำหรับพิมพ์ฉลาก" ${selectedPrintAssets.has(String(item.id))?'checked':''} ${canPrint?'':'disabled'}></td>
         <td>
           <div class="asset-code-badge">
             <span>${esc(item.code || 'ยังไม่มีรหัส')}</span>
@@ -325,18 +338,28 @@ function renderAssets() {
         <td style="text-align:center;">
           <div class="table-action-group">
             <button class="btn-dossier" type="button" data-smart-id="${item.id}" title="ดูรายละเอียด ประวัติ และใบคุมทรัพย์สิน">รายละเอียด</button>
+            ${canPrint ? `<button class="btn-more-action btn-print-sticker" type="button" data-print-sticker="${item.id}" title="เลือกเทมเพลตและพิมพ์ฉลาก" aria-label="พิมพ์ฉลาก ${esc(item.name)}">🏷️</button>` : ''}
             <button class="btn-quick-repair" type="button" data-quick-repair="${item.id}" title="แจ้งซ่อมชิ้นนี้">⚒️ ซ่อม</button>
             ${can('edit') ? `<button class="btn-more-action" type="button" data-assign-location="${item.id}" title="ระบุตึก / ชั้น / ห้อง">📍 ที่ตั้ง</button>` : ''}
             ${currentRole===ROLE_OFFICER && can('edit') ? `<button class="btn-more-action" type="button" data-workspace-edit="${item.id}" title="แก้ไขข้อมูล">✏️ แก้ไข</button>` : ''}
           </div>
         </td>
       </tr>`;
-    }).join(''):'<tr><td colspan="7" class="empty-cell">ไม่พบรายการครุภัณฑ์ที่ตรงกับเงื่อนไขการค้นหา</td></tr>';
+    }).join(''):'<tr><td colspan="8" class="empty-cell">ไม่พบรายการครุภัณฑ์ที่ตรงกับเงื่อนไขการค้นหา</td></tr>';
   }
+  const selectVisible=$('#selectVisibleAssets');
+  if(selectVisible){
+    const visibleIds=filtered.map(item=>String(item.id));
+    const selectedCount=visibleIds.filter(id=>selectedPrintAssets.has(id)).length;
+    selectVisible.checked=visibleIds.length>0&&selectedCount===visibleIds.length;
+    selectVisible.indeterminate=selectedCount>0&&selectedCount<visibleIds.length;
+    selectVisible.disabled=!canPrint||!visibleIds.length;
+  }
+  updateInventoryPrintToolbar(canPrint);
   const shownStart=inventoryTotal?inventoryOffset+1:1, shownEnd=Math.min(inventoryOffset+filtered.length,inventoryTotal||filtered.length);
-  const result=$('#resultCount'); if(result) result.textContent=`แสดง ${filtered.length?shownStart:0}–${shownEnd} จาก ${inventoryRows!==null?inventoryTotal.toLocaleString('th-TH'):assets.length} รายการ`;
-  const total=$('#totalCount'); if(total) total.textContent=String(appConfig.overview?.assets ?? inventoryTotal ?? assets.length);
-  const pending=$('#pendingCount'); if(pending) pending.textContent=String(appConfig.overview?.pendingAssets ?? assets.filter(item=>item.status==='รออนุมัติ'||item.status==='รอตรวจสอบ').length);
+  const result=$('#resultCount'); if(result) result.textContent=`แสดง ${(filtered.length?shownStart:0).toLocaleString('th-TH')}–${shownEnd.toLocaleString('th-TH')} จาก ${(inventoryRows!==null?inventoryTotal:assets.length).toLocaleString('th-TH')} รายการ`;
+  const total=$('#totalCount'); if(total) total.textContent=Number(appConfig.overview?.assets ?? inventoryTotal ?? assets.length).toLocaleString('th-TH');
+  const pending=$('#pendingCount'); if(pending) pending.textContent=Number(appConfig.overview?.pendingAssets ?? assets.filter(item=>item.status==='รออนุมัติ'||item.status==='รอตรวจสอบ').length).toLocaleString('th-TH');
   $$('[data-asset-action]',rows||document).forEach(button=>button.addEventListener('click',()=>handleAssetApproval(button.dataset.assetId,button.dataset.assetAction)));
   const panel=rows?.closest('.listing-panel');
   if(panel){
@@ -384,10 +407,20 @@ function renderAssets() {
     $('#inventoryPageSelect')?.addEventListener('change', e=>loadInventory((Number(e.target.value) - 1) * inventoryLimit));
   }
 }
+function updateInventoryPrintToolbar(canPrint=true) {
+  const toolbar=$('#inventoryPrintToolbar'),count=$('#inventoryPrintSelectionCount'),print=$('#printInventorySelection');
+  if(!toolbar||!count||!print)return;
+  toolbar.hidden=!canPrint;
+  count.textContent=selectedPrintAssets.size
+    ? `เลือกแล้ว ${selectedPrintAssets.size.toLocaleString('th-TH')} รายการ · เลือกข้ามหน้าได้`
+    : 'เลือกรายการในทะเบียนเพื่อพิมพ์หลายฉลากพร้อมกัน';
+  print.disabled=!canPrint||selectedPrintAssets.size===0;
+  const clear=$('#clearInventoryPrintSelection');if(clear)clear.disabled=selectedPrintAssets.size===0;
+}
 async function loadInventory(offset=0){
   const request=++inventoryRequest;
   const params=inventoryQueryParams(offset);
-  try{const result=await api(`/api/inventory?${params}`);if(request!==inventoryRequest)return;inventoryRows=result.items;inventoryTotal=result.total;inventoryOffset=result.offset;renderAssets();document.dispatchEvent(new CustomEvent('govasset:inventory-rendered'));}catch(error){if(request===inventoryRequest){const rows=$('#assetRows');if(rows)rows.innerHTML=`<tr><td colspan="7" class="empty-cell" role="alert">โหลดทะเบียนไม่สำเร็จ: ${esc(error?.message||'ไม่สามารถเชื่อมต่อฐานข้อมูลได้')} · ลองค้นหาใหม่อีกครั้ง</td></tr>`;setText('#resultCount','โหลดข้อมูลไม่สำเร็จ');showError(error);}}
+  try{const result=await api(`/api/inventory?${params}`);if(request!==inventoryRequest)return;inventoryRows=result.items;inventoryTotal=result.total;inventoryOffset=result.offset;renderAssets();document.dispatchEvent(new CustomEvent('govasset:inventory-rendered'));}catch(error){if(request===inventoryRequest){const rows=$('#assetRows');if(rows)rows.innerHTML=`<tr><td colspan="8" class="empty-cell" role="alert">โหลดทะเบียนไม่สำเร็จ: ${esc(error?.message||'ไม่สามารถเชื่อมต่อฐานข้อมูลได้')} · ลองค้นหาใหม่อีกครั้ง</td></tr>`;setText('#resultCount','โหลดข้อมูลไม่สำเร็จ');showError(error);}}
 }
 function fmtDate(value) {
   if(!value) return '—';
@@ -397,7 +430,7 @@ function fmtDate(value) {
   if (Number.isNaN(date.getTime()) || date.getFullYear() < 1920) return '—';
   return date.toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'numeric'});
 }
-function repairStatusClass(status) { return ['ปิดงาน','ซ่อมเสร็จ'].includes(status)?'green':['รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง','รับแจ้งใหม่','รอผู้แจ้งยืนยัน','รอมอบหมาย','รอแก้ไขค่าใช้จ่าย'].includes(status)?'amber':status==='ไม่อนุมัติ'?'red':status==='รออะไหล่'?'violet':'blue'; }
+function repairStatusClass(status) { return ['ปิดงาน','ซ่อมเสร็จ'].includes(status)?'green':['รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง','รับแจ้งใหม่','รอผู้แจ้งยืนยัน','รอมอบหมาย','รอตรวจสอบ/ประเมิน','รอแก้ไขค่าใช้จ่าย'].includes(status)?'amber':status==='ไม่อนุมัติ'?'red':status==='รออะไหล่'?'violet':'blue'; }
 function repairBadge(status) { return `<span class="badge ${repairStatusClass(status)}">${esc(status)}</span>`; }
 function isUserReport(item) { return ['asset_qr','location_qr'].includes(item?.sourceChannel); }
 function userReportBadge(item) {
@@ -412,19 +445,19 @@ function renderRepairs() {
   const rowMarkup=item=>`<tr><td><button class="link-button ticket-number" data-ticket-detail="${item.id}">${esc(item.ticketNo)}</button><div class="item-meta">${esc(fmtDate(item.createdAt))}${isUserReport(item)?' · จากผู้ใช้':''}</div></td><td><div class="item-name">${esc(item.assetName)}</div><div class="item-meta">${esc(item.issue)}</div></td><td>${esc(item.location)}</td><td>${urgencyBadge(item.urgency)}</td><td>${userReportBadge(item)}${repairBadge(item.status)}</td><td>${esc(item.assignedTo||'—')}</td><td><div class="ticket-row-actions"><button class="button outline mini-action" data-ticket-detail="${item.id}" aria-label="ดูรายละเอียด" title="ดูรายละเอียด"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button class="button outline mini-action" data-ticket-print="${item.id}" aria-label="พิมพ์เอกสาร" title="พิมพ์เอกสาร"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><path d="M6 14h12v7H6zM18 12h.01"></path></svg></button></div></td></tr>`;
   const body=$('#repairRows'); if(body) body.innerHTML=filtered.length?filtered.map(rowMarkup).join(''):'<tr><td colspan="7" class="empty-cell">ไม่พบ Ticket ที่ตรงกับคำค้น</td></tr>';
   // Overview shows open work first; closed and cancelled tickets only fill leftover rows.
-  const count=$('#repairResultCount'); if(count) count.textContent=`แสดง ${filtered.length} จาก ${repairs.length} Ticket`;
-  setText('#repairTotal',repairs.length); setText('#repairWaiting',repairs.filter(x=>x.status==='รับแจ้งใหม่').length); setText('#repairPendingApproval',repairs.filter(x=>['รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง'].includes(x.status)).length); setText('#repairActive',repairs.filter(x=>['กำลังซ่อม','รออะไหล่','รอผู้แจ้งยืนยัน','รอมอบหมาย'].includes(x.status)).length);
+  const count=$('#repairResultCount'); if(count) count.textContent=`แสดง ${formatQuantity(filtered.length)} จาก ${formatQuantity(repairs.length)} Ticket`;
+  setText('#repairTotal',formatQuantity(repairs.length)); setText('#repairWaiting',formatQuantity(repairs.filter(x=>x.status==='รับแจ้งใหม่').length)); setText('#repairPendingApproval',formatQuantity(repairs.filter(x=>['รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง'].includes(x.status)).length)); setText('#repairActive',formatQuantity(repairs.filter(x=>['กำลังซ่อม','รอตรวจสอบ/ประเมิน','รออะไหล่','รอผู้แจ้งยืนยัน','รอมอบหมาย'].includes(x.status)).length));
   $$('#repairRows [data-ticket-detail]').forEach(button=>button.addEventListener('click',()=>openTicket(Number(button.dataset.ticketDetail))));
   $$('[data-ticket-print]',body||document).forEach(button=>button.addEventListener('click',()=>openRepairPrintDialog(Number(button.dataset.ticketPrint))));
 }
 function setText(id,value) { const el=$(id); if(el) el.textContent=String(value); }
 function renderApprovals() {
   const pendingTickets=repairs.filter(item=>['รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง'].includes(item.status)), pendingAssets=approvalAssets;
-  setText('#approvalTicketCount',`${pendingTickets.length} รายการ`); setText('#approvalAssetCount',`${pendingAssets.length} รายการ`);
-  setText('#approvalTabBadgeTickets', pendingTickets.length); setText('#approvalTabBadgeAssets', pendingAssets.length);
-  setText('#approvalKpiTickets', pendingTickets.length); setText('#approvalKpiAssets', pendingAssets.length);
+  setText('#approvalTicketCount',`${formatQuantity(pendingTickets.length)} รายการ`); setText('#approvalAssetCount',`${formatQuantity(pendingAssets.length)} รายการ`);
+  setText('#approvalTabBadgeTickets', formatQuantity(pendingTickets.length)); setText('#approvalTabBadgeAssets', formatQuantity(pendingAssets.length));
+  setText('#approvalKpiTickets', formatQuantity(pendingTickets.length)); setText('#approvalKpiAssets', formatQuantity(pendingAssets.length));
   // The nav badge counts only what this screen lists, so it can be cleared from here.
-  setText('#navApprovalBadge', pendingTickets.length + pendingAssets.length);
+  setText('#navApprovalBadge', formatQuantity(pendingTickets.length + pendingAssets.length));
   const t=$('#approvalTicketRows'); if(t) t.innerHTML=pendingTickets.length?pendingTickets.map(item=>`<tr><td><button class="link-button ticket-number" data-ticket-detail="${item.id}">${esc(item.ticketNo)}</button></td><td>${esc(item.assetName)}<div class="item-meta">${esc(item.status)} · ${esc(item.approvalReason||'ตรวจยอดค่าใช้จ่ายจริง')}</div></td><td>${Number(item.status==='รออนุมัติค่าใช้จ่ายจริง'?item.actualCost:item.estimateCost||0).toLocaleString('th-TH')} บาท</td><td><button class="button outline mini-action" data-ticket-detail="${item.id}">ตรวจสอบ / อนุมัติ</button></td></tr>`).join(''):'<tr><td colspan="4" class="empty-cell">ไม่มี Ticket รออนุมัติ</td></tr>';
   const a=$('#approvalAssetRows'); if(a) a.innerHTML=pendingAssets.length?pendingAssets.map(item=>`<tr><td><span class="code-text">${esc(item.code)}</span></td><td>${esc(item.name)}<div class="item-meta">${esc(item.location)}</div></td><td>${esc(item.createdBy||'—')}</td><td>${currentRole===ROLE_APPROVER?`<button class="button outline mini-action" data-asset-action="approve" data-asset-id="${item.id}">อนุมัติ</button> <button class="button outline mini-action reject" data-asset-action="reject" data-asset-id="${item.id}">ไม่อนุมัติ</button>`:'<span class="item-meta">เลือกบทบาทผู้อนุมัติเพื่อจัดการ</span>'}</td></tr>`).join(''):'<tr><td colspan="4" class="empty-cell">ไม่มีครุภัณฑ์ใหม่รออนุมัติ</td></tr>';
   $$('[data-ticket-detail]',document.querySelector('#view-approvals')||document).forEach(button=>button.addEventListener('click',()=>openTicket(Number(button.dataset.ticketDetail))));
@@ -492,7 +525,7 @@ function switchView(name, isBack=false) {
     button.classList.toggle('active',active);
     if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
   });
-  const titles={equipment:'บัญชีอุปกรณ์และนำเข้าทะเบียน','access-admin':'ผู้ใช้งานและสิทธิ์','operational-master':'ข้อมูลหลักหน่วยงาน',supply:'รับเข้า / เบิกจ่าย','supply-settings':'เงื่อนไขรับเข้าและเบิกจ่าย',administration:'ตั้งหมวดและค่าเสื่อม',work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่า',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตามงาน',approvals:'คิวรออนุมัติ',register:'เอกสารทะเบียนคุมทรัพย์สิน',stickers:'แบบสติกเกอร์และการพิมพ์',depreciation:'อายุใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'หมวดและเอกสารอ้างอิง',numbering:'จัดการเลขครุภัณฑ์'};
+  const titles={equipment:'บัญชีอุปกรณ์และนำเข้าทะเบียน','access-admin':'ผู้ใช้งานและสิทธิ์','operational-master':'ข้อมูลหลักหน่วยงาน',supply:'รับเข้า / เบิกจ่าย','supply-settings':'เงื่อนไขรับเข้าและเบิกจ่าย',administration:'ตั้งหมวดและค่าเสื่อม',work:'PM / ตรวจนับครุภัณฑ์',settings:'ตั้งค่า',dashboard:'ภาพรวม',assets:'ทะเบียนครุภัณฑ์',repairs:'แจ้งซ่อมและติดตามงาน',approvals:'คิวรออนุมัติ',reports:'รายงานและส่งออก',register:'เอกสารทะเบียนคุมทรัพย์สิน',stickers:'ตั้งค่าเทมเพลตฉลาก',depreciation:'อายุใช้งานและค่าเสื่อม',survey:'สำรวจและออกเลข',codes:'หมวดและเอกสารอ้างอิง',numbering:'จัดการเลขครุภัณฑ์'};
   const title=titles[name]||'ภาพรวม';
   $('#crumbCurrent').textContent=parents[name]?`${titles[activeMenu]} / ${title}`:title;
   document.title=`${title} — ${window.govAssetBranding?.appName || 'Smart Asset'}`;
@@ -555,7 +588,8 @@ function actionMarkup(ticket) {
   if(role===ROLE_APPROVER&&status==='รออนุมัติ') return `<div class="action-form"><p>โปรดพิจารณาเหตุผล/ยอดประมาณการ และบันทึกเหตุผลประกอบการตัดสินใจ</p><label>ความเห็นผู้อนุมัติ<textarea id="approvalNote" rows="3" maxlength="1000" placeholder="ระบุเหตุผลประกอบ"></textarea></label><div class="dialog-actions"><button class="button outline reject" data-ticket-action="reject">ไม่อนุมัติ</button><button class="button primary" data-ticket-action="approve">อนุมัติและส่งมอบหมาย</button></div></div>`;
   if(role===ROLE_APPROVER&&status==='รออนุมัติค่าใช้จ่ายจริง') return `<div class="action-form"><p>ยอดจริง ${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท สูงกว่าวงเงินหรือยอดที่อนุมัติไว้ ต้องตรวจทานก่อนส่งผู้แจ้งปิดงาน</p><label>ความเห็นผู้อนุมัติ<textarea id="finalCostNote" rows="3" maxlength="1000" placeholder="ระบุเหตุผลประกอบ"></textarea></label><div class="dialog-actions"><button class="button outline reject" data-ticket-action="reject_final_cost">ขอแก้ไขข้อมูลยอดจริง</button><button class="button primary" data-ticket-action="approve_final_cost">อนุมัติยอดจริง</button></div></div>`;
   if(role===ROLE_OFFICER&&status==='รอแก้ไขค่าใช้จ่าย') return `<div class="action-form"><p>ผู้อนุมัติขอข้อมูลเพิ่ม/แก้ไขยอดก่อนตรวจรับงาน</p><label>ยอดค่าใช้จ่ายจริงที่เสนอใหม่<input id="revisionCost" type="number" min="0" step="0.01" value="${Number(ticket.actualCost||0)}"></label><label>คำชี้แจง<textarea id="revisionNote" rows="3" maxlength="1000" placeholder="ระบุรายละเอียดที่แก้ไข"></textarea></label><button class="button primary" data-ticket-action="resubmit_cost">ส่งยอดให้อนุมัติอีกครั้ง</button></div>`;
-  if(role===ROLE_OFFICER&&status==='รอมอบหมาย') return `<div class="action-form"><label>มอบหมายให้ช่าง <input id="assignedTo" maxlength="160" placeholder="ชื่อผู้รับผิดชอบ" required></label><label>หมายเหตุ<input id="assignNote" maxlength="500" placeholder="วันนัด/ขอบเขตงาน (ถ้ามี)"></label><button class="button primary" data-ticket-action="assign">มอบหมายและเริ่มงาน</button></div>`;
+  if(role===ROLE_OFFICER&&status==='รอมอบหมาย') return `<div class="action-form"><label>มอบหมายให้ช่าง <input id="assignedTo" maxlength="160" placeholder="ชื่อผู้รับผิดชอบ" required></label><label>หมายเหตุ<input id="assignNote" maxlength="500" placeholder="วันนัด/ขอบเขตงาน (ถ้ามี)"></label><button class="button primary" data-ticket-action="assign">มอบหมายช่าง</button></div>`;
+  if(role===ROLE_TECHNICIAN&&status==='รอตรวจสอบ/ประเมิน') return `<div class="action-form"><p>บันทึกผลสำรวจก่อนเริ่มซ่อม หากพบว่าต้องซื้ออะไหล่ ส่งซ่อมภายนอก หรือมีค่าใช้จ่ายถึงเกณฑ์ ระบบจะส่งให้ผู้อนุมัติพิจารณาก่อน</p><label>ผลการตรวจสอบ / ประเมิน<textarea id="inspectionNotes" rows="3" maxlength="3000" placeholder="อาการที่พบ สาเหตุ และแนวทางซ่อม"></textarea></label><label>ประมาณการค่าใช้จ่าย (บาท)<input id="assessmentCost" type="number" min="0" step="0.01" value="${Number(ticket.estimateCost||0)}"></label><label class="check-label"><input id="assessmentPurchase" type="checkbox" ${ticket.requiresPurchase?'checked':''}> ต้องซื้ออะไหล่</label><label class="check-label"><input id="assessmentExternal" type="checkbox" ${ticket.requiresExternal?'checked':''}> ส่งซ่อม/จ้างภายนอก</label><label class="check-label"><input id="assessmentReplacement" type="checkbox" ${ticket.requiresReplacement?'checked':''}> พิจารณาทดแทน/จำหน่าย</label><label class="check-label"><input id="assessmentApproval" type="checkbox"> ขออนุมัติเพิ่มเติม</label><button class="button primary" data-ticket-action="assess">บันทึกผลประเมิน</button></div>`;
   if(role===ROLE_TECHNICIAN&&status==='กำลังซ่อม') return `<div class="action-form"><label>ผลการตรวจ/ซ่อม<textarea id="workNotes" rows="3" maxlength="3000" placeholder="บันทึกอาการที่พบ วิธีแก้ และอะไหล่"></textarea></label><label>ค่าใช้จ่ายจริง (บาท)<input id="actualCost" type="number" min="0" step="0.01" value="0"></label><div class="dialog-actions"><button class="button outline" data-ticket-action="wait_parts">บันทึกรออะไหล่</button><button class="button primary" data-ticket-action="complete">ส่งผู้แจ้งตรวจรับ</button></div></div>`;
   if(role===ROLE_TECHNICIAN&&status==='รออะไหล่') return `<div class="action-form"><p>บันทึกเหตุการณ์ใน timeline แล้ว เมื่ออะไหล่พร้อมให้กลับมาดำเนินงานต่อ</p><button class="button primary" data-ticket-action="resume">อะไหล่มาแล้ว · ทำงานต่อ</button></div>`;
   if(role===ROLE_REQUESTER&&status==='รอผู้แจ้งยืนยัน') return `<div class="action-form"><label>ความเห็นผู้แจ้ง (กรณีส่งกลับให้แก้ไขให้ระบุเหตุผล)<textarea id="requesterNote" rows="3" maxlength="1000"></textarea></label><div class="dialog-actions"><button class="button outline" data-ticket-action="send_back">ส่งกลับให้แก้ไข</button><button class="button primary" data-ticket-action="confirm">ยืนยันรับงานและปิด Ticket</button></div></div>`;
@@ -570,6 +604,7 @@ const ticketActionRequirements={
   reject_final_cost:[['finalCostNote','ความเห็นผู้อนุมัติ']],
   resubmit_cost:[['revisionCost','ค่าใช้จ่ายจริง'],['revisionNote','คำชี้แจง']],
   assign:[['assignedTo','ชื่อผู้รับผิดชอบ']],
+  assess:[['inspectionNotes','ผลการตรวจสอบ / ประเมิน']],
   complete:[['workNotes','ผลการตรวจ/ซ่อม']],
   send_back:[['requesterNote','เหตุผลที่ส่งกลับ']],
   cancel:[['cancelNote','เหตุผลยกเลิก']],
@@ -611,9 +646,10 @@ async function openTicket(id) {
     const ticket=await api(`/api/tickets/${id}`); activeTicketId=id;
     const timeline=ticket.events.map(event=>`<li><span class="timeline-dot"></span><div><b>${esc(event.action)} · ${esc(event.actor)}</b><small>${esc(fmtDate(event.createdAt))} ${esc(new Date(event.createdAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}))}</small><p>${esc(event.note||`${event.from_status||'เริ่ม'} → ${event.to_status}`)}</p></div></li>`).join('');
     const ticketPhotos=(ticket.photos||[]).map(photo=>`<a href="${esc(photo.url)}" target="_blank" rel="noopener"><img src="${esc(photo.thumbUrl)}" alt="รูปประกอบ ${esc(ticket.ticketNo)}" loading="lazy"></a>`).join('');
-    $('#ticketDialogContent').innerHTML=`<div class="ticket-dialog-inner"><div class="dialog-head"><div><div class="eyebrow">ติดตาม Ticket · ${esc(ticket.ticketNo)}</div><h2 id="ticketDialogTitle">${esc(ticket.assetName)}</h2></div><div class="ticket-header-actions"><button type="button" class="button outline" data-print-current="${ticket.id}">พิมพ์เอกสาร</button><button type="button" class="dialog-close" data-close-ticket aria-label="ปิด">×</button></div></div><div class="ticket-dialog-scroll"><div class="ticket-status-row">${userReportBadge(ticket)} ${repairBadge(ticket.status)} ${urgencyBadge(ticket.urgency)}<span class="ticket-date">เปิด ${esc(fmtDate(ticket.createdAt))}</span></div><div class="ticket-detail-grid"><div><small>เลข Ticket</small><b>${esc(ticket.ticketNo)}</b></div><div><small>รหัสครุภัณฑ์</small><b>${esc(ticket.assetCode||'—')}</b></div><div><small>ผู้แจ้ง / ช่องทางติดต่อ</small><b>${esc(ticket.requester)} · ${esc(ticket.contact||'—')}</b></div><div><small>สถานที่</small><b>${esc(ticket.location)}</b></div><div class="wide"><small>อาการ</small><b>${esc(ticket.issue)}</b></div>${ticket.reporterNote?`<div class="wide reporter-note"><small>หมายเหตุผู้แจ้ง / ที่ตั้งจริงที่ขอตรวจสอบ</small><b>${esc(ticket.reporterNote)}</b></div>`:''}<div><small>ผู้รับผิดชอบ</small><b>${esc(ticket.assignedTo||'ยังไม่มอบหมาย')}</b></div><div><small>ค่าใช้จ่ายประมาณ / จริง</small><b>${Number(ticket.estimateCost||0).toLocaleString('th-TH')} / ${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท</b></div>${ticket.approvalRequired?`<div class="wide"><small>เหตุผลที่ต้องอนุมัติ</small><b>${esc(ticket.approvalReason)} · ผู้อนุมัติ ${esc(ticket.approvedBy||'รอดำเนินการ')}</b></div>`:''}${ticket.workNotes?`<div class="wide"><small>ผลซ่อม</small><b>${esc(ticket.workNotes)}</b></div>`:''}${ticket.finalCostApprovalRequired?`<div class="wide"><small>อนุมัติค่าใช้จ่ายจริง</small><b>${esc(ticket.finalCostStatus)} · ${esc(ticket.finalCostApprovedBy||'รอผู้อนุมัติ')}</b></div>`:''}${ticketPhotos?`<div class="wide"><small>รูปถ่ายประกอบ (${(ticket.photos||[]).length} รูป)</small><div class="ticket-photo-gallery">${ticketPhotos}</div></div>`:''}</div><div class="ticket-columns"><section class="timeline-panel"><h3>ประวัติการดำเนินงาน</h3><ol class="ticket-timeline">${timeline||'<li>ยังไม่มีเหตุการณ์</li>'}</ol></section><section class="ticket-actions-panel"><h3>ดำเนินการในฐานะ: ${esc(currentRole)}</h3>${actionMarkup(ticket)}<p id="ticketActionError" role="alert"></p></section></div></div></div>`;
+    $('#ticketDialogContent').innerHTML=`<div class="ticket-dialog-inner"><div class="dialog-head"><div><div class="eyebrow">ติดตาม Ticket · ${esc(ticket.ticketNo)}</div><h2 id="ticketDialogTitle">${esc(ticket.assetName)}</h2></div><div class="ticket-header-actions"><button type="button" class="button outline" data-print-current="${ticket.id}">พิมพ์เอกสาร</button><button type="button" class="dialog-close" data-close-ticket aria-label="ปิด">×</button></div></div><div class="ticket-dialog-scroll"><div class="ticket-status-row">${userReportBadge(ticket)} ${repairBadge(ticket.status)} ${urgencyBadge(ticket.urgency)}<span class="ticket-date">เปิด ${esc(fmtDate(ticket.createdAt))}</span></div><div class="ticket-detail-grid"><div><small>เลข Ticket</small><b>${esc(ticket.ticketNo)}</b></div><div><small>รหัสครุภัณฑ์</small><b>${esc(ticket.assetCode||'—')}</b></div><div><small>ผู้แจ้ง / ช่องทางติดต่อ</small><b>${esc(ticket.requester)} · ${esc(ticket.contact||'—')}</b></div><div><small>สถานที่</small><b>${esc(ticket.location)}</b></div><div class="wide"><small>อาการ</small><b>${esc(ticket.issue)}</b></div>${ticket.reporterNote?`<div class="wide reporter-note"><small>หมายเหตุผู้แจ้ง / ที่ตั้งจริงที่ขอตรวจสอบ</small><b>${esc(ticket.reporterNote)}</b></div>`:''}<div><small>ผู้รับผิดชอบ</small><b>${esc(ticket.assignedTo||'ยังไม่มอบหมาย')}</b></div><div><small>ค่าใช้จ่ายประมาณ / จริง</small><b>${Number(ticket.estimateCost||0).toLocaleString('th-TH')} / ${Number(ticket.actualCost||0).toLocaleString('th-TH')} บาท</b></div>${ticket.approvalRequired?`<div class="wide"><small>เหตุผลที่ต้องอนุมัติ</small><b>${esc(ticket.approvalReason)} · ผู้อนุมัติ ${esc(ticket.approvedBy||'รอดำเนินการ')}</b></div>`:''}    ${ticket.inspectionNotes?`<div class="wide"><small>ผลตรวจสอบ / ประเมิน</small><b>${esc(ticket.inspectionNotes)}</b></div>`:''}${ticket.workNotes?`<div class="wide"><small>ผลซ่อม</small><b>${esc(ticket.workNotes)}</b></div>`:''}${ticket.finalCostApprovalRequired?`<div class="wide"><small>อนุมัติค่าใช้จ่ายจริง</small><b>${esc(ticket.finalCostStatus)} · ${esc(ticket.finalCostApprovedBy||'รอผู้อนุมัติ')}</b></div>`:''}${ticketPhotos?`<div class="wide"><small>รูปถ่ายประกอบ (${(ticket.photos||[]).length} รูป)</small><div class="ticket-photo-gallery">${ticketPhotos}</div></div>`:''}</div><div class="ticket-columns"><section class="timeline-panel"><h3>ประวัติการดำเนินงาน</h3><ol class="ticket-timeline">${timeline||'<li>ยังไม่มีเหตุการณ์</li>'}</ol></section><section class="ticket-actions-panel"><h3>ดำเนินการในฐานะ: ${esc(currentRole)}</h3>${actionMarkup(ticket)}<p id="ticketActionError" role="alert"></p></section></div></div></div>`;
     updateTicketActionReadiness();
     if(!$('#ticketDialog').open) $('#ticketDialog').showModal();
+    document.dispatchEvent(new CustomEvent('govasset:ticket-opened',{detail:{id,ticket}}));
     $('[data-close-ticket]')?.addEventListener('click',()=>$('#ticketDialog').close());
     $('[data-print-current]')?.addEventListener('click',()=>openRepairPrintDialog(id));
     $('#switchToApprover')?.addEventListener('click',()=>{$('#actorRole').value=ROLE_APPROVER;switchRole(ROLE_APPROVER);});
@@ -633,6 +669,7 @@ async function runTicketAction(id,action) {
   if(action==='approve_final_cost'||action==='reject_final_cost') data.note=$('#finalCostNote')?.value||'';
   if(action==='resubmit_cost') Object.assign(data,{actualCost:$('#revisionCost')?.value||0,note:$('#revisionNote')?.value||''});
   if(action==='assign') Object.assign(data,{assignedTo:$('#assignedTo')?.value||'',note:$('#assignNote')?.value||''});
+  if(action==='assess') Object.assign(data,{inspectionNotes:$('#inspectionNotes')?.value||'',estimateCost:$('#assessmentCost')?.value||0,requiresPurchase:$('#assessmentPurchase')?.checked,requiresExternal:$('#assessmentExternal')?.checked,requiresReplacement:$('#assessmentReplacement')?.checked,approvalRequired:$('#assessmentApproval')?.checked});
   if(action==='complete') Object.assign(data,{workNotes:$('#workNotes')?.value||'',actualCost:$('#actualCost')?.value||0});
   if(action==='confirm'||action==='send_back') data.note=$('#requesterNote')?.value||'';
   if(action==='cancel') data.note=$('#cancelNote')?.value||'';
@@ -883,6 +920,28 @@ function openLocationAssignDialog(targetItems){
 
 $$('.nav-item[data-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.view)));
 document.addEventListener('click',event=>{const quick=event.target.closest('[data-quick-repair]');if(quick){const item=(inventoryRows||assets).find(a=>a.id===Number(quick.dataset.quickRepair));if(item)openRepairDialog(item);return;}const locBtn=event.target.closest('[data-assign-location]');if(locBtn){const item=(inventoryRows||assets).find(a=>a.id===Number(locBtn.dataset.assignLocation));if(item)openLocationAssignDialog([item]);}});
+document.addEventListener('change',event=>{
+  const checkbox=event.target.closest('[data-print-select-asset]');
+  if(checkbox){
+    const id=String(checkbox.dataset.printSelectAsset),item=(inventoryRows||[]).find(asset=>String(asset.id)===id);
+    if(checkbox.checked&&item)selectedPrintAssets.set(id,item);else selectedPrintAssets.delete(id);
+    updateInventoryPrintToolbar();
+    const visible=[...document.querySelectorAll('[data-print-select-asset]')];
+    const header=$('#selectVisibleAssets'),checked=visible.filter(input=>input.checked).length;
+    if(header){header.checked=visible.length>0&&checked===visible.length;header.indeterminate=checked>0&&checked<visible.length;}
+    return;
+  }
+  if(event.target.id==='selectVisibleAssets'){
+    (inventoryRows||[]).forEach(item=>{const id=String(item.id);if(event.target.checked)selectedPrintAssets.set(id,item);else selectedPrintAssets.delete(id);});
+    renderAssets();
+  }
+});
+document.addEventListener('click',event=>{
+  const printOne=event.target.closest('[data-print-sticker]');
+  if(printOne){window.govAssetSticker?.printAssets([Number(printOne.dataset.printSticker)]);return;}
+  if(event.target.closest('#printInventorySelection')){window.govAssetSticker?.printAssets([...selectedPrintAssets.keys()].map(Number));return;}
+  if(event.target.closest('#clearInventoryPrintSelection')){selectedPrintAssets.clear();renderAssets();}
+});
 document.addEventListener('click',event=>{const target=event.target.closest('[data-go-view]');if(target)switchView(target.dataset.goView);const record=event.target.closest('[data-register-id]');if(record)window.govAssetApp.openRegister(Number(record.dataset.registerId));const chip=event.target.closest('[data-remove-filter]');if(chip){const key=chip.dataset.removeFilter,value=chip.dataset.filterValue;if(smartFilterMultiKeys.includes(key))smartFilterCommitted[key]=smartFilterCommitted[key].filter(item=>item!==value);else if(key==='account'){smartFilterCommitted.account='';smartFilterCommitted.branch='';}else smartFilterCommitted.branch='';smartFilterDraft=cloneSmartFilter(smartFilterCommitted);applySmartFilterDraft();}});
 $$('[data-open-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.openView)));
 $('#assetSearch')?.addEventListener('input',()=>{++inventoryRequest;clearTimeout(inventorySearchTimer);inventorySearchTimer=setTimeout(()=>loadInventory(0),220);});
@@ -1069,5 +1128,93 @@ new MutationObserver(records=>records.forEach(record=>{
   record.addedNodes.forEach(guardFormsWithin);
 })).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['required']});
 applyFontScale(fontScale);
-window.govAssetApp={api,toast,showError,refreshData,switchView,openCategory,goBack,fmtDate,openTicket,openRepairDialog,getRole:()=>currentRole,canManageSettings:()=>{const s=window.govAssetAccess?.session;return s?.required?Boolean(s.isAdmin):currentRole===ROLE_OFFICER;},loadFsn,loadLocationFacets,loadInventory,setSmartFilterAccountChoices:syncSmartFilterAccountChoices,openAssetDialog};
+window.govAssetApp={api,toast,showError,refreshData,switchView,openCategory,goBack,fmtDate,formatQuantity,openTicket,openRepairDialog,getRole:()=>currentRole,canManageSettings:()=>{const s=window.govAssetAccess?.session;return s?.required?Boolean(s.isAdmin):currentRole===ROLE_OFFICER;},loadFsn,loadLocationFacets,loadInventory,setSmartFilterAccountChoices:syncSmartFilterAccountChoices,openAssetDialog};
 refreshData();
+
+(() => {
+  const preview = document.createElement('div');
+  preview.className = 'register-photo-preview';
+  preview.hidden = true;
+  preview.setAttribute('aria-hidden', 'true');
+  const previewImage = document.createElement('img');
+  preview.append(previewImage);
+  document.body.append(preview);
+
+  const dialog = document.createElement('dialog');
+  dialog.className = 'register-photo-dialog';
+  dialog.setAttribute('aria-label', 'รูปครุภัณฑ์');
+  dialog.innerHTML = '<header><b>รูปครุภัณฑ์</b><button type="button" aria-label="ปิด">×</button></header><img><p hidden>ไม่สามารถโหลดรูปได้ กรุณาลองใหม่อีกครั้ง</p>';
+  document.body.append(dialog);
+  const dialogImage = dialog.querySelector('img');
+  const error = dialog.querySelector('p');
+  let anchor = null;
+  let timer = 0;
+
+  function hide() {
+    clearTimeout(timer);
+    anchor = null;
+    preview.hidden = true;
+  }
+  function fullUrl(img) {
+    return img.getAttribute('src').replace(/\/thumb$/, '/full');
+  }
+  function show(button) {
+    const img = button.querySelector('img');
+    if (!img || !button.isConnected) return;
+    anchor = button;
+    previewImage.src = img.src;
+    preview.hidden = false;
+    const rect = button.getBoundingClientRect();
+    const unit = document.body.offsetWidth ? document.body.getBoundingClientRect().width / document.body.offsetWidth : 1;
+    const box = preview.getBoundingClientRect();
+    const left = rect.right + 12 + box.width <= window.innerWidth - 8 ? rect.right + 12 : rect.left - box.width - 12;
+    preview.style.left = `${Math.max(8, Math.min(left, window.innerWidth - box.width - 8)) / unit}px`;
+    preview.style.top = `${Math.max(8, Math.min(rect.top, window.innerHeight - box.height - 8)) / unit}px`;
+    const full = new Image();
+    full.onload = () => { if (anchor === button) previewImage.src = full.src; };
+    full.src = fullUrl(img);
+  }
+
+  document.addEventListener('pointerover', event => {
+    if (event.pointerType !== 'mouse') return;
+    const button = event.target.closest('[data-asset-photo-preview]');
+    if (!button || button.contains(event.relatedTarget)) return;
+    hide();
+    timer = setTimeout(() => show(button), 200);
+  });
+  document.addEventListener('pointerout', event => {
+    const button = event.target.closest('[data-asset-photo-preview]');
+    if (button && !button.contains(event.relatedTarget)) hide();
+  });
+  document.addEventListener('focusin', event => {
+    const button = event.target.closest('[data-asset-photo-preview]');
+    if (button && button.matches(':focus-visible')) show(button);
+  });
+  document.addEventListener('focusout', event => {
+    if (event.target.closest('[data-asset-photo-preview]')) hide();
+  });
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-asset-photo-preview]');
+    if (!button) return;
+    hide();
+    const img = button.querySelector('img');
+    dialogImage.alt = img.alt;
+    dialogImage.hidden = false;
+    error.hidden = true;
+    dialogImage.src = fullUrl(img);
+    dialog.showModal();
+  });
+  dialogImage.addEventListener('error', () => {
+    dialogImage.hidden = true;
+    error.hidden = false;
+  });
+  dialog.querySelector('button').addEventListener('click', () => dialog.close());
+  document.addEventListener('govasset:inventory-rendering', hide);
+  document.addEventListener('scroll', hide, true);
+  window.addEventListener('resize', hide);
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    hide();
+    if (dialog.open) { event.preventDefault(); dialog.close(); }
+  });
+})();

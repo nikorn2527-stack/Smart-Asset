@@ -309,6 +309,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   requires_replacement INTEGER NOT NULL DEFAULT 0,
   estimate_cost REAL NOT NULL DEFAULT 0,
   approved_by TEXT NOT NULL DEFAULT '',
+  inspection_notes TEXT NOT NULL DEFAULT '',
   final_cost_approval_required INTEGER NOT NULL DEFAULT 0,
   final_cost_status TEXT NOT NULL DEFAULT '',
   final_cost_approved_by TEXT NOT NULL DEFAULT '',

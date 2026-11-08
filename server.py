@@ -25,6 +25,8 @@ from urllib.parse import parse_qs, unquote, urlparse
 from asset_api import ensure_location_hierarchy, handle as handle_asset_api
 import asset_photos
 import ticket_photos
+import reports
+import ticket_items
 import dashboard_api
 from smart_assets import base_url, branding, public_asset, public_receipt, qr_url, token_for
 from qr_smart import (
@@ -311,6 +313,7 @@ def initialize() -> None:
             ("final_cost_approval_required", "INTEGER NOT NULL DEFAULT 0"),
             ("final_cost_status", "TEXT NOT NULL DEFAULT ''"),
             ("final_cost_approved_by", "TEXT NOT NULL DEFAULT ''"),
+            ("inspection_notes", "TEXT NOT NULL DEFAULT ''"),
             ("data_origin", "TEXT NOT NULL DEFAULT 'prototype'"),
             ("approval_threshold_snapshot", "REAL"),
             ("reporter_note", "TEXT NOT NULL DEFAULT ''"),
@@ -347,6 +350,7 @@ def initialize() -> None:
         initialize_qr_smart(db)
         asset_photos.ensure_schema(db)
         ticket_photos.ensure_schema(db)
+        ticket_items.ensure_schema(db)
         dashboard_api.ensure_schema(db)
 
 
@@ -368,7 +372,8 @@ def ticket_dict(row: sqlite3.Row) -> dict:
         "requiresPurchase": bool(row["requires_purchase"]), "requiresExternal": bool(row["requires_external"]),
         "requiresReplacement": bool(row["requires_replacement"]), "estimateCost": row["estimate_cost"], "approvedBy": row["approved_by"],
         "finalCostApprovalRequired": bool(row["final_cost_approval_required"]), "finalCostStatus": row["final_cost_status"], "finalCostApprovedBy": row["final_cost_approved_by"],
-        "assignedTo": row["assigned_to"], "workNotes": row["work_notes"], "actualCost": row["actual_cost"],
+        "assignedTo": row["assigned_to"], "inspectionNotes": row["inspection_notes"],
+        "workNotes": row["work_notes"], "actualCost": row["actual_cost"],
         "closeNote": row["close_note"], "createdAt": row["created_at"], "updatedAt": row["updated_at"], "closedAt": row["closed_at"],
         "sourceChannel": row["source_channel"] if "source_channel" in row.keys() else "staff",
         "locationPointId": row["location_point_id"] if "location_point_id" in row.keys() else None,
@@ -425,6 +430,12 @@ class Handler(BaseHTTPRequestHandler):
             qr = handle_qr_smart(self, db, method, path, query, body, self.qr_origin())
             if qr is not None:
                 return qr
+            report = reports.handle(db, method, path, query)
+            if report is not None:
+                return report
+            items = ticket_items.handle(db, method, path, query, body)
+            if items is not None:
+                return items
             result = self.route_api(db,method,path,query,body)
             if ctx and method not in ('GET','HEAD'):
                 db.execute('INSERT INTO account_events(actor,kind,before_json,after_json) VALUES(?,?,?,?)',(ctx['user']['username'],'request','{}',json.dumps({'method':method,'path':path,'accountId':ctx['accountId'],'branchId':ctx['branchId'],'action':body.get('action')},ensure_ascii=False)))
@@ -885,7 +896,7 @@ class Handler(BaseHTTPRequestHandler):
             screen_guest_on_review(db, ticket_id)
             estimate = safe_money(body.get("estimateCost", 0))
             flags = [bool(body.get("requiresPurchase")), bool(body.get("requiresExternal")), bool(body.get("requiresReplacement"))]
-            threshold = approval_threshold(db)
+            threshold = row["approval_threshold_snapshot"] if row["approval_threshold_snapshot"] is not None else approval_threshold(db)
             mandatory = estimate >= threshold and estimate > 0 or any(flags)
             approval = bool(body.get("approvalRequired")) or mandatory
             reason = note or ("เข้าเงื่อนไขค่าใช้จ่าย/อะไหล่/จ้างภายนอก/ทดแทน" if mandatory else "ซ่อมทั่วไปตามวงเงินทดลอง")
@@ -898,16 +909,58 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError("Ticket นี้ไม่ได้รออนุมัติ")
             if action == "reject" and not note:
                 raise ApiError("กรุณาระบุเหตุผลที่ไม่อนุมัติ")
-            new = "รอมอบหมาย" if action == "approve" else "ไม่อนุมัติ"
+            new = ("กำลังซ่อม" if row["assigned_to"] else "รอมอบหมาย") if action == "approve" else "ไม่อนุมัติ"
             fields["approved_by"] = actor if action == "approve" else ""
         elif action == "assign":
             require_role(actor, ROLE_OFFICER)
             if old != "รอมอบหมาย":
                 raise ApiError("ต้องได้รับอนุมัติ/ตรวจรับก่อนมอบหมาย")
             assigned = clean_text(body.get("assignedTo"), 160, "ชื่อช่าง")
-            new = "กำลังซ่อม"
+            new = "รอตรวจสอบ/ประเมิน"
             fields["assigned_to"] = assigned
             note = note or f"มอบหมายงานให้ {assigned}"
+        elif action == "assess":
+            require_role(actor, ROLE_TECHNICIAN)
+            require_status(old, "รอตรวจสอบ/ประเมิน")
+            inspection = clean_text(body.get("inspectionNotes"), 3000, "ผลการตรวจสอบ")
+            estimate = safe_money(body.get("estimateCost", row["estimate_cost"]))
+            flags = [
+                bool(body.get("requiresPurchase", row["requires_purchase"])),
+                bool(body.get("requiresExternal", row["requires_external"])),
+                bool(body.get("requiresReplacement", row["requires_replacement"])),
+            ]
+            threshold = row["approval_threshold_snapshot"] if row["approval_threshold_snapshot"] is not None else approval_threshold(db)
+            previously_approved = bool(row["approval_required"] and row["approved_by"])
+            estimate_needs_approval = estimate >= threshold and estimate > 0 and not (
+                previously_approved and estimate <= float(row["estimate_cost"])
+            )
+            flag_columns = ("requires_purchase", "requires_external", "requires_replacement")
+            new_unapproved_flags = any(
+                flag and (not previously_approved or not bool(row[column]))
+                for flag, column in zip(flags, flag_columns)
+            )
+            mandatory = estimate_needs_approval or new_unapproved_flags
+            approval_pending = bool(body.get("approvalRequired")) or mandatory
+            approval_required = approval_pending or bool(row["approval_required"])
+            reason = clean_text(body.get("approvalReason", ""), 500, "เหตุผลที่ขออนุมัติ", required=False)
+            if approval_pending and not reason:
+                reason = "ผลตรวจประเมินมีค่าใช้จ่าย/อะไหล่/งานภายนอก/ทดแทนที่ต้องอนุมัติ" if mandatory else "ช่างร้องขออนุมัติงานซ่อม"
+            elif not approval_pending:
+                reason = reason or row["approval_reason"]
+            new = "รออนุมัติ" if approval_pending else "กำลังซ่อม"
+            fields = {
+                "inspection_notes": inspection,
+                "estimate_cost": estimate,
+                "requires_purchase": int(flags[0]),
+                "requires_external": int(flags[1]),
+                "requires_replacement": int(flags[2]),
+                "approval_threshold_snapshot": threshold,
+                "approval_required": int(approval_required),
+                "approval_reason": reason,
+            }
+            if approval_pending:
+                fields["approved_by"] = ""
+            note = f"ผลตรวจประเมิน: {inspection}" + (f" · {reason}" if approval_pending else " · พร้อมเริ่มดำเนินการซ่อม")
         elif action == "wait_parts":
             require_role(actor, ROLE_TECHNICIAN)
             require_status(old, "กำลังซ่อม")
@@ -1060,6 +1113,24 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 if folder: shutil.rmtree(folder)
             return
+        export_match = re.fullmatch(r"/api/reports/([a-z-]+)/export\.(csv|xlsx)", path)
+        if export_match:
+            try:
+                with managed_connection() as db:
+                    query = parse_qs(parsed.query); ctx = access.authenticate(db, self, 'GET', path, {})
+                    access.authorize(db, ctx, 'GET', path, query, {})
+                    payload, mime, filename = reports.build_export(db, export_match[1], export_match[2], query)
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Content-Disposition", reports.content_disposition(filename))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(payload)
+            except (ApiError, GovernanceError) as exc:
+                self.send_json({"error": str(exc)}, exc.status)
+            return
         if path.startswith("/api/"):
             try:
                 result = self.handle_api("GET", path, parse_qs(parsed.query), {})
@@ -1073,7 +1144,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}", flush=True)
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css", "/qr-smart.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css",         "/qr-smart.js", "/reports.js", "/ticket-items.js", "/ui-scale.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -1135,7 +1206,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css", "/qr-smart.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css", "/qr-smart.js", "/reports.js", "/ticket-items.js", "/ui-scale.js"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return

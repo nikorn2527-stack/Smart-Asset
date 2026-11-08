@@ -1,5 +1,47 @@
 /* Sticker Studio + linked register view. Depends on app.js exposing window.govAssetApp. */
 (() => {
+  function fitText(root, selector, minimumFontSize) {
+    let unfit = 0;
+    root.querySelectorAll(selector).forEach(node => {
+      const box = node.getBoundingClientRect();
+      if (!box.width || !box.height) return;
+      let text = node.querySelector(':scope > .sticker-fit-text');
+      if (!text) {
+        text = node.ownerDocument.createElement('span');
+        text.className = 'sticker-fit-text';
+        text.textContent = node.textContent;
+        node.replaceChildren(text);
+      }
+      text.style.cssText = 'display:block;min-width:0;max-width:100%;overflow-wrap:anywhere;white-space:inherit;transition:none';
+      node.style.transition = 'none';
+      const originalSize = parseFloat(node.ownerDocument.defaultView.getComputedStyle(node).fontSize);
+      const fits = () => {
+        const content = text.getBoundingClientRect();
+        return content.width <= box.width + 0.1 && content.height <= box.height + 0.1
+          && text.scrollWidth <= text.clientWidth + 1;
+      };
+      if (fits()) return;
+      let low = Math.min(originalSize, minimumFontSize);
+      let high = originalSize;
+      node.style.fontSize = `${low}px`;
+      if (!fits()) {
+        unfit += 1;
+        return;
+      }
+      for (let i = 0; i < 12; i += 1) {
+        const mid = (low + high) / 2;
+        node.style.fontSize = `${mid}px`;
+        if (fits()) low = mid;
+        else high = mid;
+      }
+      node.style.fontSize = `${low}px`;
+    });
+    return unfit;
+  }
+  window.fitStickerText = fitText;
+})();
+
+(() => {
   const app = window.govAssetApp;
   if (!app) return;
   const $ = (s, root = document) => root.querySelector(s);
@@ -623,10 +665,14 @@
       const size = Number(el.fontSize || 7) * scale * 25.4 / 72, align = el.align || 'left';
       const ff = fontFamilyCss(el.fontFamily);
       const letterSpacing = Math.max(-2, Math.min(2, Number(el.letterSpacing) || 0)) * scale;
-      return `<div class="sticker-preview-node sticker-preview-text ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}font-family:${esc(ff)};font-size:${size}px;font-weight:${Number(el.fontWeight || 500)};line-height:${Number(el.lineHeight || 1.12)};letter-spacing:${letterSpacing}px;color:${esc(el.color || '#172b3a')};text-align:${align};align-items:${el.valign === 'bottom' ? 'flex-end' : el.valign === 'center' ? 'center' : 'flex-start'};justify-content:${align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start'}">${esc(previewText(el.content || ''))}${handles}</div>`;
+      return `<div class="sticker-preview-node sticker-preview-text ${selectedClass}" data-preview-id="${esc(el.id)}" style="${style}display:flex;font-family:${esc(ff)};font-size:${size}px;font-weight:${Number(el.fontWeight || 500)};line-height:${Number(el.lineHeight || 1.12)};letter-spacing:${letterSpacing}px;color:${esc(el.color || '#172b3a')};text-align:${align};align-items:${el.valign === 'bottom' ? 'flex-end' : el.valign === 'center' ? 'center' : 'flex-start'};justify-content:${align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start'}"><span class="sticker-fit-text">${esc(previewText(el.content || ''))}</span>${handles}</div>`;
     }).join('');
 
     root.innerHTML = `<div class="sticker-preview-canvas" style="width:${pxW}px;height:${pxH}px;overflow:${state.template.overflow === 'visible' ? 'visible' : 'hidden'}">${nodes}</div>`;
+    const unfit = window.fitStickerText(root, '.sticker-preview-text', 4 * scale * 25.4 / 72);
+    const warning = $('#stickerTextFitWarning');
+    warning.hidden = !unfit;
+    warning.textContent = unfit ? 'ข้อความบางช่องยาวเกินกรอบ กรุณาขยายกรอบหรือใช้เทมเพลตที่มีพื้นที่มากขึ้นก่อนพิมพ์' : '';
 
     root.querySelectorAll('[data-preview-id]').forEach(node => {
       node.addEventListener('pointerdown', event => startDrag(event, node.dataset.previewId, scale));
@@ -737,23 +783,84 @@
     try {const saved=await app.api('/api/sticker/templates',{method:'POST',body:JSON.stringify({template:state.template,isActive:active||Boolean(state.template.isActive)})});state.template=saved;const existing=state.templates.findIndex(t=>t.id===saved.id);if(existing>=0)state.templates[existing]=saved;else state.templates.unshift(saved);renderTemplateSelect();selectTemplate(saved);if(notify)toast(active?'บันทึกและตั้งเป็นแบบหลักแล้ว':'บันทึกเทมเพลตแล้ว');return true;}
     catch(error){app.showError(error);return false;}
   }
+  function printRenderedDocument(result, message) {
+    const iframe=document.createElement('iframe');iframe.style.position='fixed';iframe.style.width='0';iframe.style.height='0';iframe.style.opacity='0';iframe.style.border='0';iframe.setAttribute('aria-hidden','true');document.body.appendChild(iframe);
+    const doc=iframe.contentWindow.document;doc.open();doc.write(result.html);doc.close();
+    const localFonts = doc.createElement('style');
+    localFonts.textContent = "@font-face{font-family:Sarabun;src:url('/assets/fonts/Sarabun-Regular.ttf') format('truetype');font-weight:400}@font-face{font-family:Sarabun;src:url('/assets/fonts/Sarabun-Bold.ttf') format('truetype');font-weight:700}";
+    doc.head.appendChild(localFonts);
+    Promise.all([...doc.images].map(image => image.decode().catch(() => undefined)))
+      .then(() => doc.fonts.ready)
+      .then(() => {
+        if (window.fitStickerText(doc, '.sticker-text', 4 * 96 / 72)) {
+          iframe.remove();
+          app.toast('ข้อความบางช่องยาวเกินกรอบ กรุณาขยายกรอบหรือใช้เทมเพลตที่มีพื้นที่มากขึ้นก่อนพิมพ์', 'error');
+          return;
+        }
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        toast(message(result));
+        setTimeout(() => iframe.remove(), 1200);
+      })
+      .catch(error => { iframe.remove(); app.showError(error); });
+  }
+  let pendingPrintAssetIds = [], pendingPrintLocationId = '';
+  function renderInventoryPrintTemplates() {
+    const select=$('#inventoryStickerTemplate'),size=$('#inventoryStickerTemplateSize');
+    if(!select||!size)return;
+    const templates=pendingPrintLocationId
+      ? state.templates.filter(template=>template.elements?.some(element=>element.type==='qr'))
+      : state.templates;
+    select.innerHTML=templates.map(template=>{
+      const width=Number(template.canvas?.width||0),height=Number(template.canvas?.height||0);
+      return `<option value="${esc(template.id)}">${esc(template.name)} · ${width.toLocaleString('th-TH')} × ${height.toLocaleString('th-TH')} มม.</option>`;
+    }).join('');
+    select.disabled=templates.length===0;
+    $('#confirmInventoryStickerPrint').disabled=templates.length===0;
+    const template=templates.find(item=>item.id===select.value)||templates[0];
+    if(template){
+      select.value=template.id;
+      size.textContent=`ขนาด ${Number(template.canvas?.width||0).toLocaleString('th-TH')} × ${Number(template.canvas?.height||0).toLocaleString('th-TH')} มม. · พิมพ์ตามขนาดที่กำหนดในเทมเพลต`;
+    }else{
+      size.textContent=pendingPrintLocationId
+        ? 'ยังไม่มีเทมเพลตที่มี QR Code กรุณาเพิ่ม QR Code และบันทึกเทมเพลตก่อน'
+        : 'ยังไม่มีเทมเพลตที่บันทึกไว้ กรุณาสร้างและบันทึกเทมเพลตก่อน';
+    }
+  }
+  async function printAssets(assetIds) {
+    const ids=[...new Set((assetIds||[]).map(Number))];
+    if(!ids.length||ids.some(id=>!Number.isSafeInteger(id)||id<1)){
+      toast('ไม่พบรายการครุภัณฑ์ที่ถูกต้องสำหรับพิมพ์');
+      return;
+    }
+    if(ids.length>500){
+      toast('พิมพ์ครั้งละไม่เกิน 500 รายการ');
+      return;
+    }
+    try {
+      if(!state.templates.length){
+        const result=await app.api('/api/sticker/templates');
+        state.templates=result.templates||[];
+      }
+      if(!state.templates.length){
+        toast('ยังไม่มีเทมเพลตที่บันทึกไว้ กรุณาสร้างเทมเพลตก่อนพิมพ์');
+        return;
+      }
+      pendingPrintAssetIds=ids;
+      pendingPrintLocationId='';
+      $('#inventoryStickerPrintTitle').textContent='พิมพ์ฉลากครุภัณฑ์';
+      $('#inventoryStickerPrintCount').textContent=`เลือกครุภัณฑ์ ${ids.length.toLocaleString('th-TH')} รายการ`;
+      renderInventoryPrintTemplates();
+      $('#inventoryStickerPrintDialog').showModal();
+    }catch(error){app.showError(error);}
+  }
   async function printSelected() {
     if(!state.selected.size||!state.template)return;
     try {
       if(!await saveTemplate(false))return;
       const paperLayout=$('#stickerPaperLayout')?.value||'label';
       const result=await app.api('/api/sticker/bulk-render',{method:'POST',body:JSON.stringify({assetIds:[...state.selected.keys()],templateId:state.template.id||undefined,paperLayout,requestedBy:'ผู้ปฏิบัติงาน (ทดสอบ)'})});
-      const iframe=document.createElement('iframe');iframe.style.position='fixed';iframe.style.width='0';iframe.style.height='0';iframe.style.opacity='0';iframe.style.border='0';iframe.setAttribute('aria-hidden','true');document.body.appendChild(iframe);
-      const doc=iframe.contentWindow.document;doc.open();doc.write(result.html);doc.close();
-      Promise.all([...doc.images].map(image => image.decode().catch(() => undefined)))
-        .then(() => doc.fonts.ready)
-        .then(() => {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
-          toast(`เตรียมพิมพ์ ${result.count} ฉลากแล้ว · บันทึกงานพิมพ์ #${result.jobId}`);
-          setTimeout(() => iframe.remove(), 1200);
-        })
-        .catch(error => { iframe.remove(); app.showError(error); });
+      printRenderedDocument(result,result=>`เตรียมพิมพ์ ${result.count} ฉลากแล้ว · บันทึกงานพิมพ์ #${result.jobId}`);
     } catch(error){app.showError(error);}
   }
   async function printLocationSticker() {
@@ -765,28 +872,30 @@
         method: 'POST',
         body: JSON.stringify({ locationId, templateId: state.template.id }),
       });
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'fixed'; iframe.style.width = '0'; iframe.style.height = '0';
-      iframe.style.opacity = '0'; iframe.style.border = '0'; iframe.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(iframe);
-      const doc = iframe.contentWindow.document;
-      doc.open(); doc.write(result.html); doc.close();
-      Promise.all([...doc.images].map(image => image.decode().catch(() => undefined)))
-        .then(() => doc.fonts.ready)
-        .then(() => {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
-          toast(`เตรียมพิมพ์ Location QR ด้วยเทมเพลต ${result.template.name} แล้ว`);
-          setTimeout(() => iframe.remove(), 1200);
-        })
-        .catch(error => { iframe.remove(); app.showError(error); });
+      printRenderedDocument(result, result => `เตรียมพิมพ์ Location QR ด้วยเทมเพลต ${result.template.name} แล้ว`);
     } catch (error) {
       app.showError(error);
     }
   }
   async function openLocationSticker(locationId) {
-    app.switchView('stickers');
-    await loadStickerLocations(locationId);
+    try {
+      if(!state.templates.length){
+        const result=await app.api('/api/sticker/templates');
+        state.templates=result.templates||[];
+      }
+      const result=await app.api('/api/qr/locations');
+      const location=(result.items||[]).find(item=>String(item.id)===String(locationId));
+      if(!location){
+        toast('ไม่พบจุดบริการในขอบเขตสิทธิ์');
+        return;
+      }
+      pendingPrintAssetIds=[];
+      pendingPrintLocationId=String(location.id);
+      $('#inventoryStickerPrintTitle').textContent='พิมพ์ Location QR';
+      $('#inventoryStickerPrintCount').textContent=`${location.code ? `${location.code} · ` : ''}${location.name}`;
+      renderInventoryPrintTemplates();
+      $('#inventoryStickerPrintDialog').showModal();
+    }catch(error){app.showError(error);}
   }
   async function loadRegister(id) {
     const request=++registerLoadEpoch;
@@ -855,9 +964,41 @@
   $('#stickerDeleteElement').addEventListener('click',()=>{if(!state.template||!state.selectedElementId)return;state.template.elements=state.template.elements.filter(e=>e.id!==state.selectedElementId);state.selectedElementId=state.template.elements[0]?.id||null;renderElementList();renderProperties();renderPreview();});
   $('#stickerVariableSelect').addEventListener('change',event=>{const value=event.target.value,el=state.template?.elements?.find(item=>item.id===state.selectedElementId);if(value&&el&&['text','qr'].includes(el.type)){el.content=(el.content||'')+value;renderProperties();renderElementList();renderPreview();}event.target.value='';});
   $('#printSelectedStickers').addEventListener('click',printSelected);
+  $('#inventoryStickerTemplate').addEventListener('change',renderInventoryPrintTemplates);
+  $('#inventoryStickerPrintForm').addEventListener('submit',async event=>{
+    event.preventDefault();
+    const templateId=$('#inventoryStickerTemplate').value;
+    if((!pendingPrintAssetIds.length&&!pendingPrintLocationId)||!templateId)return;
+    const button=$('#confirmInventoryStickerPrint');
+    button.disabled=true;
+    try{
+      const isLocation=Boolean(pendingPrintLocationId);
+      const result=isLocation
+        ? await app.api('/api/sticker/location-render',{method:'POST',body:JSON.stringify({locationId:pendingPrintLocationId,templateId})})
+        : await app.api('/api/sticker/bulk-render',{method:'POST',body:JSON.stringify({
+            assetIds:pendingPrintAssetIds,
+            templateId,
+            paperLayout:'label',
+            requestedBy:app.getRole?.()||'เจ้าหน้าที่พัสดุ'
+          })});
+      $('#inventoryStickerPrintDialog').close();
+      printRenderedDocument(result,result=>isLocation
+        ? `เตรียมพิมพ์ Location QR · ${result.location?.name||'จุดบริการ'} ด้วยเทมเพลต ${result.template?.name||''} แล้ว`
+        : `เตรียมพิมพ์ ${result.count} ฉลากแล้ว · บันทึกงานพิมพ์ #${result.jobId}`);
+    }catch(error){app.showError(error);}
+    finally{button.disabled=false;}
+  });
+  $('#closeInventoryStickerPrint').addEventListener('click',()=>$('#inventoryStickerPrintDialog').close());
+  $('#cancelInventoryStickerPrint').addEventListener('click',()=>$('#inventoryStickerPrintDialog').close());
   $('#stickerLocationSelect').addEventListener('change', renderLocationPrintControls);
   $('#printLocationSticker').addEventListener('click', printLocationSticker);
-  window.govAssetSticker = { openLocation: openLocationSticker };
+  window.govAssetSticker = { openLocation: openLocationSticker, printAssets };
   $('#saveStickerSettings').addEventListener('click',saveStickerSettings);
+  document.addEventListener('govasset:view-changed', event => {
+    if (event.detail?.name === 'stickers' && state.template) renderPreview();
+  });
+  document.fonts.ready.then(() => {
+    if (state.template) renderPreview();
+  });
   Promise.all([loadStickerTemplates().then(renderLocationPrintControls),loadStickerAssets(0),loadStickerLocations(),app.api('/api/sticker/settings').then(data=>{state.settings=data;$('#stickerOrgName').value=data.orgName||'';$('#stickerCompanyName').value=data.companyName||'';$('#stickerCompanyAddress').value=data.companyAddress||'';$('#stickerCompanyAddress2').value=data.companyAddress2||'';$('#stickerCompanyPhone').value=data.companyPhone||'';$('#stickerHotline').value=data.hotline||'';renderPreview();}).catch(app.showError)]).catch(app.showError);
 })();

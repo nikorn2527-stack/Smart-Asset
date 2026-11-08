@@ -88,7 +88,7 @@
     const buttons = ids.map(({id,label}) => `<button type="button" class="scan-button scan-service-btn${id===selected?' is-active':''}" data-service="${esc(id)}" aria-pressed="${id===selected?'true':'false'}">${esc(label)}</button>`).join('');
     const nav = `<nav class="scan-services${compact?' scan-services-app':''}" aria-label="บริการจาก QR">${buttons}</nav>`;
     const panel = `<div id="scanServicePanel" class="scan-service-panel"></div><p id="scanServiceStatus" role="status"></p>`;
-    return compact ? `${panel}${nav}` : `${nav}${panel}`;
+    return `${nav}${panel}`;
   }
   function fieldText(f) {
     if (f.kind === 'money') {
@@ -212,7 +212,7 @@
         return `<div class="scan-info">
           ${facts ? `<div class="scan-app-facts">${facts}</div>` : ''}
           ${repairs}
-          <p class="scan-info-hint">พบปัญหาการใช้งาน กด <b>แจ้งซ่อม</b> ด้านล่าง · แจ้งแล้วติดตามผลได้ที่ <b>ติดตามคำแจ้งของฉัน</b></p>
+          <p class="scan-info-hint">พบปัญหาการใช้งาน กด <b>แจ้งซ่อม</b> · แจ้งแล้วติดตามผลได้ที่ <b>ติดตามคำแจ้งของฉัน</b></p>
         </div>`;
       }
       if (id === 'repair') {
@@ -352,23 +352,22 @@
       if (s.id === 'repair') return canRepair || !place.active;
       return true;
     });
-    const staff = config.authenticated ? serviceList('staff').filter(s => {
+    const staff = config.authenticated ? [...serviceList('staff').filter(s => {
       if (s.id === 'borrow' || s.id === 'history') return false;
       if (s.id === 'more') return flagOn('additionalQrServices', false);
       return true;
-    }) : [];
+    }), ...(place.active && config.permissions?.edit !== false ? [{id:'relocate',label:'ย้ายครุภัณฑ์มาที่นี่',enabled:true}] : [])] : [];
     const services = [...guest, ...staff];
     const assets = place.active ? (place.guestAssets || []) : [];
     const assetList = assets.length
       ? `<ul>${assets.map(item => `<li><b>${esc(item.name)}</b><code>${esc(item.code)}</code></li>`).join('')}</ul>`
       : `<p>${place.active ? 'ยังไม่มีครุภัณฑ์ผูกกับจุดนี้' : 'จุดนี้ปิดใช้งานชั่วคราว จึงไม่แสดงรายการครุภัณฑ์'}</p>`;
     main.innerHTML = `<div class="scan-breadcrumb">${esc(place.placement || 'ฉลากติดที่จุดพื้นที่ ไม่ใช่ตัวครุภัณฑ์')} <span>${place.active ? '✓ พร้อมรับบริการ' : 'ปิดรับคำแจ้งใหม่'}</span></div>
-      <section class="scan-card">
+      <section class="scan-card scan-place-card">
         <span class="scan-kicker">LOCATION QR</span>
         <h1>${esc(place.name)}</h1>
         <p>${esc(KIND_LABELS[place.kind] || place.kind || 'จุดบริการ')}</p>
         ${place.active ? '' : '<span class="scan-badge">ปิดใช้งานชั่วคราว</span>'}
-        ${noticeCard()}
         ${place.active ? '' : `<p class="scan-notice" role="status">QR จุดนี้ถูกปิดใช้งานแล้ว สามารถดูชื่อและติดตามใบรับแจ้งเดิมได้ แต่ยังไม่รับคำแจ้งใหม่</p>`}
         ${serviceMenu(services, 'info')}
         <section class="scan-location-assets" aria-labelledby="scanLocationAssetsTitle">
@@ -437,11 +436,93 @@
       if (id === 'track') {
         return `<span class="scan-kicker">MY REPORTS</span><h2>ใบรับแจ้งบนอุปกรณ์นี้</h2>${receiptLinks(savedReceipts(), 'ยังไม่มีใบรับแจ้งที่บันทึกบนอุปกรณ์นี้')}`;
       }
+      if (id === 'relocate') return relocatePanel(place, panel, status);
       if (id === 'more') {
         return extraServices(location.href, location.href, place.name);
       }
       return `<p>ไม่พบบริการนี้</p>`;
     });
+  }
+
+  function relocatePanel(place, panel, status) {
+    const queue = [];
+    panel.innerHTML = `<span class="scan-kicker">RELOCATE</span><h2>ย้ายครุภัณฑ์มาที่ ${esc(place.name)}</h2>
+      <p>สแกน QR ครุภัณฑ์ทีละชิ้น หรือพิมพ์เลขครุภัณฑ์ แล้วกดยืนยัน ระบบจะเปลี่ยนที่ตั้งและบันทึกประวัติให้</p>
+      <div class="scan-actions">
+        <button class="scan-button secondary" type="button" id="relocateCamera">สแกนด้วยกล้อง</button>
+      </div>
+      <video id="relocateVideo" playsinline muted hidden style="width:100%;max-height:240px;border-radius:8px"></video>
+      <form id="relocateAddForm" class="scan-form-grid"><label>เลขครุภัณฑ์ หรือ ลิงก์ QR<input name="ref" maxlength="200" autocomplete="off"></label><button class="scan-button secondary" type="submit">เพิ่มในรายการ</button></form>
+      <ul id="relocateQueue"></ul>
+      <label>หมายเหตุ<input id="relocateNote" maxlength="300"></label>
+      <button class="scan-button" type="button" id="relocateSubmit" disabled>ยืนยันย้ายเข้าจุดนี้</button>
+      <p id="relocateStatus" role="status"></p>`;
+    const list = panel.querySelector('#relocateQueue');
+    const submit = panel.querySelector('#relocateSubmit');
+    const out = panel.querySelector('#relocateStatus');
+    const draw = () => {
+      list.innerHTML = queue.map((ref, i) => `<li><code>${esc(ref.length > 40 ? ref.slice(-12) : ref)}</code> <button type="button" class="scan-button secondary" data-drop="${i}">เอาออก</button></li>`).join('');
+      submit.disabled = !queue.length;
+    };
+    const add = ref => {
+      ref = String(ref || '').trim();
+      if (!ref || queue.includes(ref)) return false;
+      queue.push(ref);
+      draw();
+      return true;
+    };
+    list.onclick = e => {
+      const i = e.target.dataset?.drop;
+      if (i !== undefined) { queue.splice(Number(i), 1); draw(); }
+    };
+    panel.querySelector('#relocateAddForm').onsubmit = e => {
+      e.preventDefault();
+      add(e.target.elements.ref.value);
+      e.target.reset();
+    };
+    let stream = null;
+    const stopCamera = () => { stream?.getTracks().forEach(t => t.stop()); stream = null; panel.querySelector('#relocateVideo').hidden = true; };
+    panel.querySelector('#relocateCamera').onclick = async () => {
+      if (stream) return stopCamera();
+      if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+        out.textContent = 'อุปกรณ์นี้สแกนในหน้าเว็บไม่ได้ ให้ใช้กล้องมือถือสแกน QR แล้วคัดลอกลิงก์มาวาง หรือพิมพ์เลขครุภัณฑ์';
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+        const video = panel.querySelector('#relocateVideo');
+        video.srcObject = stream;
+        video.hidden = false;
+        await video.play();
+        const detector = new BarcodeDetector({formats:['qr_code']});
+        const tick = async () => {
+          if (!stream) return;
+          try {
+            const codes = await detector.detect(video);
+            codes.forEach(c => { if (add(c.rawValue)) out.textContent = `เพิ่มแล้ว ${queue.length} รายการ`; });
+          } catch { /* keep scanning */ }
+          setTimeout(tick, 400);
+        };
+        tick();
+      } catch {
+        out.textContent = 'เปิดกล้องไม่ได้ กรุณาอนุญาตกล้องหรือพิมพ์เลขครุภัณฑ์แทน';
+      }
+    };
+    submit.onclick = async () => {
+      submit.disabled = true;
+      out.textContent = 'กำลังบันทึก…';
+      try {
+        const result = await api('/api/lifecycle/relocate', {locationId: place.locationId, assets: queue, note: panel.querySelector('#relocateNote').value});
+        stopCamera();
+        queue.length = 0;
+        draw();
+        out.textContent = `ย้ายแล้ว ${result.moved.length} รายการ: ` + result.moved.map(m => `${m.name} (${m.code})`).join(', ');
+      } catch (err) {
+        out.setAttribute('role', 'alert');
+        out.textContent = err.message;
+        submit.disabled = !queue.length;
+      }
+    };
   }
 
   async function receiptPage(token) {

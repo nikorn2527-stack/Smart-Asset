@@ -128,8 +128,8 @@
 .fiscal-year-menu[popover] {
   position: fixed;
   inset: auto;
-  width: min(280px, calc(100vw - 16px));
-  max-height: min(360px, calc(100vh - 16px));
+  width: min(280px, calc(calc(100 * var(--vw, 1vw)) - 16px));
+  max-height: min(360px, calc(calc(100 * var(--vh, 1vh)) - 16px));
   margin: 0;
   padding: 12px;
   overflow: hidden;
@@ -343,8 +343,8 @@ select:not([multiple]):not(#actorRole):focus-visible {
 .smart-filter-menu[popover] {
   position: fixed;
   inset: auto;
-  width: min(620px, calc(100vw - 20px));
-  max-height: min(620px, calc(100vh - 20px));
+  width: min(620px, calc(calc(100 * var(--vw, 1vw)) - 20px));
+  max-height: min(620px, calc(calc(100 * var(--vh, 1vh)) - 20px));
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -482,7 +482,7 @@ select:not([multiple]):not(#actorRole):focus-visible {
 .smart-filter-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-height: min(330px, 42vh);
+  max-height: min(330px, calc(42 * var(--vh, 1vh)));
   padding: 0 12px 10px;
   overflow: auto;
   overscroll-behavior: contain;
@@ -573,14 +573,14 @@ select:not([multiple]):not(#actorRole):focus-visible {
 
 @media (max-width: 640px) {
   .smart-filter-menu[popover] {
-    width: calc(100vw - 16px);
-    max-height: calc(100dvh - 16px);
+    width: calc(calc(100 * var(--vw, 1vw)) - 16px);
+    max-height: calc(calc(100 * var(--vh, 1dvh)) - 16px);
     border-radius: 14px;
   }
 
   .smart-filter-options {
     grid-template-columns: 1fr;
-    max-height: min(42vh, 300px);
+    max-height: min(calc(42 * var(--vh, 1vh)), 300px);
   }
 
   .smart-filter-menu-foot > span {
@@ -596,4 +596,126 @@ select:not([multiple]):not(#actorRole):focus-visible {
     flex-wrap: wrap;
     justify-content: flex-end;
   }
+}
+
+#view-assets .smart-asset-table th:nth-child(8),
+#view-repairs .listing-panel table thead th:last-child,
+#view-qr-smart .qr-location-register-table thead th:last-child {
+  text-align: center !important;
+}
+
+#view-repairs #repairRows > tr > td:last-child {
+  text-align: center !important;
+}
+
+:is(#view-assets, #view-repairs, #view-qr-smart) .table-action-group > button,
+#view-repairs .ticket-row-actions > .mini-action {
+  background: #eaf2fc !important;
+  border: 1px solid #6992c2 !important;
+  border-radius: 7px !important;
+  color: #174b80 !important;
+  box-shadow: none !important;
+}
+
+#view-assets .table-action-group > .btn-dossier,
+#view-repairs .ticket-row-actions > [data-ticket-detail] {
+  background: #eaf2fc !important;
+  border-color: #6992c2 !important;
+  color: #174b80 !important;
+}
+
+#view-assets .table-action-group > .btn-print-sticker,
+#view-repairs .ticket-row-actions > [data-ticket-print],
+#view-qr-smart .table-action-group > [data-use-location-template] {
+  background: #f2ecff !important;
+  border-color: #a48ad6 !important;
+  color: #6241a3 !important;
+}
+
+#view-assets .table-action-group > .btn-quick-repair {
+  background: #fff1df !important;
+  border-color: #dda35f !important;
+  color: #9a5200 !important;
+}
+
+#view-assets .table-action-group > [data-assign-location] {
+  background: #e7f7f3 !important;
+  border-color: #69b4a1 !important;
+  color: #0c6b59 !important;
+}
+
+#view-assets .table-action-group > [data-workspace-edit],
+#view-qr-smart .table-action-group > [data-edit-location] {
+  background: #fff6d8 !important;
+  border-color: #d7b34b !important;
+  color: #805d00 !important;
+}
+
+:is(#view-assets, #view-repairs, #view-qr-smart) .table-action-group > button:hover:not(:disabled),
+#view-repairs .ticket-row-actions > .mini-action:hover:not(:disabled) {
+  background: #dceafb !important;
+  border-color: #4278b5 !important;
+  color: #174b80 !important;
+}
+
+:is(#view-assets, #view-repairs, #view-qr-smart) .table-action-group > button:focus-visible,
+#view-repairs .ticket-row-actions > .mini-action:focus-visible {
+  outline: 2px solid #2769bd !important;
+  outline-offset: 2px;
+}
+
+#view-assets .table-action-group > .btn-dossier::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23174b80' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+}
+
+#view-assets .table-action-group > .btn-print-sticker::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236241a3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9V3h12v6'/%3E%3Cpath d='M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2'/%3E%3Crect x='6' y='14' width='12' height='7'/%3E%3C/svg%3E");
+}
+
+#view-assets .table-action-group > .btn-quick-repair::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a5200' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.7 6.3a5 5 0 0 0-6.4 6.4L3 18a2.1 2.1 0 0 0 3 3l5.3-5.3a5 5 0 0 0 6.4-6.4l-3 3-3-3 3-3Z'/%3E%3C/svg%3E");
+}
+
+#view-assets .table-action-group > [data-assign-location]::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230c6b59' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z'/%3E%3Ccircle cx='12' cy='10' r='2.5'/%3E%3C/svg%3E");
+}
+
+#view-assets .table-action-group > [data-workspace-edit]::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23805d00' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 5 4 4M4 20l4-.8L20 7a2.8 2.8 0 0 0-4-4L4 15l-.8 5Z'/%3E%3C/svg%3E");
+}
+
+#view-repairs .ticket-row-actions > .mini-action svg {
+  stroke: currentColor;
+}
+
+#view-repairs .ticket-row-actions > [data-ticket-print]:hover:not(:disabled),
+#view-qr-smart .table-action-group > [data-use-location-template]:hover:not(:disabled) {
+  background: #e8defc !important;
+  border-color: #876abd !important;
+  color: #6241a3 !important;
+}
+
+#view-assets .table-action-group > .btn-quick-repair:hover:not(:disabled) {
+  background: #ffead0 !important;
+  border-color: #c98536 !important;
+  color: #9a5200 !important;
+}
+
+#view-assets .table-action-group > [data-assign-location]:hover:not(:disabled) {
+  background: #d7f0e9 !important;
+  border-color: #4a9f8c !important;
+  color: #0c6b59 !important;
+}
+
+#view-assets .table-action-group > [data-workspace-edit]:hover:not(:disabled),
+#view-qr-smart .table-action-group > [data-edit-location]:hover:not(:disabled) {
+  background: #ffefbd !important;
+  border-color: #bd9935 !important;
+  color: #805d00 !important;
+}
+
+#view-qr-smart .qr-location-row-details > summary {
+  background: #eaf2fc;
+  border-color: #6992c2;
+  color: #174b80;
 }

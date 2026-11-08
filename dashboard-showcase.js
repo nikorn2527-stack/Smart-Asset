@@ -21,6 +21,7 @@ window.govAssetRenderOrganizationName = (target, value) => {
   const REFRESH_MS = 60000;
   let focus = localStorage.getItem(FOCUS_KEY) === 'center' ? 'center' : 'all';
   let trendRange = 12;
+  const trendVisible = new Set(['outgoing', 'returns', 'repairsOpened', 'repairsClosed']);
   let data = null;
   let realData = null;
   let demoMode = false;
@@ -127,27 +128,6 @@ window.govAssetRenderOrganizationName = (target, value) => {
       </nav>
     </div>
     <p class="dsc-demo-notice" id="dscDemoNotice" role="status" hidden>โหมดตัวอย่าง · ข้อมูลจำลองเพื่อดูหน้าตาแดชบอร์ดเท่านั้น ไม่บันทึกหรือเปลี่ยนแปลงข้อมูลจริง</p>
-    <section class="dsc-panel dsc-trends" aria-labelledby="dscTrendsTitle">
-      <header class="dsc-head dsc-trends-head">
-        <div><h3 id="dscTrendsTitle">แนวโน้มการใช้งาน</h3><p>เปรียบเทียบงานซ่อมกับการยืม เบิก และคืน</p></div>
-        <div class="dsc-trend-range" role="group" aria-label="ช่วงเวลาของกราฟ">
-          <button type="button" data-dsc-trend-range="6" aria-pressed="false">6 เดือน</button>
-          <button type="button" data-dsc-trend-range="12" aria-pressed="true">12 เดือน</button>
-        </div>
-      </header>
-      <div class="dsc-trend-grid">
-        <section class="dsc-trend-chart-panel" aria-labelledby="dscRepairTrendTitle">
-          <div class="dsc-trend-chart-title"><h4 id="dscRepairTrendTitle">งานซ่อม</h4><span id="dscRepairTrendSummary"></span></div>
-          <div class="dsc-trend-chart-wrap" id="dscRepairTrend"></div>
-          <ul class="dsc-trend-legend" id="dscRepairTrendLegend"></ul>
-        </section>
-        <section class="dsc-trend-chart-panel" aria-labelledby="dscMovementTrendTitle">
-          <div class="dsc-trend-chart-title"><h4 id="dscMovementTrendTitle">ยืม / เบิก / คืน</h4><span id="dscMovementTrendSummary"></span></div>
-          <div class="dsc-trend-chart-wrap" id="dscMovementTrend"></div>
-          <ul class="dsc-trend-legend" id="dscMovementTrendLegend"></ul>
-        </section>
-      </div>
-    </section>
     <div class="dsc-lower">
       <section class="dsc-panel dsc-ring" aria-labelledby="dscRingTitle">
         <header class="dsc-head"><div><h3 id="dscRingTitle">สถานะครุภัณฑ์</h3><p id="dscRingSub">—</p></div></header>
@@ -165,6 +145,26 @@ window.govAssetRenderOrganizationName = (target, value) => {
         <div class="dsc-bubble-field" id="dscBubbles"></div>
       </section>
     </div>
+    <section class="dsc-panel dsc-trends" aria-labelledby="dscTrendsTitle">
+      <header class="dsc-head dsc-trends-head">
+        <div><h3 id="dscTrendsTitle">แนวโน้มการใช้งาน</h3><p>ยืม / เบิก / คืน และงานซ่อมรายเดือน</p></div>
+        <div class="dsc-trend-range" role="group" aria-label="ช่วงเวลาของกราฟ">
+          <button type="button" data-dsc-trend-range="6" aria-pressed="false">6 เดือน</button>
+          <button type="button" data-dsc-trend-range="12" aria-pressed="true">12 เดือน</button>
+        </div>
+      </header>
+      <div class="dsc-trend-layout">
+        <div class="dsc-trend-chart-panel">
+          <div class="dsc-trend-chart-title"><h4>จำนวนรายการ</h4><span id="dscTrendSummary"></span></div>
+          <div class="dsc-trend-chart-wrap" id="dscTrendChart"></div>
+          <ul class="dsc-trend-legend" id="dscTrendLegend"></ul>
+        </div>
+        <div class="dsc-usage-panel">
+          <div class="dsc-usage-summary" id="dscUsageSummary"></div>
+          <div class="dsc-usage-ranking" id="dscUsageRanking"></div>
+        </div>
+      </div>
+    </section>
     <section class="dsc-today" aria-labelledby="dscTodayTitle">
       <header class="dsc-today-head">
         <div><h3 id="dscTodayTitle">งานวันนี้</h3><p id="dscTodaySub">กำลังโหลดงานที่รอดำเนินการ…</p></div>
@@ -258,7 +258,7 @@ window.govAssetRenderOrganizationName = (target, value) => {
       ? `อันดับ ${index + 1} ${item.name} ยืมแล้ว ${item.borrowCount} ครั้ง สถานะ ${item.stateLabel}`
       : `${item.name} สถานะ ${item.stateLabel}`;
     const foot = mode === 'top'
-      ? `<span class="dsc-count"><b data-count="${item.borrowCount}">${num(item.borrowCount)}</b> ครั้ง${item.recentCount ? ` · ${num(item.recentCount)} ใน ${data.windowDays} วัน` : ''}</span><span class="dsc-meter"><i style="--p:${share.toFixed(3)}"></i></span>`
+      ? `<span class="dsc-count"><b data-count="${item.borrowCount}">${num(item.borrowCount)}</b> ครั้ง${item.usageStats ? ` · ${num(item.usageStats.totalDays)} วันสะสม${item.usageStats.incompleteCount ? '*' : ''}` : ''}</span><span class="dsc-meter"><i style="--p:${share.toFixed(3)}"></i></span>`
       : `<span class="dsc-count dsc-count-soft">${item.photoCount ? `${num(item.photoCount)} รูป · ` : ''}ยังไม่มีประวัติยืม</span>`;
     const tagName = demoMode ? 'div' : 'button';
     return `<${tagName}${demoMode ? '' : ' type="button"'} class="dsc-card${index === 0 && mode === 'top' ? ' is-first' : ''}" role="listitem"${demoMode ? '' : ` data-smart-id="${item.id}" data-dsc-key="${key}" aria-label="${esc(label)}"`} data-dsc-tilt style="--i:${index}">
@@ -312,7 +312,7 @@ window.govAssetRenderOrganizationName = (target, value) => {
       const tagName = demoMode ? 'div' : 'button';
       return `<${tagName}${demoMode ? '' : ' type="button"'} class="dsc-loan d-${due.cls}" role="listitem"${demoMode ? '' : ` data-smart-id="${item.id}" data-dsc-tab="custody" data-dsc-key="${key}" aria-label="${esc(`${item.name} ${item.state === 'issued' ? 'ผู้เบิก' : 'ผู้ยืม'} ${item.holder || 'ไม่ระบุ'} ${due.text} เปิดแท็บยืมเบิกคืน`)}`} style="--i:${i}">
         <span class="dsc-loan-art">${art(item)}</span>
-        <span class="dsc-loan-text"><b>${esc(item.name)}</b><span class="dsc-loan-meta"><span class="dsc-due">${esc(due.text)}</span><small>${item.state === 'issued' ? 'เบิกโดย' : 'ยืมโดย'} ${esc(item.holder || 'ไม่ระบุ')}</small></span></span>
+        <span class="dsc-loan-text"><b>${esc(item.name)}</b><span class="dsc-loan-meta"><span class="dsc-due">${esc(due.text)}${item.usageStats?.currentDays != null ? ` · ใช้มา ${num(item.usageStats.currentDays)} วัน` : ''}</span><small>${item.state === 'issued' ? 'เบิกโดย' : 'ยืมโดย'} ${esc(item.holder || 'ไม่ระบุ')}</small></span></span>
       </${tagName}>`;
     }).join('') + (loans.total > loans.items.length ? `<p class="dsc-more">และอีก ${num(loans.total - loans.items.length)} รายการ</p>` : '');
   }
@@ -359,58 +359,51 @@ window.govAssetRenderOrganizationName = (target, value) => {
     const width = 600, height = 172, left = 28, right = 590, top = 12, bottom = 132;
     const maxValue = Math.max(1, ...rows.flatMap(row => series.map(item => row[item.key] || 0)));
     const step = (right - left) / rows.length;
-    const groupWidth = step * 0.72;
-    const barWidth = Math.min(12, groupWidth / (series.length + 0.5));
     const grid = [0, 0.5, 1].map(fraction => {
       const y = bottom - (bottom - top) * fraction;
-      return `<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" class="dsc-trend-gridline"/><text x="${left - 5}" y="${y + 3}" text-anchor="end" class="dsc-trend-axis">${Math.round(maxValue * fraction)}</text>`;
+      return `<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" class="dsc-trend-gridline"/><text x="${left - 5}" y="${y + 3}" text-anchor="end" class="dsc-trend-axis">${num(maxValue * fraction)}</text>`;
     }).join('');
-    const bars = rows.map((row, index) => {
+    const ticks = rows.map((row, index) => {
       const center = left + step * (index + 0.5);
-      const groupStart = center - (series.length * barWidth) / 2;
-      const entries = series.map((item, seriesIndex) => {
-        const value = Number(row[item.key]) || 0;
-        const barHeight = value ? Math.max(1, (value / maxValue) * (bottom - top)) : 0;
-        const x = groupStart + seriesIndex * barWidth;
-        const y = bottom - barHeight;
-        const monthText = new Date(`${row.month}-01T00:00:00`).toLocaleDateString('th-TH', {month:'short'});
-        return `<rect class="dsc-trend-bar" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${Math.max(2, barWidth - 2).toFixed(2)}" height="${barHeight.toFixed(2)}" rx="2" fill="${item.color}" style="--bar-i:${index * series.length + seriesIndex}"><title>${esc(`${monthText} · ${item.label}: ${num(value)}`)}</title></rect>`;
-      }).join('');
       const date = new Date(`${row.month}-01T00:00:00`);
       const tick = date.toLocaleDateString('th-TH', {month:'short'}).replace('.', '');
-      return `${entries}<text x="${center}" y="${bottom + 17}" text-anchor="middle" class="dsc-trend-axis">${esc(tick)}</text>`;
+      return `<text x="${center}" y="${bottom + 17}" text-anchor="middle" class="dsc-trend-axis">${esc(tick)}</text>`;
+    }).join('');
+    const lines = series.map(item => {
+      const points = rows.map((row, index) => {
+        const x = left + step * (index + 0.5);
+        const y = bottom - (Number(row[item.key] || 0) / maxValue) * (bottom - top);
+        return { x, y, value: row[item.key], month: row.month };
+      });
+      const path = points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
+      const area = item.key === 'outgoing' ? `<path d="${path} L ${points.at(-1).x} ${bottom} L ${points[0].x} ${bottom} Z" fill="${item.color}" opacity=".13"/>` : '';
+      return `${area}<path d="${path}" fill="none" stroke="${item.color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" ${item.dash ? `stroke-dasharray="${item.dash}"` : ''}/>${points.map(p => `<circle cx="${p.x}" cy="${p.y}" r="2" fill="${item.color}"><title>${esc(`${p.month} · ${item.label}: ${num(p.value)} ครั้ง`)}</title></circle>`).join('')}`;
     }).join('');
     const accessible = rows.map(row => {
       const month = new Date(`${row.month}-01T00:00:00`).toLocaleDateString('th-TH', {month:'long',year:'numeric'});
       return `${month}: ${series.map(item => `${item.label} ${num(row[item.key])}`).join(', ')}`;
     }).join('; ');
-    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(`${label}. ${accessible}`)}"><title>${esc(label)}</title>${grid}${bars}</svg>`;
+    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(`${label}. ${accessible}`)}"><title>${esc(label)}</title>${grid}${lines}${ticks}</svg>`;
   }
 
   function renderTrends() {
-    const rows = (data?.monthlyTrends || []).slice(-trendRange);
-    const repairs = [
-      {key:'repairsOpened', label:'รับแจ้ง', color:'#0c7f82'},
-      {key:'repairsClosed', label:'ปิดงาน', color:'#f9a35a'},
+    const rows = (data?.monthlyTrends || []).slice(-trendRange).map(row => ({...row, outgoing: Number(row.loans || 0) + Number(row.issues || 0)}));
+    const series = [
+      {key:'outgoing', label:'ยืม + เบิก', color:'#258b88'},
+      {key:'returns', label:'คืน', color:'#d7935d'},
+      {key:'repairsOpened', label:'รับแจ้งซ่อม', color:'#bf747b'},
+      {key:'repairsClosed', label:'ปิดงานซ่อม', color:'#7b88bd', dash:'5 3'},
     ];
-    const movements = [
-      {key:'loans', label:'ยืม', color:'#0c7f82'},
-      {key:'issues', label:'เบิก', color:'#6c7fd8'},
-      {key:'returns', label:'คืน', color:'#f9a35a'},
-    ];
-    const draw = (chartId, legendId, summaryId, series, label) => {
-      const chart = $(`#${chartId}`);
-      if (!chart || !rows.length) return;
-      chart.classList.remove('is-in');
-      chart.innerHTML = trendSvg(rows, series, label);
-      $(`#${legendId}`).innerHTML = series.map(item => `<li><i style="--trend-color:${item.color}"></i>${esc(item.label)}</li>`).join('');
-      const totals = series.map(item => `${item.label} ${num(rows.reduce((sum, row) => sum + (Number(row[item.key]) || 0), 0))}`);
-      $(`#${summaryId}`).textContent = `${trendRange} เดือน · ${totals.join(' / ')}`;
-      if (reduce.matches) chart.classList.add('is-in');
-      else requestAnimationFrame(() => requestAnimationFrame(() => chart.classList.add('is-in')));
-    };
-    draw('dscRepairTrend', 'dscRepairTrendLegend', 'dscRepairTrendSummary', repairs, 'แนวโน้มงานซ่อม');
-    draw('dscMovementTrend', 'dscMovementTrendLegend', 'dscMovementTrendSummary', movements, 'แนวโน้มการยืม เบิก และคืน');
+    const visible = series.filter(item => trendVisible.has(item.key));
+    const chart = $('#dscTrendChart');
+    chart.innerHTML = rows.length ? trendSvg(rows, visible, 'แนวโน้มยืม เบิก คืน และงานซ่อม') : '<p>ยังไม่มีข้อมูลแนวโน้ม</p>';
+    $('#dscTrendLegend').innerHTML = series.map(item => `<li><button type="button" data-dsc-trend-series="${item.key}" aria-pressed="${trendVisible.has(item.key)}"><i style="--trend-color:${item.color}"></i>${esc(item.label)}</button></li>`).join('');
+    const total = key => rows.reduce((sum, row) => sum + Number(row[key] || 0), 0);
+    $('#dscTrendSummary').textContent = `${trendRange} เดือน · ยืม ${num(total('loans'))} / เบิก ${num(total('issues'))} / คืน ${num(total('returns'))} ครั้ง`;
+    const usage = data?.usageSummary;
+    $('#dscUsageSummary').innerHTML = usage ? `<span>ประวัติทั้งหมด</span><b>ยืม ${num(usage.loanCount)} ครั้ง</b><b>เบิก ${num(usage.issueCount)} ครั้ง</b><b>ใช้งานสะสม ${num(usage.totalDays)} วัน</b><small>นับรวมวันเริ่มและวันคืน · รายการค้างนับถึงวันนี้${usage.incompleteCount ? ` · ประวัติไม่ครบ ${num(usage.incompleteCount)} รายการ ไม่รวมวันที่คำนวณไม่ได้` : ''}</small>` : '';
+    const longest = data?.longestUsage || [];
+    $('#dscUsageRanking').innerHTML = longest.length ? `<b>ใช้งานสะสมนานที่สุด</b>${longest.map(item => demoMode ? `<span>${esc(item.name)} · ${num(item.usageStats.totalDays)} วัน</span>` : `<button type="button" data-smart-id="${item.id}" data-dsc-tab="custody">${esc(item.name)} · ${num(item.usageStats.totalDays)} วัน${item.usageStats.incompleteCount ? '*' : ''}</button>`).join('')}` : '';
     root.querySelectorAll('[data-dsc-trend-range]').forEach(button => {
       button.setAttribute('aria-pressed', String(Number(button.dataset.dscTrendRange) === trendRange));
     });
@@ -472,11 +465,11 @@ window.govAssetRenderOrganizationName = (target, value) => {
   const ROLE_TILES = { 'ผู้อนุมัติ': ['approvals'], 'ช่าง': ['repairs', 'maintenance'], 'เจ้าหน้าที่พัสดุ': ['repairs', 'overdueLoans'], 'ผู้แจ้ง': ['repairs'] };
   const ROLE_STATUSES = {
     'ผู้อนุมัติ': ['รออนุมัติ', 'รออนุมัติค่าใช้จ่ายจริง'],
-    'ช่าง': ['กำลังซ่อม', 'รออะไหล่'],
+    'ช่าง': ['รอตรวจสอบ/ประเมิน', 'กำลังซ่อม', 'รออะไหล่'],
     'เจ้าหน้าที่พัสดุ': ['รับแจ้งใหม่', 'รอมอบหมาย', 'รอแก้ไขค่าใช้จ่าย'],
     'ผู้แจ้ง': ['รอผู้แจ้งยืนยัน']
   };
-  const TICKET_LABEL = { 'รับแจ้งใหม่': 'รอคัดกรอง', 'รอมอบหมาย': 'รอมอบหมาย', 'กำลังซ่อม': 'กำลังซ่อม', 'รออะไหล่': 'รออะไหล่', 'รอผู้แจ้งยืนยัน': 'รอตรวจรับ', 'รออนุมัติ': 'รออนุมัติ', 'รออนุมัติค่าใช้จ่ายจริง': 'อนุมัติยอดจริง', 'รอแก้ไขค่าใช้จ่าย': 'แก้ไขยอด' };
+  const TICKET_LABEL = { 'รับแจ้งใหม่': 'รอคัดกรอง', 'รอมอบหมาย': 'รอมอบหมาย', 'รอตรวจสอบ/ประเมิน': 'รอตรวจสอบ/ประเมิน', 'กำลังซ่อม': 'กำลังซ่อม', 'รออะไหล่': 'รออะไหล่', 'รอผู้แจ้งยืนยัน': 'รอตรวจรับ', 'รออนุมัติ': 'รออนุมัติ', 'รออนุมัติค่าใช้จ่ายจริง': 'อนุมัติยอดจริง', 'รอแก้ไขค่าใช้จ่าย': 'แก้ไขยอด' };
   const age = days => (days == null ? '' : days <= 0 ? 'วันนี้' : `${num(days)} วัน`);
 
   function createDemoData(source) {
@@ -532,6 +525,8 @@ window.govAssetRenderOrganizationName = (target, value) => {
       focus: 'all',
       borrowEnabled: true,
       statusCounts: { total: 500, ready: 374, loaned: 34, issued: 18, repair: 26, pending: 32, other: 16 },
+      usageSummary: { loanCount: 104, issueCount: 42, totalDays: 1260, incompleteCount: 0 },
+      longestUsage: assets.slice(0, 3).map((item, index) => ({...item, usageStats: {totalDays: [168, 122, 94][index], incompleteCount: 0}})),
       monthlyTrends: months,
       topBorrowed: assets.map((item, index) => ({
         ...item, borrowCount: [28, 21, 17, 14, 12][index], recentCount: [8, 6, 5, 4, 3][index]
@@ -645,7 +640,7 @@ window.govAssetRenderOrganizationName = (target, value) => {
         items: work.approvals.items.map(i => job(i, i.kind === 'asset' ? 'asset' : 'ticket', current === 'ผู้อนุมัติ')),
         go: 'go-approvals', goLabel: 'เปิดศูนย์อนุมัติ' },
       { key: 'repairs', icon: 'wrench', label: 'งานซ่อมค้าง', total: repairs.total,
-        sub: `${num(by['รับแจ้งใหม่'] || 0)} รอคัดกรอง · ${num((by['กำลังซ่อม'] || 0) + (by['รออะไหล่'] || 0))} กำลังซ่อม`,
+        sub: `${num(by['รับแจ้งใหม่'] || 0)} รอคัดกรอง · ${num((by['รอตรวจสอบ/ประเมิน'] || 0) + (by['กำลังซ่อม'] || 0) + (by['รออะไหล่'] || 0))} สำรวจ/ซ่อม`,
         items: repairItems.map(i => job(i, 'ticket', mineStatus.includes(i.status))),
         go: 'go-repairs', goLabel: 'ดูงานซ่อมทั้งหมด' },
       { key: 'maintenance', icon: 'calendar', label: 'PM / ตรวจนับ ครบกำหนด', total: work.maintenance.total,
@@ -1198,6 +1193,13 @@ window.govAssetRenderOrganizationName = (target, value) => {
       trendRange = Number(trendRangeButton.dataset.dscTrendRange);
       renderTrends();
     }
+    const trendSeriesButton = event.target.closest('[data-dsc-trend-series]');
+    if (trendSeriesButton) {
+      const key = trendSeriesButton.dataset.dscTrendSeries;
+      if (trendVisible.has(key)) trendVisible.delete(key); else trendVisible.add(key);
+      renderTrends();
+      $(`[data-dsc-trend-series="${key}"]`)?.focus();
+    }
     const focusButton = event.target.closest('[data-dsc-focus]');
     if (focusButton && focusButton.dataset.dscFocus !== focus) {
       focus = focusButton.dataset.dscFocus;
@@ -1265,6 +1267,9 @@ window.govAssetRenderOrganizationName = (target, value) => {
       if (heading.dataset.dscEnhanced === '1') return;
       heading.dataset.dscEnhanced = '1';
       heading.classList.add('dsc-view-stage');
+      if (heading.parentElement?.id === 'view-dashboard' && 'ResizeObserver' in window) {
+        new ResizeObserver(() => heading.parentElement.style.setProperty('--dsc-head-h', `${Math.round(heading.getBoundingClientRect().height)}px`)).observe(heading);
+      }
       const titleCol = heading.querySelector(':scope > div:first-child');
       if (titleCol && !titleCol.querySelector('.dsc-heading-eyebrow')) {
         const eyebrow = document.createElement('span');

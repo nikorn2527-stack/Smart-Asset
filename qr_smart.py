@@ -399,11 +399,69 @@ def apply_movement(db, asset_id, kind, actor, body):
     return lifecycle_view(db, asset_id)
 
 
+def location_path(db, location_id):
+    names, seen = [], set()
+    while location_id and location_id not in seen:
+        seen.add(location_id)
+        row = db.execute("SELECT name,parent_id FROM service_locations WHERE id=?", (location_id,)).fetchone()
+        if not row:
+            break
+        names.append(row["name"])
+        location_id = row["parent_id"]
+    return " › ".join(reversed(names))
+
+
+def resolve_scanned_asset(db, ref):
+    value = str(ref or "").strip()
+    if not value:
+        fail("กรุณาระบุหรือสแกนครุภัณฑ์")
+    found = re.search(r"([A-Za-z0-9_-]{32})/?$", value)
+    row = None
+    if found:
+        row = db.execute("SELECT a.id FROM assets a JOIN asset_qr_links q ON q.asset_id=a.id WHERE q.token=?", (found[1],)).fetchone()
+    if row is None:
+        row = db.execute("SELECT id FROM assets WHERE code=?", (value,)).fetchone()
+    if row is None:
+        fail("ไม่พบครุภัณฑ์ " + value[:60], 404)
+    return row["id"]
+
+
+def relocate_by_scan(db, body):
+    require_flag(db, "locationQr")
+    access = __import__("access_control")
+    ctx = getattr(db, "access", None) or {}
+    lid = ident(body.get("locationId"))
+    location = db.execute("SELECT * FROM service_locations s WHERE s.id=? AND " + visible_location_sql(db), (lid,)).fetchone()
+    if not location:
+        fail("ไม่พบจุดบริการในขอบเขตสิทธิ์", 404)
+    if not location["is_active"]:
+        fail("จุดนี้ปิดใช้งานอยู่ ไม่สามารถย้ายครุภัณฑ์เข้าได้", 409)
+    refs = body.get("assets") or []
+    if not isinstance(refs, list) or not refs or len(refs) > 100:
+        fail("กรุณาระบุครุภัณฑ์ 1-100 รายการ")
+    place = location_path(db, lid)
+    actor = body.get("actor") or ctx.get("actor") or "เจ้าหน้าที่พัสดุ"
+    note = text(body.get("note", ""), "หมายเหตุ", 1000, required=False) or "ย้ายโดยสแกน Location QR"
+    moved = []
+    for ref in refs:
+        aid = resolve_scanned_asset(db, ref)
+        access.can_asset(db, aid)
+        before = custody(db, aid)["location_text"]
+        apply_movement(db, aid, "relocate", actor, {"location": place, "locationId": lid, "note": note})
+        asset = db.execute("SELECT name,code FROM assets WHERE id=?", (aid,)).fetchone()
+        moved.append({"assetId": aid, "name": asset["name"], "code": asset["code"], "from": before, "to": place})
+    return {"location": {"id": lid, "name": place}, "moved": moved}
+
+
 def lifecycle_view(db, asset_id):
     state = custody(db, asset_id)
     overdue = bool(state["due_at"] and state["loan_status"] in LOAN_BUSY and state["due_at"] < now_iso()[:10])
     history = [dict(r) for r in db.execute("SELECT * FROM asset_movements WHERE asset_id=? ORDER BY id DESC LIMIT 50", (asset_id,))]
-    return {"state": {**state, "overdue": overdue, "openRepair": bool(open_repair(db, asset_id))}, "history": history}
+    from usage_stats import usage_statistics
+    movements = db.execute("SELECT kind,created_at FROM asset_movements WHERE asset_id=? ORDER BY id", (asset_id,))
+    stats = usage_statistics(movements, state["loan_status"], datetime.now(TZ).date())
+    return {"state": {**state, "overdue": overdue, "openRepair": bool(open_repair(db, asset_id))},
+            "history": history, "usageStats": stats}
 
 
 def overdue_items(db):
@@ -584,6 +642,8 @@ def handle(handler, db, method, path, query, body, origin=""):
             actor = body.get("actor") or (getattr(db, "access", None) or {}).get("actor") or "เจ้าหน้าที่พัสดุ"
             return apply_movement(db, aid, text(body.get("kind"), "ประเภท", 20), actor, body)
         fail("ไม่รองรับคำสั่งนี้", 405)
+    if path == "/api/lifecycle/relocate" and method == "POST":
+        return relocate_by_scan(db, body)
     if path == "/api/lifecycle/overdue" and method == "GET":
         require_flag(db, "borrowIssueReturn")
         return {"items": overdue_items(db)}
@@ -648,6 +708,7 @@ def save_location(db, location_id, body, origin, handler):
             fail("ไม่พบพื้นที่แม่ในขอบเขตสิทธิ์")
     stamp = now_iso()
     if location_id:
+        code = code or f"LOC-{int(location_id):06d}"
         db.execute(
             """UPDATE service_locations SET kind=?,parent_id=?,code=?,name=?,public_name=?,public_info=?,is_active=?,guest_can_report_place=?,revision=revision+1,updated_at=?
                WHERE id=?""",
@@ -658,8 +719,11 @@ def save_location(db, location_id, body, origin, handler):
         lid = db.execute(
             """INSERT INTO service_locations(account_id,branch_id,kind,parent_id,code,name,public_name,public_info,is_active,guest_can_report_place,created_at,updated_at)
                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (account_id, branch_id, kind, parent_id, code, name, public_name, public_info, active, can_place, stamp, stamp),
+            (account_id, branch_id, kind, parent_id, code or "pending", name, public_name, public_info, active, can_place, stamp, stamp),
         ).lastrowid
+        if not code:
+            code = f"LOC-{int(lid):06d}"
+            db.execute("UPDATE service_locations SET code=? WHERE id=?", (code, lid))
         location_token(db, lid)
     actor = (ctx["user"]["username"] if ctx and ctx.get("user") else body.get("actor") or "เจ้าหน้าที่พัสดุ")
     audit(db, handler, "save-location", "location", lid, {"name": name, "active": active}, actor)

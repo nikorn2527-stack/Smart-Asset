@@ -108,6 +108,43 @@ class DashboardShowcase(HTTPFixture):
             for item in data['monthlyTrends']
         ))
 
+    def test_usage_statistics_on_asset_and_dashboard(self):
+        baseline = self.call(PATH)['usageSummary']
+        asset_id = self.asset('SHOW-USAGE-0001')
+        self.move(asset_id, 'loan', borrower='ผู้ยืม', dueAt='2099-01-01')
+        self.move(asset_id, 'return')
+        self.move(asset_id, 'issue', recipient='ผู้เบิก')
+        life = self.call(f'/api/lifecycle/assets/{asset_id}')
+        self.assertEqual((life['usageStats']['loanCount'], life['usageStats']['issueCount']), (1, 1))
+        self.assertEqual(life['usageStats']['totalDays'], 2)
+        self.assertEqual(life['usageStats']['currentDays'], 1)
+        self.assertEqual(life['usageStats']['averageDays'], 1)
+        data = self.call(PATH)
+        self.assertEqual(data['usageSummary']['loanCount'] - baseline['loanCount'], 1)
+        self.assertEqual(data['usageSummary']['issueCount'] - baseline['issueCount'], 1)
+        self.assertEqual(data['usageSummary']['totalDays'] - baseline['totalDays'], 2)
+        top = next(item for item in data['topBorrowed'] if item['id'] == asset_id)
+        self.assertEqual(top['usageStats']['totalDays'], 2)
+        self.assertNotIn('periods', top['usageStats'])
+
+    def test_usage_includes_history_beyond_recent_50_and_respects_center_scope(self):
+        center = self.center_asset('SHOW-USAGE-CENTER')
+        other = self.asset('SHOW-USAGE-OTHER')
+        self.move(center, 'loan', borrower='ผู้ยืม', dueAt='2099-01-01')
+        self.move(center, 'return')
+        self.move(other, 'issue', recipient='ผู้เบิก')
+        with sqlite3.connect(self.db) as db:
+            db.executemany("INSERT INTO asset_movements(asset_id,kind,actor,created_at) VALUES(?,?,?,?)",
+                           [(center, 'relocate', OFFICER, '2026-01-01')] * 55)
+        life = self.call(f'/api/lifecycle/assets/{center}')
+        self.assertEqual(len(life['history']), 50)
+        self.assertEqual(life['usageStats']['loanCount'], 1)
+        self.assertEqual(life['usageStats']['totalDays'], 1)
+        data = self.call(PATH + '?focus=center')
+        self.assertIn(center, {item['id'] for item in data['longestUsage']})
+        self.assertNotIn(other, {item['id'] for item in data['longestUsage']})
+        self.assertNotIn(other, {item['id'] for item in data['onLoan']['items']})
+
     def test_rejects_writes_and_clamps_limits(self):
         self.call(PATH, {'actor': OFFICER}, expected=405)
         data = self.call(PATH + '?limit=999&photos=-4&days=abc')

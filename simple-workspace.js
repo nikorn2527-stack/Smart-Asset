@@ -17,13 +17,14 @@
   advanced.onclick=()=>{const open=advanced.getAttribute('aria-expanded')!=='true';advanced.setAttribute('aria-expanded',String(open));if(!open&&['profiles','bindings','catalog'].some(t=>$(`[data-admin-section="${t}"]`).hidden===false))gov.openTab('overview');};
   $('.governance-tabs').classList.add('simplified-administration');
   $('#workspaceRuleDate').value=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
-  const key=()=>`${account()}/${$('#workspaceBranch').value}/${$('#workspaceRuleDate').value}`;
+  const ruleDate=()=>{const field=$('#workspaceRuleDate');return field.closest('.thai-date-field')?.querySelector('input[type="hidden"]')?.value??field.value;};
+  const key=()=>`${account()}/${$('#workspaceBranch').value}/${ruleDate()}`;
   async function loadBoard(){
     if(!account())return;
     const request=++boardEpoch,target=key();
     if(activeKey&&activeKey!==target)section.querySelectorAll('dialog[open]').forEach(d=>d.close());$('#workspaceCategoryStatus').textContent='กำลังอ่านหมวดและหลักเกณฑ์…';
     try{
-      const [data,state,p]=await Promise.all([app.api('/api/workspace/categories?'+new URLSearchParams({accountId:account(),branchId:$('#workspaceBranch').value,date:$('#workspaceRuleDate').value})),app.api('/api/governance'),app.api('/api/catalog/depreciation')]);
+      const [data,state,p]=await Promise.all([app.api('/api/workspace/categories?'+new URLSearchParams({accountId:account(),branchId:$('#workspaceBranch').value,date:ruleDate()})),app.api('/api/governance'),app.api('/api/catalog/depreciation')]);
       if(request!==boardEpoch||target!==key())return;
       board=data;config=state;policies=p.items;activeKey=target;renderBoard();$('#workspaceCategoryStatus').textContent=`${data.items.length} หมวด · ${data.items.reduce((n,r)=>n+r.assetCount,0).toLocaleString()} อุปกรณ์ในบัญชี/สาขาที่เลือก`;
     }catch(e){if(request===boardEpoch)$('#workspaceCategoryStatus').textContent=e.message;}
@@ -37,7 +38,7 @@
   function profileOptions(){return option('inherit','ใช้แบบหลักของหน่วยงาน / สาขา')+option('preset:inventory','สำเร็จรูป 4–3–4–4 · เลขประจำชิ้น')+option('preset:fsn','สำเร็จรูป 4–3–4 · เลขจำแนกชนิด')+config.profiles.filter(p=>p.account_id===board.accountId).map(p=>option(p.id,`${p.name} · ${numberShape(p)}`)).join('');}
   function policyOptions(){return option('','ใช้ตามหลักเกณฑ์ระดับหน่วยงาน / สาขา')+policies.filter(p=>p.isActive!==false).map(p=>option(p.id,policyName(p))).join('');}
   function filterBoard(){const q=$('#workspaceCategorySearch').value.trim().toLowerCase();for(const r of board?.items||[]){const row=$(`[data-category-row="${r.id}"]`);if(!row)continue;row.hidden=!`${r.name} ${r.sourceName} ${r.sourceFile}`.toLowerCase().includes(q);}}
-  $('#workspaceCategorySearch').oninput=filterBoard;$('#workspaceBranch').onchange=loadBoard;$('#workspaceRuleDate').onchange=loadBoard;
+  $('#workspaceCategorySearch').oninput=filterBoard;$('#workspaceBranch').onchange=loadBoard;$('#workspaceRuleDate').closest('label').addEventListener('change',loadBoard);
   $('#workspaceAddCategory').onclick=()=>$('#addCategoryBtn')?.click();
   const can=p=>!window.govAssetAccess?.session?.required||Boolean(window.govAssetAccess.session.permissions?.[p]);
   function permission(){const allowed=app.getRole()==='เจ้าหน้าที่พัสดุ'&&can('manage');section.querySelectorAll('[data-write],form button[type=submit],[data-category-edit],[data-edit-kind],[data-new-row-policy],[data-row-profile]').forEach(b=>b.disabled=!allowed||Boolean(b.dataset.sharedId&&window.govAssetAccess?.session?.required&&!window.govAssetAccess.session.isAdmin));section.querySelectorAll('[data-category-add-asset],[data-use-kind]').forEach(b=>{b.disabled=app.getRole()!=='เจ้าหน้าที่พัสดุ'||!can('create')||Boolean(b.dataset.useKind&&!b.dataset.hasCode);});$('#workspaceAddCategory').disabled=!allowed;}

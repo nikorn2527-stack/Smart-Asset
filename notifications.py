@@ -57,6 +57,7 @@ FEED = """WITH feed AS (
       WHEN :role='ผู้อนุมัติ' THEN 'พิจารณาอนุมัติงานซ่อม'
       WHEN :role='เจ้าหน้าที่พัสดุ' AND t.status='รับแจ้งใหม่' THEN 'คัดกรองคำขอแจ้งซ่อม'
       WHEN :role='เจ้าหน้าที่พัสดุ' AND t.status='รอมอบหมาย' THEN 'มอบหมายช่างดำเนินการ'
+      WHEN :role='ช่าง' AND t.status='รอตรวจสอบ/ประเมิน' THEN 'ตรวจสอบหน้างานและประเมินการซ่อม'
       WHEN t.status='รอแก้ไขค่าใช้จ่าย' THEN 'แก้ไขและเสนอค่าใช้จ่ายใหม่'
       WHEN :role='ผู้แจ้ง' AND t.status='รอผู้แจ้งยืนยัน' THEN 'ตรวจรับผลซ่อม / ส่งกลับแก้ไข'
       WHEN e.action='send_back' THEN 'ผู้แจ้งส่งกลับให้แก้ไขงานซ่อม'
@@ -71,7 +72,7 @@ FEED = """WITH feed AS (
  FROM tickets t LEFT JOIN ticket_events e ON e.id=(SELECT MAX(id) FROM ticket_events WHERE ticket_id=t.id)
  WHERE (:role='ผู้อนุมัติ' AND t.status IN ('รออนุมัติ','รออนุมัติค่าใช้จ่ายจริง'))
     OR (:role='เจ้าหน้าที่พัสดุ' AND t.status IN ('รับแจ้งใหม่','รอมอบหมาย','รอแก้ไขค่าใช้จ่าย','รออะไหล่'))
-    OR (:role='ช่าง' AND t.status IN ('กำลังซ่อม','รออะไหล่'))
+    OR (:role='ช่าง' AND t.status IN ('รอตรวจสอบ/ประเมิน','กำลังซ่อม','รออะไหล่'))
     OR (:role='ผู้แจ้ง' AND (t.status NOT IN ('ปิดงาน','ยกเลิก','ไม่อนุมัติ') OR datetime(t.updated_at)>=datetime(:cutoff)))
  UNION ALL
  SELECT 'asset:'||a.id||':'||COALESCE(e.id,0),'asset',a.id,a.code,a.name,a.status,a.updated_at,

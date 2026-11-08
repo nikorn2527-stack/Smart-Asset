@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import access_control as access
 from asset_photos import primary_photo_sql
+from usage_stats import usage_statistics
 
 TZ = timezone(timedelta(hours=7), "Asia/Bangkok")
 PATH = "/api/dashboard/showcase"
@@ -122,6 +123,31 @@ def _top_borrowed(db, where, params, since, limit, today):
         f"JOIN assets a ON a.id=m.asset_id {ASSET_JOINS} WHERE {where} ORDER BY m.n DESC,m.last_at DESC,a.id LIMIT ?",
         [since, *params, limit]).fetchall()
     return [{**_base(r, today), "borrowCount": r["n"], "recentCount": r["recent"] or 0, "lastBorrowedAt": r["last_at"] or ""} for r in rows]
+
+
+def _usage_summary(db, where, params, today):
+    rows = db.execute(
+        f"SELECT m.asset_id,m.kind,m.created_at,cs.loan_status FROM asset_movements m "
+        f"JOIN assets a ON a.id=m.asset_id LEFT JOIN asset_custody_state cs ON cs.asset_id=a.id "
+        f"WHERE {where} AND m.kind IN ('loan','issue','return','intake') ORDER BY m.asset_id,m.id",
+        params)
+    grouped = {}
+    for row in rows:
+        group = grouped.setdefault(row["asset_id"], {"rows": [], "state": row["loan_status"]})
+        group["rows"].append(row)
+    stats = {asset_id: usage_statistics(group["rows"], group["state"], today)
+             for asset_id, group in grouped.items()}
+    for row in db.execute(
+        f"SELECT a.id,cs.loan_status FROM asset_custody_state cs JOIN assets a ON a.id=cs.asset_id "
+        f"WHERE cs.loan_status IN {BUSY_SQL} AND {where}", params):
+        if row["id"] not in stats:
+            stats[row["id"]] = usage_statistics([], row["loan_status"], today)
+    return {
+        "loanCount": sum(item["loanCount"] for item in stats.values()),
+        "issueCount": sum(item["issueCount"] for item in stats.values()),
+        "totalDays": sum(item["totalDays"] for item in stats.values()),
+        "incompleteCount": sum(item["incompleteCount"] for item in stats.values()),
+    }, stats
 
 
 def _on_loan(db, where, params, limit, today):
@@ -275,6 +301,21 @@ def showcase(db: sqlite3.Connection, query: dict) -> dict:
         loc_qr_count = db.execute("SELECT COUNT(*) FROM service_locations WHERE is_active=1").fetchone()[0]
     except sqlite3.Error:
         pass
+    usage_summary, usage_by_asset = _usage_summary(db, where, params, today)
+    top_borrowed = _top_borrowed(db, where, params, since, _int(query, "limit", 8, 1, 24), today)
+    on_loan = _on_loan(db, where, params, 12, today)
+    longest_ids = sorted((asset_id for asset_id, stats in usage_by_asset.items() if stats["totalDays"]),
+                         key=lambda asset_id: (-usage_by_asset[asset_id]["totalDays"], asset_id))[:8]
+    longest = []
+    if longest_ids:
+        placeholders = ",".join("?" for _ in longest_ids)
+        rows = db.execute(f"SELECT {ASSET_COLUMNS} FROM assets a {ASSET_JOINS} "
+                          f"WHERE a.id IN ({placeholders}) AND {where}", [*longest_ids, *params])
+        by_id = {row["id"]: _base(row, today) for row in rows}
+        longest = [by_id[asset_id] for asset_id in longest_ids if asset_id in by_id]
+    for item in top_borrowed + on_loan["items"] + longest:
+        stats = usage_by_asset.get(item["id"])
+        item["usageStats"] = {key: value for key, value in stats.items() if key != "periods"} if stats else None
     return {
         "generatedAt": now.isoformat(timespec="seconds"),
         "today": today.isoformat(),
@@ -283,8 +324,10 @@ def showcase(db: sqlite3.Connection, query: dict) -> dict:
         "borrowEnabled": _borrow_enabled(db),
         "statusCounts": scan["statusCounts"],
         "monthlyTrends": _monthly_trends(db, today, where, params),
-        "topBorrowed": _top_borrowed(db, where, params, since, _int(query, "limit", 8, 1, 24), today),
-        "onLoan": _on_loan(db, where, params, 12, today),
+        "usageSummary": usage_summary,
+        "longestUsage": longest,
+        "topBorrowed": top_borrowed,
+        "onLoan": on_loan,
         "recentPhotos": _recent_photos(db, where, params, _int(query, "photos", 12, 1, 30), today),
         "center": {"name": active_account["name"] if active_account else CENTER["name"],
                    "shortName": "รพ.สุรินทร์" if (active_account and active_account["code"] == "SURIN") else CENTER["shortName"],

@@ -82,7 +82,7 @@
   function field(key,cls=''){return `<div class="rf-field ${cls}" data-field="${key}"><span>${esc(fields.find(f=>f[0]===key)[1])}</span><b>${esc(state.form.fields[key])}</b></div>`;}
   function summaryValue(key){return state.form.summary?.[key] ?? [...state.form.rows].reverse().find(r=>r[key]!=='')?.[key] ?? '';}
   function total(key){const value=summaryValue(key);return value!==''?Number(value).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'';}
-  function display(key,value){return value!==''&&moneyKeys.includes(key)?Number(value).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):value;}
+  function display(key,value){return value!==''&&moneyKeys.includes(key)?Number(value).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):key==='quantity'?app.formatQuantity(value):value;}
   const colWidths = [7.2, 7.8, 14.0, 5.5, 8.5, 9.0, 5.5, 9.5, 8.5, 9.0, 9.0, 6.5];
   function render(){
     const rows=state.form.rows, pages=[];
@@ -153,7 +153,7 @@
     if(!state)return app.toast('เลือกรายการครุภัณฑ์ก่อน');
     if(app.getRole()!=='เจ้าหน้าที่พัสดุ')return app.toast('เลือกบทบาทเจ้าหน้าที่พัสดุเพื่อแก้ไขเอกสาร');
     const editingState=state;
-    editor.innerHTML=`<form id="registerEditorForm"><div class="dialog-head"><div><div class="eyebrow">เอกสารราชการ · แก้ไขข้อมูลก่อนพิมพ์</div><h2>ทะเบียนคุมทรัพย์สิน</h2></div><button class="dialog-close" type="button" id="closeRegisterEditor">×</button></div><p>ข้อมูลเอกสารเก็บแยกจากหลักฐานนำเข้า ช่องที่ไม่มีข้อมูลให้เว้นว่าง ไม่สร้างยอดขึ้นเอง</p><div class="register-editor-fields">${fields.map(([key,label])=>`<label>${esc(label)}<input name="${key}" maxlength="500" value="${esc(state.form.fields[key])}"></label>`).join('')}</div><h3>รายการในตาราง</h3><div id="registerRowEditors"></div><button class="button outline" id="addRegisterRow" type="button">＋ เพิ่มแถวรายการ</button><h3>บรรทัดสรุปท้ายตาราง</h3><p>ใช้ค่าสุดท้ายที่มีข้อมูลเป็นค่าเริ่มต้น ตรวจทานกับต้นทางได้เอง ไม่บวกมูลค่าสะสมและมูลค่าสุทธิข้ามปี</p><div class="register-editor-fields">${['annual','accumulated','net'].map(key=>`<label>${esc(columns.find(c=>c[0]===key)[1])}<input name="sum_${key}" type="number" min="0" step="0.0001" value="${esc(summaryValue(key))}"></label>`).join('')}</div><div class="dialog-actions"><button class="button primary" type="submit">บันทึกเอกสาร</button></div><p role="alert" id="registerEditorStatus"></p></form>`;
+    editor.innerHTML=`<form id="registerEditorForm"><div class="dialog-head"><div><div class="eyebrow">เอกสารราชการ · แก้ไขข้อมูลก่อนพิมพ์</div><h2>ทะเบียนคุมทรัพย์สิน</h2></div><button class="dialog-close" type="button" id="closeRegisterEditor">×</button></div><div class="register-editor-body"><p>ข้อมูลเอกสารเก็บแยกจากหลักฐานนำเข้า ช่องที่ไม่มีข้อมูลให้เว้นว่าง ไม่สร้างยอดขึ้นเอง</p><div class="register-editor-fields">${fields.map(([key,label])=>`<label>${esc(label)}<input name="${key}" maxlength="500" value="${esc(state.form.fields[key])}"></label>`).join('')}</div><h3>รายการในตาราง</h3><div id="registerRowEditors"></div><button class="button outline" id="addRegisterRow" type="button">＋ เพิ่มแถวรายการ</button><h3>บรรทัดสรุปท้ายตาราง</h3><p>ใช้ค่าสุดท้ายที่มีข้อมูลเป็นค่าเริ่มต้น ตรวจทานกับต้นทางได้เอง ไม่บวกมูลค่าสะสมและมูลค่าสุทธิข้ามปี</p><div class="register-editor-fields">${['annual','accumulated','net'].map(key=>`<label>${esc(columns.find(c=>c[0]===key)[1])}<input name="sum_${key}" type="number" min="0" step="0.0001" value="${esc(summaryValue(key))}"></label>`).join('')}</div><p role="alert" id="registerEditorStatus"></p></div><div class="dialog-actions"><button class="button primary" type="submit">บันทึกเอกสาร</button></div></form>`;
     let rows=structuredClone(editingState.form.rows);
     function renderRows(){
       $('#registerRowEditors').innerHTML=rows.map((r,i)=>`<fieldset class="register-row-editor" data-row="${i}"><legend>รายการที่ ${i+1}</legend><div class="register-editor-fields">${columns.map(([key,label])=>`<label>${esc(label)}<input data-column="${key}" value="${esc(r[key])}" maxlength="500" ${['quantity','life',...moneyKeys].includes(key)?'type="number" min="0" step="0.0001"':''}></label>`).join('')}</div><button class="button outline" type="button" data-remove-row="${i}" ${rows.length===1?'disabled':''}>ลบแถวนี้</button></fieldset>`).join('');
@@ -198,11 +198,6 @@
     doc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ทะเบียนคุมทรัพย์สิน ${esc(state.form.fields.code)}</title><style>
 @page { size: 297mm 210mm; margin: 0; }
 ${css}
-.official-register-page .rf-table th, .official-register-page .rf-table td {
-  border: 1px solid #000 !important;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
 </style></head><body class="register-print">${paper.innerHTML}</body></html>`);
     doc.close();
 

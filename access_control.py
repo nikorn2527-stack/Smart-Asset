@@ -292,7 +292,7 @@ def authorize(db,ctx,method,path,query,body):
         needed='manage'
     elif body.get('action') in ('approve','reject','approve_final_cost','reject_final_cost') or path.endswith('/action') and body.get('action') in ('approve','reject'):
         needed='approve'
-    elif path.startswith('/api/work/items/') or path.endswith('/action') and body.get('action') in ('complete','resume','wait_parts'):
+    elif path.startswith('/api/work/items/') or re.fullmatch(r'/api/tickets/\d+/items(?:/\d+)?',path) or path.endswith('/action') and body.get('action') in ('complete','resume','wait_parts'):
         if not (perms['work'] or perms['edit']):fail('ไม่ได้รับสิทธิ์ดำเนินงาน')
         return
     elif path in ('/api/assets','/api/tickets','/api/supply/documents','/api/work/plans','/api/imports/preview','/api/imports/commit','/api/qr/locations'):needed='create'

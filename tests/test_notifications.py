@@ -41,6 +41,7 @@ class Notifications(HTTPFixture):
         self.assertIsNone(self.entry(APPROVER,'ticket',tid))
         self.action(tid,'assign',OFFICER,assignedTo='ช่าง ก')
         self.assertEqual(self.entry(TECH,'ticket',tid)['assignee'],'ช่าง ก')
+        self.action(tid,'assess',TECH,inspectionNotes='ตรวจพบอาการและแนวทางซ่อม')
         self.action(tid,'complete',TECH,workNotes='ซ่อมแล้ว',actualCost=7000)
         second=self.entry(APPROVER,'ticket',tid)
         self.assertNotEqual(first['key'],second['key'])
@@ -85,6 +86,7 @@ class Notifications(HTTPFixture):
         self.assertEqual(self.call(f'/api/tickets/{tid}')['approvalThreshold'],5000)
         self.call('/api/workflow/settings',{**saved,'approvalThreshold':10000,'actor':OFFICER},method='PUT')
         self.action(tid,'assign',OFFICER,assignedTo='ช่าง ก')
+        self.action(tid,'assess',TECH,inspectionNotes='ตรวจพบอาการและแนวทางซ่อม',estimateCost=4000)
         result=self.action(tid,'complete',TECH,workNotes='ซ่อมแล้ว',actualCost=6000)
         self.assertEqual(result['status'],'รออนุมัติค่าใช้จ่ายจริง')
         self.assertEqual(self.call('/api/config')['approvalThreshold'],10000)
@@ -109,6 +111,7 @@ class Notifications(HTTPFixture):
         ticket=self.ticket('NOTIFY-OLD-ACCEPTANCE');tid=ticket['id']
         self.action(tid,'review',OFFICER,estimateCost=0)
         self.action(tid,'assign',OFFICER,assignedTo='ช่าง ก')
+        self.action(tid,'assess',TECH,inspectionNotes='ตรวจพบอาการและแนวทางซ่อม')
         self.action(tid,'complete',TECH,workNotes='ซ่อมแล้ว',actualCost=0)
         with sqlite3.connect(self.db) as db:
             db.execute("UPDATE tickets SET updated_at='2020-01-01T00:00:00+07:00' WHERE id=?",(tid,))

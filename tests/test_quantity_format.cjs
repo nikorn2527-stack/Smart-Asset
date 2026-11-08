@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(require('node:path').join(__dirname, '..', 'app.js'), 'utf8');
+const match = source.match(/^function formatQuantity\(value\) \{[\s\S]*?\n\}/);
+assert.ok(match, 'formatQuantity must exist');
+const format = vm.runInNewContext(`(${match[0]})`);
+assert.equal(format(1234567), '1,234,567');
+assert.equal(format('-1234567.0050'), '-1,234,567.0050');
+assert.equal(format(0), '0');
+assert.equal(format(''), '');
+assert.equal(format(null), null);
+assert.equal(format('1234-5678'), '1234-5678');
+assert.equal(format('001234'), '001,234');
+assert.equal(format(0.0000001), '0.0000001');
+console.log('quantity formatting passed');

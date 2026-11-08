@@ -122,6 +122,53 @@ class QrSmart(HTTPFixture):
         self.assertFalse(inactive['canReportPlace'])
         self.place_report(token, expected=403)
 
+    def test_location_without_custom_code_receives_sequential_register_code(self):
+        self.enable_location_and_borrow()
+        saved = self.call('/api/qr/locations', {
+            'kind': 'building', 'name': self.uniq('อาคาร'), 'publicName': 'อาคารทดสอบ',
+            'isActive': True, 'guestCanReportPlace': True, 'actor': OFFICER,
+        }, expected=201)
+        self.assertRegex(saved['code'], r'^LOC-\d{6}$')
+        self.assertEqual(self.call(f'/api/qr/locations/{saved["id"]}')['code'], saved['code'])
+
+    def test_relocate_by_scanning_location_then_assets(self):
+        self.enable_location_and_borrow()
+        building = self.location(self.uniq('อาคาร'), kind='building')
+        room = self.location(self.uniq('ห้อง'), parentId=building['id'])
+        aid = self.asset(self.uniq('MOVE'))
+        code = self.call(f'/api/lifecycle/assets/{aid}')['state']['location_text'] or ''
+        token = self.smart(aid)['qrUrl'].rsplit('/', 1)[1]
+        result = self.call('/api/lifecycle/relocate', {'locationId': room['id'], 'assets': [f'https://x.test/q/{token}']})
+        self.assertEqual(result['moved'][0]['assetId'], aid)
+        self.assertEqual(result['moved'][0]['to'], f"{building['name']} › {room['name']}")
+        view = self.call(f'/api/lifecycle/assets/{aid}')
+        self.assertEqual(view['state']['location_id'], room['id'])
+        self.assertEqual(view['history'][0]['kind'], 'relocate')
+        self.assertEqual(view['history'][0]['from_location'], code)
+        self.call('/api/lifecycle/relocate', {'locationId': room['id'], 'assets': ['NOPE-404']}, expected=404)
+        self.call('/api/lifecycle/relocate', {'locationId': room['id'], 'assets': []}, expected=400)
+
+    def test_reports_preview_and_export_files(self):
+        self.enable_location_and_borrow()
+        aid = self.asset(self.uniq('RPT'))
+        account_id = self.call('/api/reports')['defaultAccountId']
+        with sqlite3.connect(self.db) as db:
+            db.execute('UPDATE assets SET numbering_account_id=? WHERE id=?', (account_id, aid))
+        self.call('/api/lifecycle/relocate', {'locationId': self.location()['id'], 'assets': [self.call(f'/api/assets/{aid}/smart')['asset']['code']]})
+        catalog = {r['id'] for r in self.call('/api/reports')['items']}
+        self.assertEqual(catalog, {'assets', 'by-location', 'repairs', 'repair-summary',         'loans', 'movements', 'repair-items'})
+        for rid in catalog:
+            data = self.call(f'/api/reports/{rid}')
+            self.assertEqual(len(data['columns']), len(data['rows'][0]) if data['rows'] else len(data['columns']))
+        moves = self.call('/api/reports/movements?kind=relocate&from=2000-01-01')
+        self.assertTrue(any(row[3] == 'ย้ายที่ตั้ง' for row in moves['rows']))
+        self.call('/api/reports/movements?from=bad', expected=400)
+        self.call('/api/reports/nope', expected=404)
+        csv_bytes = self.call('/api/reports/assets/export.csv')
+        self.assertTrue(csv_bytes.startswith(b'\xef\xbb\xbf'))
+        xlsx = self.call('/api/reports/repairs/export.xlsx')
+        self.assertEqual(xlsx[:2], b'PK')
+
     def test_guest_location_report_without_asset_and_allowlist(self):
         self.enable_location_and_borrow()
         loc = self.location()
@@ -176,8 +223,13 @@ class QrSmart(HTTPFixture):
         self.assertEqual(screened['status'], 'รอมอบหมาย')
         self.call(f'/api/tickets/{tid}/action', {'action': 'assign', 'actor': TECH, 'assignedTo': 'ช่าง A'}, expected=403)
         assigned = self.action(tid, 'assign', OFFICER, assignedTo='ช่าง A')
-        self.assertEqual(assigned['status'], 'กำลังซ่อม')
+        self.assertEqual(assigned['status'], 'รอตรวจสอบ/ประเมิน')
         self.assertEqual(assigned['assignedTo'], 'ช่าง A')
+        self.call(f'/api/tickets/{tid}/action', {'action': 'assess', 'actor': TECH}, expected=400)
+        self.call(f'/api/tickets/{tid}/action', {'action': 'assess', 'actor': OFFICER, 'inspectionNotes': 'ไม่ใช่ช่าง'}, expected=403)
+        inspected = self.action(tid, 'assess', TECH, inspectionNotes='ตรวจพบซีลสึก')
+        self.assertEqual(inspected['inspectionNotes'], 'ตรวจพบซีลสึก')
+        self.assertEqual(inspected['status'], 'กำลังซ่อม')
 
     def test_user_qr_report_can_be_dismissed_as_not_genuine(self):
         aid = self.asset(self.uniq('FAKE'))
@@ -226,6 +278,27 @@ class QrSmart(HTTPFixture):
         self.assertEqual(returned['state']['due_at'], '')
         self.assertFalse(returned['state']['overdue'])
         self.assertFalse(any(item['assetId'] == aid for item in self.call('/api/lifecycle/overdue')['items']))
+        self.integrity()
+
+    def test_ticket_parts_and_external_labor_flow(self):
+        aid = self.asset(self.uniq('ITM'))
+        ticket = self.call('/api/tickets', {
+            'assetId': aid, 'assetName': 'เครื่องทดสอบ', 'issue': self.uniq('ท่อแตก'),
+            'requester': 'ผู้แจ้ง', 'contact': '1',
+        }, expected=201)
+        base = f"/api/tickets/{ticket['id']}/items"
+        self.call(base, {'kind': 'external_labor', 'name': 'ซ่อมท่อ', 'qty': 1, 'actor': OFFICER}, method='POST', expected=400)
+        part = self.call(base, {'kind': 'part', 'name': 'ข้อต่อ', 'qty': 2, 'unitCost': 50, 'source': 'purchase', 'actor': OFFICER}, method='POST', expected=201)
+        self.call(base, {'kind': 'external_labor', 'name': 'ซ่อมท่อ', 'qty': 1, 'unitCost': 800, 'vendor': 'ร้านช่างนอก', 'source': 'vendor', 'actor': OFFICER}, method='POST', expected=201)
+        listed = self.call(base)
+        self.assertEqual(len(listed['items']), 2)
+        self.assertEqual(listed['total'], 900)
+        item_id = next(i['id'] for i in listed['items'] if i['name'] == 'ข้อต่อ')
+        self.call(f'{base}/{item_id}', {'action': 'receive', 'actor': OFFICER}, method='PUT', expected=409)
+        self.call(f'{base}/{item_id}', {'action': 'approve', 'actor': APPROVER}, method='PUT')
+        self.call(f'{base}/{item_id}', {'action': 'receive', 'actor': OFFICER}, method='PUT')
+        rows = self.call('/api/reports/repair-items')['rows']
+        self.assertTrue(any('ข้อต่อ' in r for r in rows))
         self.integrity()
 
     def test_features_wrong_revision_and_asset_qr_off(self):

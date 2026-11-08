@@ -10,25 +10,26 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" href="assets/govasset-icon-optimized.png">
-  <link rel="stylesheet" href="styles.css?v=7">
-  <link rel="stylesheet" href="stickers.css">
-  <link rel="stylesheet" href="master-data.css">
-  <link rel="stylesheet" href="smart.css?v=26">
-  <link rel="stylesheet" href="work.css">
-  <link rel="stylesheet" href="notifications.css">
-  <link rel="stylesheet" href="register-form.css?v=4">
-    <link rel="stylesheet" href="governance.css">
-  <link rel="stylesheet" href="simple-workspace.css">
-  <link rel="stylesheet" href="supply.css?v=5">
-  <link rel="stylesheet" href="access.css?v=4">
-  <link rel="stylesheet" href="equipment.css">
-  <link rel="stylesheet" href="action-buttons.css">
-  <link rel="stylesheet" href="asset-register.css?v=6">
-  <link rel="stylesheet" href="layout-zones.css?v=20">
-  <link rel="stylesheet" href="dialogs-fit.css?v=5">
-  <link rel="stylesheet" href="dashboard-showcase.css?v=11">
-  <link rel="stylesheet" href="controls-polish.css?v=2">
-  <link rel="stylesheet" href="repair-print.css?v=8">
+  <script src="ui-scale.js?v=1"></script>
+  <link rel="stylesheet" href="styles.css?v=sc1">
+  <link rel="stylesheet" href="stickers.css?v=sc2">
+  <link rel="stylesheet" href="master-data.css?v=sc1">
+  <link rel="stylesheet" href="smart.css?v=sc7">
+  <link rel="stylesheet" href="work.css?v=sc1">
+  <link rel="stylesheet" href="notifications.css?v=sc1">
+  <link rel="stylesheet" href="register-form.css?v=sc3">
+    <link rel="stylesheet" href="governance.css?v=sc1">
+  <link rel="stylesheet" href="simple-workspace.css?v=sc1">
+  <link rel="stylesheet" href="supply.css?v=sc1">
+  <link rel="stylesheet" href="access.css?v=sc1">
+  <link rel="stylesheet" href="equipment.css?v=sc1">
+  <link rel="stylesheet" href="action-buttons.css?v=sc1">
+  <link rel="stylesheet" href="asset-register.css?v=sc2">
+  <link rel="stylesheet" href="layout-zones.css?v=sc3">
+  <link rel="stylesheet" href="dialogs-fit.css?v=sc1">
+  <link rel="stylesheet" href="dashboard-showcase.css?v=sc6">
+  <link rel="stylesheet" href="controls-polish.css?v=sc3">
+  <link rel="stylesheet" href="repair-print.css?v=sc1">
 </head>
 <body>
   <a class="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
@@ -48,6 +49,7 @@
         <button class="nav-item" data-view="repairs" aria-label="4. แจ้งซ่อมและบริการ"><span class="nav-icon">⚒</span>4. แจ้งซ่อมและบริการ</button>
         <div class="nav-divider"></div>
         <button class="nav-item" data-view="approvals" aria-label="ศูนย์รออนุมัติ" title="ศูนย์รออนุมัติ"><span class="nav-icon">✓</span>ศูนย์รออนุมัติ <span class="nav-badge-pill amber" id="navApprovalBadge">0</span></button>
+        <button class="nav-item" data-view="reports" aria-label="รายงานและส่งออก" title="รายงานและส่งออก"><span class="nav-icon">▥</span>รายงานและส่งออก</button>
         <button class="nav-item" data-view="settings" aria-label="ตั้งค่าระบบ" title="ตั้งค่าระบบ"><span class="nav-icon">⚙</span>ตั้งค่าระบบ</button>
       </nav>
       <div class="sidebar-bottom">
@@ -175,6 +177,7 @@
                   </select>
                   <button class="button outline" type="button" id="clearAssetFilter" title="ล้างตัวกรอง">ล้างตัวกรอง</button>
                   <button class="button outline" id="exportCsv" title="ดาวน์โหลดข้อมูลเป็น CSV">↓ ส่งออก CSV</button>
+                  <button class="button outline" type="button" id="bulkLocationBtn" title="กำหนดตึก ชั้น ห้อง หรือหน่วยงานย่อยให้กับรายการในหน้านี้">📍 กำหนดตึก/ชั้น/ห้อง</button>
                 </div>
               </div>
               <div id="smartFilterChips" class="smart-filter-chips" aria-label="ตัวกรองที่เลือก"></div>
@@ -189,7 +192,13 @@
                 <select id="roomFilter" aria-label="กรองตามห้องหรือหน่วยงานย่อย">
                   <option value="">ทุกห้อง / จุดติดตั้ง / งานย่อย</option>
                 </select>
-                <button class="button outline" type="button" id="bulkLocationBtn" title="กำหนดตึก ชั้น ห้อง หรือหน่วยงานย่อยให้กับรายการในหน้านี้">📍 กำหนดตึก/ชั้น/ห้อง</button>
+              </div>
+              <div class="inventory-print-toolbar" id="inventoryPrintToolbar" hidden>
+                <span id="inventoryPrintSelectionCount">ยังไม่ได้เลือกรายการสำหรับพิมพ์</span>
+                <div>
+                  <button class="button outline" type="button" id="clearInventoryPrintSelection">ล้างที่เลือก</button>
+                  <button class="button primary" type="button" id="printInventorySelection" disabled>🏷️ พิมพ์ฉลากที่เลือก</button>
+                </div>
               </div>
               <div id="smartFilterMenu" class="smart-filter-menu" popover="auto" role="dialog" aria-label="ตัวกรองทะเบียนครุภัณฑ์">
                 <div class="smart-filter-menu-head">
@@ -211,13 +220,14 @@
               <table class="smart-asset-table">
                 <thead>
                   <tr>
-                    <th style="width: 170px;">เลขครุภัณฑ์ / FSN</th>
+                    <th class="asset-select-column"><input type="checkbox" id="selectVisibleAssets" aria-label="เลือกครุภัณฑ์ในหน้านี้สำหรับพิมพ์ฉลาก"></th>
+                    <th>เลขครุภัณฑ์ / FSN</th>
                     <th>รายการพัสดุ / ยี่ห้อ / รุ่น</th>
-                    <th style="width: 180px;">หมวดหมู่ครุภัณฑ์</th>
-                    <th style="width: 180px;">สถานที่ตั้ง / ผู้รับผิดชอบ</th>
-                    <th style="width: 160px;">ราคาทุน / คงเหลือสุทธิ</th>
-                    <th style="width: 110px;">สถานะ</th>
-                    <th style="width: 200px; text-align: center;">จัดการ</th>
+                    <th>หมวดหมู่ครุภัณฑ์</th>
+                    <th>สถานที่ตั้ง / ผู้รับผิดชอบ</th>
+                    <th>ราคาทุน / คงเหลือสุทธิ</th>
+                    <th>สถานะ</th>
+                    <th>จัดการ</th>
                   </tr>
                 </thead>
                 <tbody id="assetRows"></tbody>
@@ -236,8 +246,8 @@
             <aside class="panel sticker-asset-panel">
               <div class="panel-heading">
                 <div>
-                  <h2>ค้นหาและเลือกครุภัณฑ์</h2>
-                  <p>เลือกเทมเพลตที่บันทึกไว้เพื่อพิมพ์ฉลากครุภัณฑ์หรือ Location QR</p>
+                  <h2>ตั้งค่าข้อมูลฉลาก</h2>
+                  <p>แก้ไขข้อมูลส่วนกลางที่ใช้แสดงในเทมเพลตฉลาก</p>
                 </div>
                 <span id="stickerSelectionCount" class="sheet-count">0 รายการ</span>
               </div>
@@ -305,7 +315,7 @@
                     <div class="sticker-header-strip">
                       <div class="sticker-header-title">
                         <div class="eyebrow">LABEL DESIGNER STUDIO <span class="live-dot"></span> SMART QR</div>
-                        <h1>ออกแบบและพิมพ์สติกเกอร์ครุภัณฑ์</h1>
+                        <h1>ตั้งค่าเทมเพลตฉลาก</h1>
                       </div>
                       <div class="toolbar-group actions-group">
                         <button type="button" class="button primary" id="stickerSaveTemplate">💾 บันทึกแบบ</button>
@@ -335,6 +345,7 @@
                     <span id="stickerCanvasSizeLabel" class="code-text">75.2 × 36 มม.</span>
                   </div>
                   <div id="stickerPreview" class="sticker-preview-wrap" aria-label="ตัวอย่างสติกเกอร์"></div>
+                  <p id="stickerTextFitWarning" class="sticker-text-fit-warning" role="status" hidden></p>
                   <div class="sticker-element-toolbar">
                     <button type="button" class="button outline" id="stickerAddText">＋ ข้อความ</button>
                     <button type="button" class="button outline" id="stickerAddQr">＋ QR Code</button>
@@ -411,6 +422,25 @@
             </section>
           </div>
         </section>
+
+        <dialog id="inventoryStickerPrintDialog" class="inventory-print-dialog" aria-labelledby="inventoryStickerPrintTitle">
+          <form method="dialog" class="inventory-print-dialog-form" id="inventoryStickerPrintForm">
+            <div class="panel-heading">
+              <div>
+                <h2 id="inventoryStickerPrintTitle">พิมพ์ฉลากครุภัณฑ์</h2>
+                <p id="inventoryStickerPrintCount">—</p>
+              </div>
+              <button type="button" class="icon-btn" id="closeInventoryStickerPrint" aria-label="ปิด">×</button>
+            </div>
+            <label for="inventoryStickerTemplate">เลือกเทมเพลต</label>
+            <select id="inventoryStickerTemplate" required></select>
+            <small id="inventoryStickerTemplateSize">เลือกเทมเพลตที่บันทึกไว้เพื่อดูขนาดพิมพ์</small>
+            <div class="dialog-actions">
+              <button type="button" class="button outline" id="cancelInventoryStickerPrint">ยกเลิก</button>
+              <button type="submit" class="button primary" id="confirmInventoryStickerPrint">พิมพ์</button>
+            </div>
+          </form>
+        </dialog>
 
         <section class="view" id="view-repairs">
           <div class="page-heading"><div><div class="eyebrow">SERVICE DESK <span class="live-dot"></span> SQLite · Ticket workflow</div><h1>แจ้งซ่อมและติดตาม Ticket</h1><p>ออก Ticket ค้นหา ตรวจสอบเหตุการณ์ และดำเนินงานซ่อมครบลำดับ</p></div><div class="heading-actions"><button class="button primary" id="newRepairButton"><span>＋</span> เปิด Ticket</button></div></div>
@@ -555,6 +585,26 @@
             </div>
           </div></section>
 
+        <section class="view" id="view-reports">
+          <div class="page-heading"><div><div class="eyebrow">REPORTS</div><h1>รายงานและส่งออก</h1><p>เลือกรายงาน ตั้งตัวกรอง ดูตัวอย่าง แล้วส่งออกเป็น Excel, CSV หรือพิมพ์เป็น PDF ตามขอบเขตสิทธิ์ของคุณ</p></div></div>
+          <div class="reports-layout">
+            <nav class="reports-list panel" id="reportsList" aria-label="รายการรายงาน"></nav>
+            <section class="reports-body panel" aria-live="polite">
+              <div class="reports-toolbar">
+                <div class="reports-filters" id="reportsFilters"></div>
+                <div class="reports-actions">
+                  <button class="button outline" type="button" id="reportsRun">แสดงรายงาน</button>
+                  <button class="button" type="button" id="reportsXlsx">↓ Excel</button>
+                  <button class="button outline" type="button" id="reportsCsv">↓ CSV</button>
+                  <button class="button outline" type="button" id="reportsPdf" title="เปิดหน้าพิมพ์ แล้วเลือกบันทึกเป็น PDF">พิมพ์ / PDF</button>
+                </div>
+              </div>
+              <p class="reports-summary" id="reportsSummary" role="status">เลือกรายงานทางซ้าย</p>
+              <div class="reports-table-wrap"><table class="reports-table"><thead id="reportsHead"></thead><tbody id="reportsBody"></tbody></table></div>
+            </section>
+          </div>
+        </section>
+
         <section class="view" id="view-qr-smart">
           <div class="subpage-nav"><button class="button outline" type="button" data-go-view="settings">← กลับตั้งค่า</button></div>
           <div class="page-heading"><div><div class="eyebrow">QR SMART</div><h1>QR Smart</h1><p>ตั้งค่าการใช้ QR ครุภัณฑ์และ Location QR · ติดตามยืม/เบิกเกินกำหนดที่แดชบอร์ด</p></div><div class="page-actions"><button class="button outline" type="button" data-go-view="dashboard">ไปที่แดชบอร์ด →</button></div></div>
@@ -577,14 +627,46 @@
           <section class="panel qr-smart-collapsible qr-smart-tab-panel" id="qrSmartLocationsPanel" role="tabpanel" aria-labelledby="qrSmartLocationsTab" hidden>
             <div class="qr-smart-section-content">
               <div class="notice" id="qrSmartSimpleNotice" hidden><span class="notice-icon">i</span><div><b>Location QR ยังปิดอยู่</b><p>ไปที่แท็บ “บริการที่เปิดใช้งาน” แล้วเปิด Location QR ก่อนเพิ่มจุดและพิมพ์ป้าย</p></div></div>
-              <p class="qr-smart-location-workflow"><b>พิมพ์ป้าย:</b> เพิ่มจุดบริการ → บันทึก → เลือกจุดใน Sticker Studio เพื่อพิมพ์ตามขนาดเทมเพลต</p>
+              <p class="qr-smart-location-workflow"><b>พิมพ์ป้าย:</b> เพิ่มจุดบริการ → บันทึก → กดปุ่มพิมพ์ของจุดนั้น แล้วเลือกเทมเพลตที่บันทึกไว้</p>
               <div class="qr-smart-collapsible-actions">
                 <button class="button primary" type="button" id="qrSmartNewLocation">＋ เพิ่มจุดบริการ</button>
               </div>
-              <div id="qrSmartLocationList"></div>
+              <div class="qr-location-register-toolbar">
+                <label class="search-field" for="qrLocationRegisterSearch"><span>⌕</span><input id="qrLocationRegisterSearch" type="search" placeholder="ค้นหารหัส จุด อาคาร ชั้น หรือห้อง" aria-label="ค้นหาทะเบียน Location"></label>
+                <label class="qr-location-register-filter">ประเภท
+                  <select id="qrLocationKindFilter" aria-label="กรองประเภทพื้นที่"><option value="all">ทุกประเภท</option></select>
+                </label>
+                <label class="qr-location-register-filter">สถานะ
+                  <select id="qrLocationStatusFilter" aria-label="กรองสถานะ Location"><option value="all">ทุกสถานะ</option><option value="active">พร้อมใช้งาน</option><option value="inactive">ปิดชั่วคราว</option></select>
+                </label>
+              </div>
+              <div class="table-wrap qr-location-register-wrap">
+                <table class="smart-asset-table qr-location-register-table">
+                  <thead><tr><th>รหัส Location</th><th>ชื่อจุด / ชื่อที่ผู้สแกนเห็น</th><th>ประเภท</th><th>พื้นที่ / อยู่ภายใต้</th><th>ครุภัณฑ์ที่เปิดให้แจ้ง</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+                  <tbody id="qrSmartLocationList"></tbody>
+                </table>
+              </div>
+              <div class="panel-foot qr-location-register-foot">
+                <span id="qrLocationRegisterCount">กำลังโหลดทะเบียน Location…</span>
+                <div class="qr-location-register-pager">
+                  <button class="button outline mini-action" type="button" id="qrLocationPrevPage">‹ ก่อนหน้า</button>
+                  <span id="qrLocationRegisterPage">—</span>
+                  <button class="button outline mini-action" type="button" id="qrLocationNextPage">ถัดไป ›</button>
+                </div>
+              </div>
               <form id="qrSmartLocationForm" class="qr-smart-location-form" hidden></form>
             </div>
           </section>
+          <dialog id="qrLocationInfoDialog" class="qr-location-info-dialog" aria-labelledby="qrLocationInfoTitle">
+            <div class="qr-location-info-head">
+              <h2 id="qrLocationInfoTitle">ข้อมูล QR ของจุด</h2>
+              <button type="button" class="dialog-close" id="qrLocationInfoClose" aria-label="ปิด">✕</button>
+            </div>
+            <div class="qr-location-info-content">
+              <label>URL สำหรับเปิด QR<input id="qrLocationInfoUrl" readonly></label>
+              <label>โทเคนประจำจุด<input id="qrLocationInfoToken" readonly></label>
+            </div>
+          </dialog>
         </section>
       </main>
       <footer class="footer"><span>Smart Asset · ระบบบริหารจัดการทะเบียนครุภัณฑ์</span><span><b class="team-credit">POWER BY PNG TEAM</b> · ระบบจัดการข้อมูลครุภัณฑ์และสินทรัพย์</span></footer>
@@ -725,12 +807,12 @@
   </form></dialog>
   <div id="toast" role="status" aria-live="polite" class="toast"></div>
   <script src="access.js?v=4"></script>
-  <script src="app.js?v=20"></script>
+  <script src="app.js?v=24"></script>
   <script src="action-buttons.js"></script>
-  <script src="register-form.js?v=7"></script>
-  <script src="asset-tools.js?v=4"></script>
+  <script src="register-form.js?v=8"></script>
+  <script src="asset-tools.js?v=6"></script>
   <script src="master-data.js"></script>
-  <script src="smart.js?v=10"></script>
+  <script src="smart.js?v=12"></script>
   <script src="work.js"></script>
   <script src="notifications.js"></script>
   <script src="line-settings.js"></script>
@@ -738,13 +820,15 @@
   <script src="catalog-guidance.js?v=2"></script>
   <script src="governance.js"></script>
   <script src="account-registration.js?v=3"></script>
-  <script src="simple-workspace.js"></script>
+  <script src="simple-workspace.js?v=2"></script>
   <script src="inventory-workspace.js"></script>
   <script src="operational-master.js"></script>
   <script src="supply.js?v=2"></script>
   <script src="equipment-workspace.js"></script>
   <script src="qr-smart.js?v=9"></script>
-  <script src="dashboard-showcase.js?v=10"></script>
+  <script src="reports.js?v=13"></script>
+  <script src="ticket-items.js?v=3"></script>
+  <script src="dashboard-showcase.js?v=13"></script>
 
   <!-- Loading Overlay (แสดงเมื่อเรียก API) -->
   <div id="app-loading">
