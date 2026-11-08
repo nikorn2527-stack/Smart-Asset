@@ -27,9 +27,10 @@
 .access-panel label>span:first-child{font-size:13px;font-weight:700;color:#f0f7f8;text-shadow:0 1px 7px rgba(0,0,0,.45)}
 .access-panel input{width:100%;height:48px;padding:0 14px;font:inherit;font-size:15px;color:#fff;background:transparent;border:1px solid rgba(151,209,204,.48);border-radius:12px;box-sizing:border-box;transition:border-color .15s,box-shadow .15s}
 .access-panel input:invalid{border-color:rgba(151,209,204,.48)}
+.access-overlay form.access-panel input[aria-invalid="true"]{border-color:rgba(151,209,204,.42)!important;box-shadow:none!important}
 .access-panel input::placeholder{color:rgba(233,246,247,.7)}
 .access-panel input:focus{outline:0;background:transparent;border-color:rgba(126,219,210,.82);box-shadow:0 0 0 3px rgba(47,181,169,.2)}
-.access-panel input:-webkit-autofill,.access-panel input:-webkit-autofill:hover,.access-panel input:-webkit-autofill:focus{background-color:transparent!important;-webkit-text-fill-color:#fff;-webkit-box-shadow:0 0 0 1000px transparent inset;transition:background-color 9999s ease-out}
+.access-panel input:-webkit-autofill,.access-panel input:-webkit-autofill:hover,.access-panel input:-webkit-autofill:focus{background-color:rgba(7,40,55,.84)!important;-webkit-text-fill-color:#fff!important;-webkit-box-shadow:0 0 0 1000px rgba(7,40,55,.84) inset!important;caret-color:#fff;transition:background-color 9999s ease-out}
 .access-password{position:relative;display:block}
 .access-password input{padding-right:76px}
 .access-reveal{position:absolute;top:50%;right:8px;transform:translateY(-50%);height:34px;padding:0 12px;border:1px solid rgba(151,209,204,.35);border-radius:9px;background:transparent;color:#e8f7f6;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
@@ -49,7 +50,7 @@
 @media(max-width:900px){
   .access-overlay{grid-template-columns:1fr;align-content:center}
   .access-hero{display:none}
-  .access-panel{margin:24px auto}
+  .access-panel{margin:24px auto;background:rgba(7,40,55,.48);border:1px solid rgba(220,245,245,.24);border-radius:20px;box-shadow:0 24px 60px rgba(0,15,24,.28);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
   .access-panel-brand,.access-panel-credit{display:flex}
   .access-panel-credit{justify-content:center}
 }
