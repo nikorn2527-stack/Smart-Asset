@@ -1,7 +1,8 @@
 """Password sessions and organization/branch access. Default-on; legacy mode is explicit."""
 import hashlib,hmac,json,os,re,secrets,sqlite3,time
 from http.cookies import SimpleCookie
-from urllib.parse import urlparse
+from urllib.parse import urlparse,urlencode
+from urllib.request import Request,urlopen
 from governance import GovernanceError,ident,text,dump
 PERMISSIONS=('view','create','edit','approve','export','manage','work')
 ACTORS=('ผู้แจ้ง','เจ้าหน้าที่พัสดุ','ผู้อนุมัติ','ช่าง')
@@ -11,6 +12,10 @@ CREATE TABLE IF NOT EXISTS user_memberships(id INTEGER PRIMARY KEY AUTOINCREMENT
 CREATE UNIQUE INDEX IF NOT EXISTS idx_membership_scope ON user_memberships(user_id,account_id,COALESCE(branch_id,0));
 CREATE TABLE IF NOT EXISTS app_sessions(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES app_users(id),csrf TEXT NOT NULL,expires_at INTEGER NOT NULL,account_id INTEGER REFERENCES asset_accounts(id),branch_id INTEGER REFERENCES account_branches(id),actor TEXT NOT NULL DEFAULT 'ผู้แจ้ง');
 CREATE TABLE IF NOT EXISTS login_attempts(key TEXT PRIMARY KEY,failures INTEGER NOT NULL,blocked_until INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS access_requests(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL,name TEXT NOT NULL,department TEXT NOT NULL DEFAULT '',contact TEXT NOT NULL DEFAULT '',requested_role TEXT NOT NULL DEFAULT 'ผู้แจ้ง',password_hash TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',account_id INTEGER REFERENCES asset_accounts(id),line_user_id TEXT NOT NULL DEFAULT '',oauth_provider TEXT NOT NULL DEFAULT '',oauth_subject TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'pending',reviewed_by TEXT NOT NULL DEFAULT '',review_note TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,reviewed_at TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS login_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL,ip TEXT NOT NULL,user_agent TEXT NOT NULL DEFAULT '',success INTEGER NOT NULL,reason TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS user_identities(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL REFERENCES app_users(id),provider TEXT NOT NULL,subject TEXT NOT NULL,display_name TEXT NOT NULL DEFAULT '',picture_url TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(provider,subject));
+CREATE TABLE IF NOT EXISTS oauth_states(state TEXT PRIMARY KEY,expires_at INTEGER NOT NULL);
 '''
 class Connection(sqlite3.Connection):pass
 
@@ -18,9 +23,46 @@ def required():return os.environ.get('ASSET_AUTH_REQUIRED','1')!='0'
 def initialize(path):
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA)
+        cols={r[1] for r in db.execute('PRAGMA table_info(access_requests)')}
+        for col in ('line_user_id','oauth_provider','oauth_subject'):
+            if col not in cols:
+                db.execute(f"ALTER TABLE access_requests ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
         center=db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER' AND is_active=1").fetchone() if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='asset_accounts'").fetchone() else None
         if center:
             db.execute('UPDATE app_sessions SET account_id=? WHERE account_id IS NULL',(center[0],))
+
+
+def _client_ip(handler):
+    xff=(handler.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
+    return xff[:64] if xff else handler.client_address[0]
+
+
+def _is_https(handler):
+    return os.environ.get('PUBLIC_BASE_URL','').startswith('https://') or (handler.headers.get('X-Forwarded-Proto') or '').lower()=='https'
+
+
+def _public_base_url(handler):
+    env=os.environ.get('PUBLIC_BASE_URL','').rstrip('/')
+    if env:return env
+    proto='https' if _is_https(handler) else 'http'
+    host=handler.headers.get('Host','localhost:8000')
+    return f'{proto}://{host}'
+
+
+def _line_enabled():
+    return bool((os.environ.get('LINE_LOGIN_CHANNEL_ID') or '').strip() and (os.environ.get('LINE_LOGIN_CHANNEL_SECRET') or '').strip())
+
+
+def _google_enabled():
+    return bool((os.environ.get('GOOGLE_CLIENT_ID') or '').strip() and (os.environ.get('GOOGLE_CLIENT_SECRET') or '').strip())
+
+
+def _apple_enabled():
+    return bool((os.environ.get('APPLE_CLIENT_ID') or '').strip() and (os.environ.get('APPLE_TEAM_ID') or '').strip() and (os.environ.get('APPLE_KEY_ID') or '').strip() and (os.environ.get('APPLE_PRIVATE_KEY') or '').strip())
+
+
+def _show_apple_notice():
+    return os.environ.get('SHOW_APPLE_LOGIN_NOTICE','0')=='1'
 def fail(message,status=403):raise GovernanceError(message,status)
 def password_hash(password):
     if not isinstance(password,str) or not 10<=len(password)<=128:fail('รหัสผ่านต้องยาว 10–128 ตัวอักษร',400)
@@ -99,8 +141,8 @@ def new_session(db,handler,user):
             for p in PERMISSIONS:permissions[p]|=bool(g['permissions'].get(p))
     actor='เจ้าหน้าที่พัสดุ' if user['global_role']=='admin' or any(permissions[p] for p in ('create','edit','manage')) else 'ผู้อนุมัติ' if permissions['approve'] else 'ช่าง' if permissions['work'] else 'ผู้แจ้ง'
     db.execute('INSERT INTO app_sessions VALUES(?,?,?,?,?,?,?)',(hashlib.sha256(raw.encode()).hexdigest(),user['id'],csrf,int(time.time())+8*3600,aid,bid,actor))
-    secure='; Secure' if os.environ.get('PUBLIC_BASE_URL','').startswith('https://') else ''
-    handler.session_cookie='smart_asset_session='+raw+'; Path=/; HttpOnly; SameSite=Strict; Max-Age=28800'+secure
+    secure='; Secure' if _is_https(handler) else ''
+    handler.session_cookie='smart_asset_session='+raw+'; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800'+secure
     row=db.execute('SELECT * FROM app_sessions WHERE token_hash=?',(hashlib.sha256(raw.encode()).hexdigest(),)).fetchone()
     return context(db,user,row) if user['global_role']!='user' or grants else {'user':{k:user[k] for k in ('id','username','name','global_role')},'memberships':[],'needsAccess':True,'csrf':csrf,'roles':['ผู้แจ้ง'],'actor':'ผู้แจ้ง'}
 
@@ -119,13 +161,14 @@ def auth_api(db,handler,method,path,body):
     if path=='/api/auth/session' and method=='GET':
         if not required():return {'required':False}
         needs=not db.execute('SELECT 1 FROM app_users LIMIT 1').fetchone()
-        if needs:return {'required':True,'authenticated':False,'setupRequired':True}
+        flags={'lineLoginEnabled':_line_enabled(),'googleLoginEnabled':_google_enabled(),'appleLoginEnabled':_apple_enabled(),'showAppleNotice':_show_apple_notice()}
+        if needs:return {'required':True,'authenticated':False,'setupRequired':True,'lineLoginEnabled':False,'googleLoginEnabled':False,'appleLoginEnabled':False,'showAppleNotice':False}
         try:
             user,s=session_user(db,handler)
             try:ctx=context(db,user,s)
             except GovernanceError:ctx={'user':{k:user[k] for k in ('id','username','name','global_role')},'needsAccess':True,'memberships':memberships(db,user['id']),'csrf':s['csrf'],'roles':['ผู้แจ้ง'],'actor':'ผู้แจ้ง'}
-            return {'required':True,'authenticated':True,**ctx}
-        except GovernanceError:return {'required':True,'authenticated':False,'setupRequired':False}
+            return {'required':True,'authenticated':True,**flags,**ctx}
+        except GovernanceError:return {'required':True,'authenticated':False,'setupRequired':False,**flags}
     if method=='POST' and path in ('/api/auth/setup','/api/auth/login'):
         origin_check(handler);username=text(body.get('username'),'ชื่อผู้ใช้',80).casefold()
         if not re.fullmatch(r'[a-z0-9ก-๙._@-]{3,80}',username):fail('ชื่อผู้ใช้ใช้ตัวอักษร ตัวเลข . _ @ - อย่างน้อย 3 ตัว',400)
@@ -135,20 +178,51 @@ def auth_api(db,handler,method,path,body):
             if db.execute('SELECT 1 FROM app_users LIMIT 1').fetchone():fail('มีผู้ดูแลแล้ว กรุณาเข้าสู่ระบบ',409)
             uid=db.execute("INSERT INTO app_users(username,name,password_hash,global_role) VALUES(?,?,?,'admin')",(username,text(body.get('name'),'ชื่อผู้ดูแล',160),hashed)).lastrowid
             return {'authenticated':True,'required':True,**new_session(db,handler,db.execute('SELECT * FROM app_users WHERE id=?',(uid,)).fetchone())}
-        key=hashlib.sha256((handler.client_address[0]+':'+username).encode()).hexdigest();attempt=db.execute('SELECT * FROM login_attempts WHERE key=?',(key,)).fetchone();now=int(time.time())
+        ip=_client_ip(handler)
+        key=hashlib.sha256((ip+':'+username).encode()).hexdigest();attempt=db.execute('SELECT * FROM login_attempts WHERE key=?',(key,)).fetchone();now=int(time.time())
         if attempt and attempt['blocked_until']>now:fail('เข้าสู่ระบบผิดหลายครั้ง กรุณารอ 5 นาที',429)
         user=db.execute('SELECT * FROM app_users WHERE username=? AND is_active=1',(username,)).fetchone()
         dummy='pbkdf2_sha256$600000$invalidsalt$'+'0'*64
+        ua=str(handler.headers.get('User-Agent','') or '')[:300]
         if not check_password(body.get('password',''),user['password_hash'] if user else dummy):
             failures=(attempt['failures'] if attempt and attempt['blocked_until']>now-300 else 0)+1
-            db.execute('INSERT INTO login_attempts VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET failures=excluded.failures,blocked_until=excluded.blocked_until',(key,failures,now+300 if failures>=5 else now));fail('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',401)
-        db.execute('DELETE FROM login_attempts WHERE key=?',(key,));return {'authenticated':True,'required':True,**new_session(db,handler,user)}
+            db.execute('INSERT INTO login_attempts VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET failures=excluded.failures,blocked_until=excluded.blocked_until',(key,failures,now+300 if failures>=5 else now))
+            db.execute("INSERT INTO login_audit(username,ip,user_agent,success,reason) VALUES(?,?,?,0,'bad_credentials')",(username,ip,ua))
+            fail('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',401)
+        db.execute('DELETE FROM login_attempts WHERE key=?',(key,))
+        db.execute("INSERT INTO login_audit(username,ip,user_agent,success,reason) VALUES(?,?,?,1,'ok')",(username,ip,ua))
+        return {'authenticated':True,'required':True,**new_session(db,handler,user)}
+    if method=='POST' and path=='/api/auth/request-access':
+        origin_check(handler)
+        ip=_client_ip(handler)
+        key=hashlib.sha256(('req:'+ip).encode()).hexdigest();attempt=db.execute('SELECT * FROM login_attempts WHERE key=?',(key,)).fetchone();now=int(time.time())
+        if attempt and attempt['blocked_until']>now:fail('ส่งคำขอบ่อยเกินไป กรุณารอสักครู่',429)
+        username=text(body.get('username'),'ชื่อผู้ใช้',80).casefold()
+        if not re.fullmatch(r'[a-z0-9ก-๙._@-]{3,80}',username):fail('ชื่อผู้ใช้ใช้ตัวอักษร ตัวเลข . _ @ - อย่างน้อย 3 ตัว',400)
+        name=text(body.get('name'),'ชื่อ-นามสกุล',160)
+        department=text(body.get('department',''),'แผนก/ตำแหน่ง',160,False)
+        contact=text(body.get('contact',''),'เบอร์โทร/LINE',120,False)
+        req_role=str(body.get('requestedRole') or 'ผู้แจ้ง').strip()
+        if req_role not in ACTORS:req_role='ผู้แจ้ง'
+        reason=text(body.get('reason',''),'เหตุผล/หมายเหตุ',400,False)
+        hashed=password_hash(body.get('password'))
+        if db.execute('SELECT 1 FROM app_users WHERE username=?',(username,)).fetchone():fail('ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว กรุณาใช้ชื่อผู้ใช้อื่นหรือเข้าสู่ระบบ',409)
+        if db.execute("SELECT 1 FROM access_requests WHERE username=? AND status='pending'",(username,)).fetchone():fail('ชื่อผู้ใช้นี้ส่งคำขอไว้แล้ว กรุณารอผู้ดูแลอนุมัติ',409)
+        center=db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER' AND is_active=1").fetchone()
+        aid=ident(body.get('accountId'),True) or (center[0] if center else None)
+        oauth_provider,oauth_subject=_read_oauth_link_cookie(handler)
+        line_uid=oauth_subject if oauth_provider=='line' else ''
+        failures=(attempt['failures'] if attempt and attempt['blocked_until']>now-600 else 0)+1
+        db.execute('INSERT INTO login_attempts VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET failures=excluded.failures,blocked_until=excluded.blocked_until',(key,failures,now+600 if failures>=10 else now))
+        db.execute('BEGIN IMMEDIATE')
+        db.execute("INSERT INTO access_requests(username,name,department,contact,requested_role,password_hash,reason,account_id,line_user_id,oauth_provider,oauth_subject,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending')",(username,name,department,contact,req_role,hashed,reason,aid,line_uid,oauth_provider,oauth_subject))
+        return {'ok':True,'message':'ส่งคำขอเข้าใช้งานแล้ว กรุณารอผู้ดูแลระบบอนุมัติ'},201
     user,s=session_user(db,handler)
     if method!='GET':
         origin_check(handler)
         if not hmac.compare_digest(handler.headers.get('X-CSRF-Token',''),s['csrf']):fail('ข้อมูลยืนยันคำขอไม่ถูกต้อง')
     if path=='/api/auth/logout' and method=='POST':
-        db.execute('DELETE FROM app_sessions WHERE token_hash=?',(s['token_hash'],));handler.session_cookie='smart_asset_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0';return {'ok':True}
+        db.execute('DELETE FROM app_sessions WHERE token_hash=?',(s['token_hash'],));handler.session_cookie='smart_asset_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';return {'ok':True}
     if path=='/api/auth/scope' and method=='POST':
         aid=ident(body.get('accountId'),True);bid=ident(body.get('branchId'),True)
         if aid is not None and not db.execute('SELECT 1 FROM asset_accounts WHERE id=? AND is_active=1',(aid,)).fetchone():fail('ไม่พบองค์กร')
@@ -166,7 +240,182 @@ def auth_api(db,handler,method,path,body):
         branches=[dict(r) for r in db.execute('SELECT id,account_id,name,code FROM account_branches WHERE is_active=1') if ctx['canViewAll'] or any(g['account_id']==r['account_id'] and g['branch_id'] in (None,r['id']) for g in ctx['memberships'])]
         return {'accounts':accounts,'branches':branches}
     if path=='/api/auth/users':return users_api(db,ctx,method,body)
+    if path=='/api/auth/requests':return requests_api(db,ctx,method,body)
+    if path=='/api/auth/requests/review':return requests_review_api(db,ctx,method,body)
     fail('ไม่พบเส้นทางผู้ใช้งาน',404)
+
+
+def requests_api(db,ctx,method,body):
+    if not ctx['permissions']['manage']:fail('ต้องได้รับสิทธิ์จัดการผู้ใช้งาน')
+    if method!='GET':fail('ไม่รองรับคำสั่ง',405)
+    where="1=1" if ctx['isAdmin'] else f"(r.account_id IS NULL OR r.account_id={int(ctx['accountId'])})"
+    rows=db.execute("SELECT r.id,r.username,r.name,r.department,r.contact,r.requested_role AS requestedRole,r.reason,r.account_id AS accountId,r.status,r.reviewed_by AS reviewedBy,r.review_note AS reviewNote,r.created_at AS createdAt,r.reviewed_at AS reviewedAt,a.name AS accountName FROM access_requests r LEFT JOIN asset_accounts a ON a.id=r.account_id WHERE "+where+" ORDER BY CASE WHEN r.status='pending' THEN 0 ELSE 1 END, r.id DESC LIMIT 50").fetchall()
+    return {'items':[dict(r) for r in rows]}
+
+
+def requests_review_api(db,ctx,method,body):
+    if not ctx['permissions']['manage']:fail('ต้องได้รับสิทธิ์จัดการผู้ใช้งาน')
+    if method!='POST':fail('ไม่รองรับคำสั่ง',405)
+    rid=ident(body.get('requestId'))
+    action=str(body.get('action') or '').strip()
+    if action not in ('approve','reject'):fail('คำสั่งพิจารณาไม่ถูกต้อง',400)
+    req=db.execute('SELECT * FROM access_requests WHERE id=?',(rid,)).fetchone()
+    if not req:fail('ไม่พบคำขอเข้าใช้งาน',404)
+    if req['status']!='pending':fail('คำขอนี้ได้รับการพิจารณาแล้ว',409)
+    if not ctx['isAdmin'] and req['account_id'] not in (None,ctx['accountId']):fail('ไม่มีสิทธิ์พิจารณาคำขอขององค์กรอื่น')
+    review_note=text(body.get('reviewNote',''),'หมายเหตุ',400,False)
+    now_str=time.strftime('%Y-%m-%d %H:%M:%S')
+    db.execute('BEGIN IMMEDIATE')
+    if action=='reject':
+        db.execute("UPDATE access_requests SET status='rejected',reviewed_by=?,review_note=?,reviewed_at=? WHERE id=?",(ctx['user']['username'],review_note,now_str,rid))
+        return {'ok':True,'status':'rejected'}
+    if db.execute('SELECT 1 FROM app_users WHERE username=?',(req['username'],)).fetchone():fail('ชื่อผู้ใช้นี้ถูกใช้งานแล้ว',409)
+    role_preset=str(body.get('rolePreset') or req['requested_role'] or 'ผู้แจ้ง').strip()
+    preset_map={
+        'ผู้แจ้ง':{'view':True,'create':True},
+        'ผู้อนุมัติ':{'view':True,'create':True,'approve':True},
+        'ช่าง':{'view':True,'work':True},
+        'เจ้าหน้าที่พัสดุ':{'view':True,'create':True,'edit':True,'export':True,'work':True},
+    }
+    perms={p:bool(preset_map.get(role_preset,preset_map['ผู้แจ้ง']).get(p,False)) for p in PERMISSIONS}
+    if not ctx['isAdmin'] and any(perms[p] and not ctx['permissions'][p] for p in PERMISSIONS):fail('ให้สิทธิ์เกินกว่าที่ตนเองมีไม่ได้')
+    aid=ident(body.get('accountId'),True) or req['account_id'] or ctx['accountId']
+    if not aid or not db.execute('SELECT 1 FROM asset_accounts WHERE id=? AND is_active=1',(aid,)).fetchone():fail('กรุณาระบุองค์กรที่อนุมัติสิทธิ์',400)
+    uid=db.execute("INSERT INTO app_users(username,name,password_hash,global_role,is_active) VALUES(?,?,?,'user',1)",(req['username'],req['name'],req['password_hash'])).lastrowid
+    db.execute('INSERT INTO user_memberships(user_id,account_id,branch_id,permissions_json) VALUES(?,?,NULL,?)',(uid,aid,dump(perms)))
+    if 'oauth_provider' in req.keys() and req['oauth_provider'] and req['oauth_subject']:
+        db.execute("INSERT OR IGNORE INTO user_identities(user_id,provider,subject,display_name) VALUES(?,?,?,?)",(uid,req['oauth_provider'],req['oauth_subject'],req['name']))
+    elif 'line_user_id' in req.keys() and req['line_user_id']:
+        db.execute("INSERT OR IGNORE INTO user_identities(user_id,provider,subject,display_name) VALUES(?,?,?,?)",(uid,'line',req['line_user_id'],req['name']))
+    db.execute("UPDATE access_requests SET status='approved',reviewed_by=?,review_note=?,reviewed_at=? WHERE id=?",(ctx['user']['username'],review_note,now_str,rid))
+    db.execute('INSERT INTO account_events(actor,kind,entity_id,before_json,after_json) VALUES(?,?,?,?,?)',(ctx['user']['username'],'access-request-approved',uid,'{}',dump({'requestId':rid,'username':req['username'],'rolePreset':role_preset,'accountId':aid})))
+    return {'ok':True,'status':'approved','userId':uid}
+
+
+def _oauth_secret() -> bytes:
+    raw=os.environ.get('OAUTH_LINK_SECRET') or os.environ.get('GOOGLE_CLIENT_SECRET') or os.environ.get('LINE_LOGIN_CHANNEL_SECRET') or ''
+    return raw.encode()
+
+
+def _sign_oauth_link(provider: str, subject: str) -> str:
+    secret=_oauth_secret()
+    if not secret or not provider or not subject:return ''
+    exp=str(int(time.time())+600)
+    payload=f'{provider}:{subject}.{exp}'
+    sig=hmac.new(secret,payload.encode(),hashlib.sha256).hexdigest()
+    return f'{provider}:{subject}.{exp}.{sig}'
+
+
+def _read_oauth_link_cookie(handler) -> tuple[str, str]:
+    secret=_oauth_secret()
+    if not secret:return '',''
+    cookie=SimpleCookie()
+    try:
+        cookie.load(handler.headers.get('Cookie',''))
+        raw=cookie.get('smart_asset_oauth_link')
+        if not raw:return '',''
+        prov_sub,exp,sig=raw.value.rsplit('.',2)
+        provider,subject=prov_sub.split(':',1)
+        if int(exp)<int(time.time()):return '',''
+        expected=hmac.new(secret,f'{provider}:{subject}.{exp}'.encode(),hashlib.sha256).hexdigest()
+        return (provider,subject) if hmac.compare_digest(sig,expected) else ('','')
+    except Exception:
+        return '',''
+
+
+def _finish_oauth_login(db, handler, provider: str, subject: str, display_name: str, email: str = '') -> str:
+    ident_row=db.execute('SELECT user_id FROM user_identities WHERE provider=? AND subject=?',(provider,subject)).fetchone()
+    if ident_row:
+        user=db.execute('SELECT * FROM app_users WHERE id=? AND is_active=1',(ident_row['user_id'],)).fetchone()
+        if user:
+            ip=_client_ip(handler)
+            ua=str(handler.headers.get('User-Agent','') or '')[:300]
+            db.execute("INSERT INTO login_audit(username,ip,user_agent,success,reason) VALUES(?,?,?,1,?)",(user['username'],ip,ua,f'{provider}_oauth'))
+            new_session(db,handler,user)
+            return '/'
+    signed=_sign_oauth_link(provider,subject)
+    secure='; Secure' if _is_https(handler) else ''
+    handler.session_cookie=f'smart_asset_oauth_link={signed}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600{secure}'
+    return '/?' + urlencode({'oauth_register':'1','provider':provider,'name':display_name,'email':email})
+
+
+def oauth_redirect(db, handler, path: str, query: dict) -> str:
+    if path.startswith('/api/auth/apple/'):
+        return '/?' + urlencode({'oauth_error':'Sign in with Apple ยังไม่รองรับในขณะนี้ (ต้องใช้บัญชี Apple Developer) กรุณาใช้บัญชีผู้ใช้, LINE หรือ Google แทน'})
+    if path.startswith('/api/auth/google/'):
+        return google_oauth_redirect(db, handler, path, query)
+    return line_oauth_redirect(db, handler, path, query)
+
+
+def google_oauth_redirect(db, handler, path: str, query: dict) -> str:
+    if not _google_enabled():
+        return '/?' + urlencode({'oauth_error':'ระบบยังไม่เปิดใช้งาน Google Login'})
+    cid=os.environ.get('GOOGLE_CLIENT_ID','').strip()
+    csec=os.environ.get('GOOGLE_CLIENT_SECRET','').strip()
+    redirect_uri=_public_base_url(handler)+'/api/auth/google/callback'
+    now=int(time.time())
+    if path=='/api/auth/google/start':
+        state=secrets.token_urlsafe(24)
+        db.execute('DELETE FROM oauth_states WHERE expires_at<=?',(now,))
+        db.execute('INSERT INTO oauth_states(state,expires_at) VALUES(?,?)',(state,now+600))
+        params=urlencode({'response_type':'code','client_id':cid,'redirect_uri':redirect_uri,'state':state,'scope':'openid email profile','prompt':'select_account'})
+        return f'https://accounts.google.com/o/oauth2/v2/auth?{params}'
+    code=(query.get('code') or [''])[0]
+    state=(query.get('state') or [''])[0]
+    row=db.execute('SELECT state FROM oauth_states WHERE state=? AND expires_at>?',(state,now)).fetchone() if state else None
+    if not code or not row:
+        return '/?' + urlencode({'oauth_error':'การยืนยัน Google หมดอายุ กรุณาลองใหม่'})
+    db.execute('DELETE FROM oauth_states WHERE state=?',(state,))
+    try:
+        token_req=Request('https://oauth2.googleapis.com/token',data=urlencode({'grant_type':'authorization_code','code':code,'redirect_uri':redirect_uri,'client_id':cid,'client_secret':csec}).encode(),headers={'Content-Type':'application/x-www-form-urlencoded'})
+        with urlopen(token_req,timeout=10) as resp:
+            tok=json.loads(resp.read().decode())
+        prof_req=Request('https://openidconnect.googleapis.com/v1/userinfo',headers={'Authorization':'Bearer '+tok['access_token']})
+        with urlopen(prof_req,timeout=10) as resp:
+            prof=json.loads(resp.read().decode())
+    except Exception:
+        return '/?' + urlencode({'oauth_error':'ไม่สามารถเชื่อมต่อ Google ได้ กรุณาลองใหม่'})
+    sub=str(prof.get('sub') or '')
+    display_name=str(prof.get('name') or prof.get('email') or '')
+    email=str(prof.get('email') or '')
+    if not sub:
+        return '/?' + urlencode({'oauth_error':'ไม่พบรหัสผู้ใช้ Google'})
+    return _finish_oauth_login(db,handler,'google',sub,display_name,email)
+
+
+def line_oauth_redirect(db, handler, path: str, query: dict) -> str:
+    if not _line_enabled():
+        return '/?' + urlencode({'oauth_error':'ระบบยังไม่เปิดใช้งาน LINE Login'})
+    cid=os.environ.get('LINE_LOGIN_CHANNEL_ID','').strip()
+    csec=os.environ.get('LINE_LOGIN_CHANNEL_SECRET','').strip()
+    redirect_uri=_public_base_url(handler)+'/api/auth/line/callback'
+    now=int(time.time())
+    if path=='/api/auth/line/start':
+        state=secrets.token_urlsafe(24)
+        db.execute('DELETE FROM oauth_states WHERE expires_at<=?',(now,))
+        db.execute('INSERT INTO oauth_states(state,expires_at) VALUES(?,?)',(state,now+600))
+        params=urlencode({'response_type':'code','client_id':cid,'redirect_uri':redirect_uri,'state':state,'scope':'profile openid'})
+        return f'https://access.line.me/oauth2/v2.1/authorize?{params}'
+    code=(query.get('code') or [''])[0]
+    state=(query.get('state') or [''])[0]
+    row=db.execute('SELECT state FROM oauth_states WHERE state=? AND expires_at>?',(state,now)).fetchone() if state else None
+    if not code or not row:
+        return '/?' + urlencode({'oauth_error':'การยืนยัน LINE หมดอายุ กรุณาลองใหม่'})
+    db.execute('DELETE FROM oauth_states WHERE state=?',(state,))
+    try:
+        token_req=Request('https://api.line.me/oauth2/v2.1/token',data=urlencode({'grant_type':'authorization_code','code':code,'redirect_uri':redirect_uri,'client_id':cid,'client_secret':csec}).encode(),headers={'Content-Type':'application/x-www-form-urlencoded'})
+        with urlopen(token_req,timeout=10) as resp:
+            tok=json.loads(resp.read().decode())
+        prof_req=Request('https://api.line.me/v2/profile',headers={'Authorization':'Bearer '+tok['access_token']})
+        with urlopen(prof_req,timeout=10) as resp:
+            prof=json.loads(resp.read().decode())
+    except Exception:
+        return '/?' + urlencode({'oauth_error':'ไม่สามารถเชื่อมต่อ LINE ได้ กรุณาลองใหม่'})
+    line_uid=str(prof.get('userId') or '')
+    display_name=str(prof.get('displayName') or '')
+    if not line_uid:
+        return '/?' + urlencode({'oauth_error':'ไม่พบรหัสผู้ใช้ LINE'})
+    return _finish_oauth_login(db,handler,'line',line_uid,display_name)
 
 def users_api(db,ctx,method,body):
     if not ctx['permissions']['manage']:fail('ต้องได้รับสิทธิ์จัดการผู้ใช้งาน')

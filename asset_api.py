@@ -8,6 +8,7 @@ import json
 import re
 import sqlite3
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from master_data_api import handle as handle_master_data
 from numbering import get_catalog, link_code
@@ -105,7 +106,7 @@ def _extract_location_parts(loc: str, detail: str = "") -> tuple[str, str, str, 
 
 def ensure_location_hierarchy(db: sqlite3.Connection) -> None:
     cols = {r[1] for r in db.execute("PRAGMA table_info(assets)")}
-    for col in ("building", "floor", "room", "sub_unit"):
+    for col in ("building", "floor", "room", "sub_unit", "notes"):
         if col not in cols:
             db.execute(f"ALTER TABLE assets ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
     db.execute("CREATE INDEX IF NOT EXISTS idx_assets_location_hierarchy ON assets(numbering_account_id,building,floor,room,sub_unit)")
@@ -125,7 +126,7 @@ def ensure_location_hierarchy(db: sqlite3.Connection) -> None:
 
 
 def _inventory_select() -> str:
-    return """SELECT a.id,a.name,a.detail,a.code,a.group_name,a.location,a.building,a.floor,a.room,a.sub_unit,a.acquired_year,a.status,a.icon,a.created_at,a.created_by,a.category_id,
+    return """SELECT a.id,a.name,a.detail,a.code,a.group_name,a.location,a.building,a.floor,a.room,a.sub_unit,a.notes,a.acquired_year,a.status,a.icon,a.created_at,a.created_by,a.category_id,
         a.fsn_code,a.old_asset_code,a.maintenance_status,a.asset_status_source,a.asset_type,a.fiscal_year_th,a.acquisition_date,a.delivery_date,
         a.acquisition_method,a.purchase_price,a.gfmis_no,a.po_no,a.model,a.serial_number,a.useful_life_years,a.depreciation_policy_id,
         a.depreciation_value,a.accumulated_depreciation,a.net_book_value,a.valuation_date,a.remaining_days,a.is_loaned,a.loan_price,
@@ -173,10 +174,11 @@ def _inventory_item(row: sqlite3.Row) -> dict[str, Any]:
     floor = row["floor"] if "floor" in keys else ""
     room = row["room"] if "room" in keys else ""
     sub_unit = row["sub_unit"] if "sub_unit" in keys else ""
+    notes = row["notes"] if "notes" in keys else ""
     item = {
         "id": row["id"], "name": name, "detail": row["detail"] or row["register_description"] or "",
         "code": row["code"], "group": row["category_name"] or row["group_name"], "location": location,
-        "building": building, "floor": floor, "room": room, "subUnit": sub_unit,
+        "building": building, "floor": floor, "room": room, "subUnit": sub_unit, "notes": notes,
         "date": row["created_at"], "status": row["status"], "icon": row["icon"], "createdBy": row["created_by"],
         "accountName": row["account_name"], "branchName": row["branch_name"], "accountId": row["numbering_account_id"], "branchId": row["branch_id"], "profileId": row["numbering_profile_id"], "categoryId": row["category_id"], "fsnCode": row["fsn_code"], "assetType": row["register_asset_type"] or row["asset_type"],
         "organization": row["organization_name"] or "", "department": row["department_name"] or "",
@@ -240,7 +242,7 @@ def _where(query: dict) -> tuple[str, list[Any]]:
     text = _one(query, "q").strip()
     if text:
         like = f"%{text}%"
-        searchable = ["a.fsn_code", "a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.building", "a.floor", "a.room", "a.sub_unit", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name", "account.name", "branch.name", "category_label.name"]
+        searchable = ["a.fsn_code", "a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.building", "a.floor", "a.room", "a.sub_unit", "a.notes", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name", "account.name", "branch.name", "category_label.name"]
         searchable_terms = [f"COALESCE({column},'') LIKE ?" for column in searchable]
         searchable_terms.append("EXISTS(SELECT 1 FROM asset_register_details rr WHERE rr.asset_id=a.id AND (rr.vendor_name LIKE ? OR rr.description LIKE ?))")
         values.extend([like] * len(searchable))
@@ -251,8 +253,16 @@ def _where(query: dict) -> tuple[str, list[Any]]:
         terms.append("(" + " OR ".join(searchable_terms) + ")")
     statuses = [value for value in _many(query, "status") if value != "all"]
     if statuses:
-        terms.append(f"a.status IN ({','.join('?' for _ in statuses)})")
-        values.extend(statuses)
+        if "active_only" in statuses:
+            other = [s for s in statuses if s != "active_only"]
+            if other:
+                terms.append(f"(a.status!='จำหน่ายแล้ว' OR a.status IN ({','.join('?' for _ in other)}))")
+                values.extend(other)
+            else:
+                terms.append("a.status!='จำหน่ายแล้ว'")
+        else:
+            terms.append(f"a.status IN ({','.join('?' for _ in statuses)})")
+            values.extend(statuses)
     categories = _many(query, "category")
     if categories:
         category_terms = []
@@ -353,6 +363,114 @@ def bulk_update_location(db: sqlite3.Connection, body: dict) -> dict[str, Any] |
     return {"updated": cur.rowcount, "building": building, "floor": floor, "room": room, "subUnit": sub_unit}
 
 
+def bulk_update_category(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tuple[dict[str, str], int]:
+    actor = str(body.get("actor") or "").strip()[:160]
+    if actor == "ผู้แจ้ง":
+        return {"error": "ย้ายหมวดหมู่ได้เฉพาะเจ้าหน้าที่"}, 403
+    raw_ids = body.get("assetIds") or []
+    if not isinstance(raw_ids, list) or not raw_ids or len(raw_ids) > 500:
+        return {"error": "กรุณาเลือกครุภัณฑ์ 1–500 รายการ"}, 400
+    try:
+        ids = list(dict.fromkeys(int(x) for x in raw_ids))
+        category_id = int(body.get("categoryId"))
+    except (TypeError, ValueError):
+        return {"error": "ข้อมูลรหัสครุภัณฑ์หรือหมวดหมู่ไม่ถูกต้อง"}, 400
+    cat = db.execute("SELECT id,category_name FROM asset_categories WHERE id=?", (category_id,)).fetchone()
+    if not cat:
+        return {"error": "ไม่พบหมวดหมู่ครุภัณฑ์ที่เลือก"}, 404
+    reason = str(body.get("reason") or "").strip()[:300]
+    placeholders = ",".join("?" for _ in ids)
+    scope = scope_sql(db, "a")
+    rows = db.execute(f"SELECT a.id,a.status,a.group_name,a.numbering_account_id FROM assets a WHERE a.id IN ({placeholders}) AND {scope}", ids).fetchall()
+    if not rows:
+        return {"error": "ไม่พบรายการครุภัณฑ์ในขอบเขตสิทธิ์"}, 404
+    aliases = {int(r["account_id"]): r["name"] for r in db.execute("SELECT account_id,name FROM account_category_labels WHERE category_id=?", (category_id,))}
+    now = datetime.now(timezone(timedelta(hours=7))).isoformat(timespec="seconds")
+    updated = 0
+    for row in rows:
+        aid = row["numbering_account_id"]
+        new_group = aliases.get(int(aid), cat["category_name"]) if aid is not None else cat["category_name"]
+        db.execute("UPDATE assets SET category_id=?,group_name=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (category_id, new_group, row["id"]))
+        note = json.dumps({"fromCategory": row["group_name"] or "", "toCategory": new_group, "categoryId": category_id, "reason": reason}, ensure_ascii=False)
+        db.execute("INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)",
+                   (row["id"], actor or "เจ้าหน้าที่พัสดุ", "ย้ายหมวดครุภัณฑ์แบบกลุ่ม", row["status"], row["status"], note, now))
+        updated += 1
+    return {"updated": updated, "categoryId": category_id, "categoryName": cat["category_name"]}
+
+
+ALLOWED_ASSET_STATUSES = ("พร้อมใช้", "รอตรวจสอบ", "สำรวจแล้ว", "รออนุมัติ", "ทะเบียนแล้ว", "ไม่อนุมัติ", "จำหน่ายแล้ว")
+
+
+def bulk_update_status(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tuple[dict[str, str], int]:
+    ensure_location_hierarchy(db)
+    actor = str(body.get("actor") or "").strip()[:160]
+    if actor == "ผู้แจ้ง":
+        return {"error": "เปลี่ยนสถานะครุภัณฑ์ได้เฉพาะเจ้าหน้าที่"}, 403
+    raw_ids = body.get("assetIds") or []
+    if not isinstance(raw_ids, list) or not raw_ids or len(raw_ids) > 500:
+        return {"error": "กรุณาเลือกครุภัณฑ์ 1–500 รายการ"}, 400
+    try:
+        ids = list(dict.fromkeys(int(x) for x in raw_ids))
+    except (TypeError, ValueError):
+        return {"error": "ข้อมูลรหัสครุภัณฑ์ไม่ถูกต้อง"}, 400
+    status = str(body.get("status") or "").strip()
+    if status not in ALLOWED_ASSET_STATUSES:
+        return {"error": "สถานะที่เลือกไม่ถูกต้อง"}, 400
+    reason = str(body.get("note") or body.get("reason") or "").strip()[:1000]
+    placeholders = ",".join("?" for _ in ids)
+    scope = scope_sql(db, "assets")
+    rows = db.execute(f"SELECT a.id,a.status,a.notes FROM assets a WHERE a.id IN ({placeholders}) AND {scope}", ids).fetchall()
+    if not rows:
+        return {"error": "ไม่พบรายการครุภัณฑ์ในขอบเขตสิทธิ์"}, 404
+    now = datetime.now(timezone(timedelta(hours=7))).isoformat(timespec="seconds")
+    updated = 0
+    for row in rows:
+        new_notes = row["notes"] or ""
+        if reason:
+            new_notes = f"{new_notes} | {reason}".strip(" |") if new_notes and reason not in new_notes else reason
+        db.execute("UPDATE assets SET status=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (status, new_notes, row["id"]))
+        note_payload = json.dumps({"fromStatus": row["status"], "toStatus": status, "reason": reason}, ensure_ascii=False)
+        db.execute("INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)",
+                   (row["id"], actor or "เจ้าหน้าที่พัสดุ", f"เปลี่ยนสถานะเป็น {status}", row["status"], status, note_payload, now))
+        updated += 1
+    return {"updated": updated, "status": status}
+
+
+def bulk_update_notes(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tuple[dict[str, str], int]:
+    ensure_location_hierarchy(db)
+    actor = str(body.get("actor") or "").strip()[:160]
+    if actor == "ผู้แจ้ง":
+        return {"error": "บันทึกหมายเหตุตรวจนับได้เฉพาะเจ้าหน้าที่"}, 403
+    raw_ids = body.get("assetIds") or []
+    if not isinstance(raw_ids, list) or not raw_ids or len(raw_ids) > 500:
+        return {"error": "กรุณาเลือกครุภัณฑ์ 1–500 รายการ"}, 400
+    try:
+        ids = list(dict.fromkeys(int(x) for x in raw_ids))
+    except (TypeError, ValueError):
+        return {"error": "ข้อมูลรหัสครุภัณฑ์ไม่ถูกต้อง"}, 400
+    notes = str(body.get("notes") or "").strip()[:1000]
+    mode = str(body.get("mode") or "replace").strip()
+    placeholders = ",".join("?" for _ in ids)
+    scope = scope_sql(db, "assets")
+    rows = db.execute(f"SELECT a.id,a.status,a.notes FROM assets a WHERE a.id IN ({placeholders}) AND {scope}", ids).fetchall()
+    if not rows:
+        return {"error": "ไม่พบรายการครุภัณฑ์ในขอบเขตสิทธิ์"}, 404
+    now = datetime.now(timezone(timedelta(hours=7))).isoformat(timespec="seconds")
+    updated = 0
+    for row in rows:
+        old_notes = row["notes"] or ""
+        if mode == "append" and notes:
+            final_notes = f"{old_notes} | {notes}".strip(" |") if old_notes and notes not in old_notes else notes
+        else:
+            final_notes = notes
+        db.execute("UPDATE assets SET notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (final_notes, row["id"]))
+        note_payload = json.dumps({"before": old_notes, "after": final_notes, "mode": mode}, ensure_ascii=False)
+        db.execute("INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)",
+                   (row["id"], actor or "เจ้าหน้าที่พัสดุ", "บันทึกหมายเหตุตรวจนับ", row["status"], row["status"], note_payload, now))
+        updated += 1
+    return {"updated": updated, "notes": notes}
+
+
 def asset_detail(db: sqlite3.Connection, asset_id: int) -> dict[str, Any] | None:
     ensure_location_hierarchy(db)
     row = db.execute(_inventory_select() + " WHERE a.id=?", (asset_id,)).fetchone()
@@ -427,7 +545,7 @@ def _default_70x36_template() -> dict[str, Any]:
             {"id": "default-code-label", "type": "text", "x": 19.0, "y": 16.2, "width": 20.0, "height": 3.8, "content": "เลขครุภัณฑ์ :", "fontSize": 6.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
             {"id": "default-code", "type": "text", "x": 41.0, "y": 16.2, "width": 27.0, "height": 3.8, "content": "{{AssetNo}}", "fontSize": 6.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "letterSpacing": 0.2, "zIndex": 2},
             {"id": "default-name-label", "type": "text", "x": 2.4, "y": 20.3, "width": 14.0, "height": 3.4, "content": "ชื่อครุภัณฑ์ :", "fontSize": 6.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
-            {"id": "default-name", "type": "text", "x": 16.4, "y": 20.3, "width": 39.5, "height": 8.4, "content": "{{AssetName}}", "fontSize": 5.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "top", "lineHeight": 1.35, "zIndex": 2},
+            {"id": "default-name", "type": "text", "x": 16.4, "y": 20.3, "width": 39.5, "height": 8.4, "content": "{{DisplayName}}", "fontSize": 5.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "top", "lineHeight": 1.35, "zIndex": 2},
             {"id": "default-date-label", "type": "text", "x": 2.4, "y": 29.0, "width": 14.0, "height": 3.6, "content": "วันที่ได้มา :", "fontSize": 6.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
             {"id": "default-date", "type": "text", "x": 16.4, "y": 29.0, "width": 39.5, "height": 3.6, "content": "{{AcquisitionDate}}", "fontSize": 6.8, "fontWeight": 700, "fontFamily": "Sarabun", "color": "#111111", "align": "left", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
             {"id": "default-footer", "type": "text", "x": 16.0, "y": 32.8, "width": 36.0, "height": 2.8, "content": "{{footerNote}} {{hotline}}", "fontSize": 5.4, "fontWeight": 600, "fontFamily": "Sarabun", "color": "#111111", "align": "center", "valign": "center", "lineHeight": 1.35, "zIndex": 2},
@@ -643,6 +761,9 @@ def _migrate_default_70x36_template(db: sqlite3.Connection) -> None:
     ):
         name["fontSize"] = 5.8
         changed = True
+    if name and name.get("content") in {"{{AssetName}}", "{{AssetName}}{{Detail}}", "{{AssetName}} {{Detail}}"}:
+        name["content"] = "{{DisplayName}}"
+        changed = True
 
     if changed:
         db.execute(
@@ -797,10 +918,13 @@ def _asset_for_sticker(db: sqlite3.Connection, asset_id: int, origin: str = "") 
     item = _inventory_item(row)
     acq_formatted = _format_thai_short_date(row["linked_acquired_on"])
     warranty_formatted = _format_thai_short_date(row["warranty_end"])
-    item.update({"AssetNo": row["code"], "AssetName": item["name"], "AssetSiteCode": row["code"],
+    model_val = (row["linked_model"] or "").strip()
+    detail_val = (item.get("detail") or "").strip()
+    display_name = model_val or (detail_val if detail_val and detail_val != item["name"] else item["name"])
+    item.update({"AssetNo": row["code"], "AssetName": item["name"], "DisplayName": display_name, "displayName": display_name, "Detail": detail_val, "AssetSiteCode": row["code"],
                  "Category": item["group"] or row["group_name"] or "", "Group": item["group"] or row["group_name"] or "",
                  "Serial": row["linked_serial_number"] or "", "Type": row["register_asset_type"] or row["asset_type"] or row["category_name"] or "",
-                 "Brand":"", "Model":row["linked_model"] or "",
+                 "Brand":"", "Model":model_val,
                  "Building": item.get("building") or "", "Floor": item.get("floor") or "", "Room": item.get("room") or "",
                  "Department":row["department_name"] or row["responsible_unit"] or "", "DepartmentCode":"",
                  "Location":item["location"], "Site":row["organization_name"] or "", "ContractNo":row["linked_po_no"] or "",
@@ -1067,6 +1191,12 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
         return inventory_facets(db,query)
     if method=="POST" and path=="/api/inventory/bulk-location":
         return bulk_update_location(db,body)
+    if method=="POST" and path=="/api/inventory/bulk-category":
+        return bulk_update_category(db,body)
+    if method=="POST" and path=="/api/inventory/bulk-status":
+        return bulk_update_status(db,body)
+    if method=="POST" and path=="/api/inventory/bulk-notes":
+        return bulk_update_notes(db,body)
     if method=="GET" and path=="/api/register/featured":
         row=db.execute("SELECT r.asset_id FROM asset_register_details r JOIN assets a ON a.id=r.asset_id WHERE "+scope_sql(db)+" ORDER BY r.id DESC LIMIT 1").fetchone()
         if not row:

@@ -409,6 +409,12 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         print(f"[{self.log_date_time_string()}] {self.address_string()} {fmt % args}")
 
+    def end_headers(self) -> None:
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "same-origin")
+        super().end_headers()
+
     def send_json(self, value, status: int = 200) -> None:
         body = json.dumps(value, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -702,11 +708,13 @@ class Handler(BaseHTTPRequestHandler):
             if body.get("actor") != ROLE_OFFICER:
                 raise ApiError("เลือกบทบาทเจ้าหน้าที่พัสดุเพื่อแก้ไขทะเบียนในโหมดทดสอบ", 403)
             db.execute("BEGIN IMMEDIATE")
+        from asset_api import ensure_location_hierarchy
+        ensure_location_hierarchy(db)
         row = db.execute("SELECT * FROM assets WHERE id=?", (asset_id,)).fetchone()
         if row is None:
             raise ApiError("ไม่พบครุภัณฑ์", 404)
         profile = db.execute("SELECT * FROM asset_profiles WHERE asset_id=?", (asset_id,)).fetchone()
-        item = {**asset_dict(row), "serialNumber": profile["serial_number"] if profile else row["serial_number"], "custodian": profile["custodian"] if profile else "", "warrantyEnd": profile["warranty_end"] if profile else ""}
+        item = {**asset_dict(row), "notes": row["notes"] if "notes" in row.keys() else "", "serialNumber": profile["serial_number"] if profile else row["serial_number"], "custodian": profile["custodian"] if profile else "", "warrantyEnd": profile["warranty_end"] if profile else ""}
         version = hashlib.sha256(json.dumps(item, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         if method == "PUT":
             if body.get("version") != version:
@@ -715,6 +723,7 @@ class Handler(BaseHTTPRequestHandler):
             code = clean_text(body.get("code"), 80, "รหัสครุภัณฑ์")
             location = clean_text(body.get("location"), 300, "ที่ตั้ง")
             detail = clean_text(body.get("detail", ""), 1000, "รายละเอียด", required=False)
+            notes = clean_text(body.get("notes", item["notes"]), 1000, "หมายเหตุตรวจนับ", required=False)
             serial = clean_text(body.get("serialNumber", ""), 160, "หมายเลขเครื่อง", required=False)
             custodian = clean_text(body.get("custodian", ""), 160, "ผู้ดูแล", required=False)
             warranty = clean_text(body.get("warrantyEnd", ""), 10, "วันสิ้นสุดประกัน", required=False)
@@ -734,9 +743,9 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError("รายการที่ผูกบัญชีเลขแล้วต้องคงเลขและหมวดเดิม เพื่อรักษาหลักเกณฑ์ที่บันทึกไว้ แก้ข้อมูลทั่วไปได้")
             if row["code_unique"] and db.execute("SELECT 1 FROM assets WHERE COALESCE(numbering_account_id,0)=? AND code=? AND id<>?", (row["numbering_account_id"] or 0, code, asset_id)).fetchone():
                 raise ApiError("รหัสครุภัณฑ์ซ้ำกับรายการอื่น", 409)
-            db.execute("UPDATE assets SET name=?,code=?,location=?,detail=?,category_id=?,group_name=?,updated_at=? WHERE id=?", (name, code, location, detail, category_id, category[0], now_iso(), asset_id))
+            db.execute("UPDATE assets SET name=?,code=?,location=?,detail=?,notes=?,category_id=?,group_name=?,updated_at=? WHERE id=?", (name, code, location, detail, notes, category_id, category[0], now_iso(), asset_id))
             db.execute("INSERT INTO asset_profiles(asset_id,serial_number,custodian,warranty_end) VALUES(?,?,?,?) ON CONFLICT(asset_id) DO UPDATE SET serial_number=excluded.serial_number,custodian=excluded.custodian,warranty_end=excluded.warranty_end", (asset_id, serial, custodian, warranty))
-            db.execute("INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)", (asset_id, ROLE_OFFICER, "แก้ไขทะเบียน", row["status"], row["status"], json.dumps({"before": item, "after": {"name": name, "code": code, "location": location, "detail": detail, "categoryId": category_id, "serialNumber": serial, "custodian": custodian, "warrantyEnd": warranty}}, ensure_ascii=False), now_iso()))
+            db.execute("INSERT INTO asset_events(asset_id,actor,action,from_status,to_status,note,created_at) VALUES(?,?,?,?,?,?,?)", (asset_id, ROLE_OFFICER, "แก้ไขทะเบียน", row["status"], row["status"], json.dumps({"before": item, "after": {"name": name, "code": code, "location": location, "detail": detail, "notes": notes, "categoryId": category_id, "serialNumber": serial, "custodian": custodian, "warrantyEnd": warranty}}, ensure_ascii=False), now_iso()))
             return {"ok": True}
         if method != "GET":
             raise ApiError("ไม่รองรับคำสั่งนี้", 405)
@@ -1056,6 +1065,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+        if path in ("/api/auth/line/start", "/api/auth/line/callback", "/api/auth/google/start", "/api/auth/google/callback", "/api/auth/apple/start"):
+            with managed_connection() as db:
+                location = access.oauth_redirect(db, self, path, parse_qs(parsed.query))
+            self.send_response(302)
+            self.send_header("Location", location)
+            self.send_header("Cache-Control", "no-store")
+            if getattr(self, "session_cookie", None):
+                self.send_header("Set-Cookie", self.session_cookie); self.session_cookie = None
+            self.end_headers()
+            return
         ticket_photo = ticket_photos.IMAGE_PATH.fullmatch(path)
         if ticket_photo:
             try:

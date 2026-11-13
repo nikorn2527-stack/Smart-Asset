@@ -3,7 +3,7 @@
   const app = window.govAssetApp;
   const $ = (s, root = document) => root.querySelector(s);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const credit = '<b class="team-credit">POWER BY PNG TEAM</b>';
+  const credit = '<b class="team-credit">POWERED BY PNG TEAM</b>';
   let branding = null, logo = '', selected = null;
   let logoVersion = 0, logoLoading = false, brandingSaving = false, logoError = '';
   let pendingLogo = Promise.resolve();
@@ -301,7 +301,7 @@
         <div class="smart-layout"><div>
           <section data-smart-panel="detail">${photoBlock(photos, canPhoto)}${canPhoto ? `<div class="asset-feature-pin"><button type="button" class="button outline mini-action" data-dsc-pin="${a.id}">☆ ปักหมุดอุปกรณ์เด่น</button><small>แสดงเป็นการ์ดใหญ่บนหน้าภาพรวมพร้อมบันทึกย่อ</small></div>` : ''}${detailSheet(a, data, regData, life, categoryName)}</section>
           <section data-smart-panel="info" hidden><div class="smart-state"><span class="badge blue">${esc(a.status)}</span><span>${active.length ? `มีงานซ่อมที่กำลังดำเนินการ ${active.length} งาน` : 'ไม่มีงานซ่อมค้าง'}</span></div>
-          ${window.govAssetAccountContextMarkup?.(accountContext)||''}<form id="smartAssetForm" class="smart-form"><div class="form-grid"><label>ชื่อครุภัณฑ์<input name="name" required maxlength="300" value="${esc(a.name)}"></label><label>รหัสครุภัณฑ์<input name="code" required maxlength="80" value="${esc(a.code)}"></label></div><label>หมวดครุภัณฑ์<select name="categoryId" required><option value="">เลือกหมวดครุภัณฑ์</option>${categories.map(c => `<option value="${c.id}" ${Number(c.id) === Number(a.categoryId) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label><label>รายละเอียด<textarea name="detail" maxlength="1000" rows="3">${esc(a.detail)}</textarea></label><div class="form-grid"><label>สถานที่ตั้ง<input name="location" required maxlength="300" value="${esc(a.location)}"></label><label>หมายเลขเครื่อง / Serial<input name="serialNumber" maxlength="160" value="${esc(a.serialNumber)}"></label><label>ผู้ดูแลครุภัณฑ์<input name="custodian" maxlength="160" value="${esc(a.custodian)}"></label><label>สิ้นสุดประกัน<input name="warrantyEnd" type="date" value="${esc(a.warrantyEnd)}"></label></div><p class="field-hint">${canEdit ? 'การแก้ไขจะบันทึกประวัติ และแสดงข้อมูลใหม่ผ่าน QR เดิมทันที' : 'สำหรับเจ้าหน้าที่พัสดุที่มีสิทธิ์แก้ไขทะเบียนครุภัณฑ์'}</p><div class="dialog-actions"><button class="button outline" type="button" id="smartRegister">📋 เปิดใบคุมทรัพย์สินเต็มหน้า (A4)</button><button class="button outline" type="button" id="smartRepair">แจ้งซ่อมรายการนี้</button>${canEdit ? '<button class="button primary" type="submit">บันทึกข้อมูล</button>' : ''}</div><p id="smartSaveStatus" role="status"></p></form></section>
+          ${window.govAssetAccountContextMarkup?.(accountContext)||''}<form id="smartAssetForm" class="smart-form"><div class="form-grid"><label>ชื่อครุภัณฑ์<input name="name" required maxlength="300" value="${esc(a.name)}"></label><label>รหัสครุภัณฑ์<input name="code" required maxlength="80" value="${esc(a.code)}"></label></div><label>หมวดครุภัณฑ์<select name="categoryId" required><option value="">เลือกหมวดครุภัณฑ์</option>${categories.map(c => `<option value="${c.id}" ${Number(c.id) === Number(a.categoryId) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label><label>รายละเอียด<textarea name="detail" maxlength="1000" rows="3">${esc(a.detail)}</textarea></label><label>หมายเหตุตรวจนับ (เช่น มีครุภัณฑ์แต่ไม่มีเลข / มีเลขแต่หาไม่เจอ)<textarea name="notes" maxlength="1000" rows="2">${esc(a.notes || '')}</textarea></label><div class="form-grid"><label>สถานที่ตั้ง<input name="location" required maxlength="300" value="${esc(a.location)}"></label><label>หมายเลขเครื่อง / Serial<input name="serialNumber" maxlength="160" value="${esc(a.serialNumber)}"></label><label>ผู้ดูแลครุภัณฑ์<input name="custodian" maxlength="160" value="${esc(a.custodian)}"></label><label>สิ้นสุดประกัน<input name="warrantyEnd" type="date" value="${esc(a.warrantyEnd)}"></label></div><p class="field-hint">${canEdit ? 'การแก้ไขจะบันทึกประวัติ และแสดงข้อมูลใหม่ผ่าน QR เดิมทันที' : 'สำหรับเจ้าหน้าที่พัสดุที่มีสิทธิ์แก้ไขทะเบียนครุภัณฑ์'}</p><div class="dialog-actions"><button class="button outline" type="button" id="smartRegister">📋 เปิดใบคุมทรัพย์สินเต็มหน้า (A4)</button><button class="button outline" type="button" id="smartRepair">แจ้งซ่อมรายการนี้</button>${canEdit ? '<button class="button primary" type="submit">บันทึกข้อมูล</button>' : ''}</div><p id="smartSaveStatus" role="status"></p></form></section>
           <section data-smart-panel="ledger" hidden>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
               <div>
@@ -870,7 +870,7 @@
               </div>
 
               <div class="phone-footer-credit">
-                <b>POWER BY PNG TEAM</b>
+                <b>POWERED BY PNG TEAM</b>
                 <small>ระบบทะเบียนครุภัณฑ์และบริหารงานซ่อม</small>
               </div>
             </div>

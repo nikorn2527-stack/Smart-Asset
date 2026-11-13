@@ -52,7 +52,7 @@
   const locationKindLabels = {building:'อาคาร',floor:'ชั้น',room:'ห้อง',service_point:'จุดบริการ',common_area:'พื้นที่ส่วนกลาง'};
   const variableMap = {
     AssetNo:'code', Code:'code', AssetSiteCode:'code', FsnCode:'fsnCode', OldCode:'inventoryCode',
-    AssetName:'name', Name:'name', Detail:'detail', Category:'group', Group:'group',
+    AssetName:'name', Name:'name', DisplayName:'displayName', displayName:'displayName', Detail:'detail', Category:'group', Group:'group',
     Type:'assetType', AssetType:'assetType', Brand:'brand', Model:'model',
     Serial:'serialNumber', SerialNumber:'serialNumber',
     Location: 'location', LocationName: 'LocationName', LocationCode: 'LocationCode',
@@ -133,7 +133,10 @@
   }
   function previewText(text) {
     const asset = selectedPreviewAsset();
-    const values = {...asset, ...state.settings};
+    const modelVal = String(asset.model || '').trim();
+    const detailVal = String(asset.detail || '').trim();
+    const displayName = modelVal || (detailVal && detailVal !== asset.name ? detailVal : asset.name) || '';
+    const values = {...asset, displayName, DisplayName: displayName, ...state.settings};
     return String(text || '').replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (_, key) => {
       const field = variableMap[key] || key;
       const rawVal = values[field] ?? values[key] ?? '';
@@ -353,7 +356,9 @@
             <span class="prop-sublabel">แทรกตัวแปรด่วน:</span>
             <div class="chips-row">
               <button type="button" class="quick-chip" data-insert-var="{{AssetNo}}">＋ รหัสครุภัณฑ์</button>
-              <button type="button" class="quick-chip" data-insert-var="{{AssetName}}">＋ ชื่อครุภัณฑ์</button>
+              <button type="button" class="quick-chip" data-insert-var="{{DisplayName}}">＋ แบบ/ลักษณะ (หรือชื่อ)</button>
+              <button type="button" class="quick-chip" data-insert-var="{{Model}}">＋ แบบ/ลักษณะ</button>
+              <button type="button" class="quick-chip" data-insert-var="{{AssetName}}">＋ ชื่อครุภัณฑ์ (ตามทะเบียน)</button>
               <button type="button" class="quick-chip" data-insert-var="{{Category}}">＋ ประเภทครุภัณฑ์</button>
               <button type="button" class="quick-chip" data-insert-var="{{AcquisitionDate}}">＋ วันที่ได้มา</button>
               <button type="button" class="quick-chip" data-insert-var="{{Location}}">＋ สถานที่ตั้ง</button>

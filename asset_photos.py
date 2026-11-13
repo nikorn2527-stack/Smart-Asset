@@ -19,7 +19,7 @@ MAX_PHOTOS_PER_ASSET = 12
 MAX_FULL_BYTES = 2_500_000
 MAX_THUMB_BYTES = 300_000
 UPLOAD_BODY_LIMIT = 4_500_000
-UPLOAD_PATH = re.compile(r"/api/assets/\d+/photos")
+UPLOAD_PATH = re.compile(r"/api/assets/(?:\d+|bulk)/photos")
 IMAGE_PATH = re.compile(r"/api/assets/(\d+)/photos/(\d+)/(thumb|full)")
 BLOCKED_ROLES = {"ผู้แจ้ง"}
 
@@ -110,7 +110,52 @@ def _actor(body: dict) -> str:
     return actor
 
 
+def _bulk_upload(db: sqlite3.Connection, body: dict):
+    actor = _actor(body)
+    raw_ids = body.get("assetIds") or []
+    if not isinstance(raw_ids, list) or not raw_ids or len(raw_ids) > 200:
+        raise PhotoError("กรุณาเลือกครุภัณฑ์ 1–200 รายการ", 400)
+    try:
+        ids = list(dict.fromkeys(int(x) for x in raw_ids))
+    except (TypeError, ValueError):
+        raise PhotoError("รหัสครุภัณฑ์ไม่ถูกต้อง", 400)
+    mime, image = decode_image(body.get("image"), "รูป", MAX_FULL_BYTES)
+    _, thumb = decode_image(body.get("thumb") or body.get("image"), "รูปย่อ", MAX_THUMB_BYTES if body.get("thumb") else MAX_FULL_BYTES)
+    try:
+        width, height = max(0, int(body.get("width") or 0)), max(0, int(body.get("height") or 0))
+    except (TypeError, ValueError):
+        width = height = 0
+    caption = str(body.get("caption") or "").strip()[:200]
+    placeholders = ",".join("?" for _ in ids)
+    rows = {int(r["id"]): r for r in db.execute(f"SELECT id,status FROM assets WHERE id IN ({placeholders})", ids)}
+    if not rows:
+        raise PhotoError("ไม่พบครุภัณฑ์ที่เลือก", 404)
+    db.execute("BEGIN IMMEDIATE")
+    now = _now()
+    added = 0
+    skipped = 0
+    for aid in ids:
+        asset = rows.get(aid)
+        if asset is None:
+            continue
+        count = db.execute("SELECT COUNT(*) FROM asset_photos WHERE asset_id=? AND removed_at IS NULL", (aid,)).fetchone()[0]
+        if count >= MAX_PHOTOS_PER_ASSET:
+            skipped += 1
+            continue
+        primary = 1 if count == 0 else 0
+        cur = db.execute("INSERT INTO asset_photos(asset_id,mime,image,thumb,width,height,bytes,caption,is_primary,created_by,created_at) "
+                         "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                         (aid, mime, image, thumb, width, height, len(image), caption, primary, actor, now))
+        _event(db, asset, actor, "เพิ่มรูปครุภัณฑ์แบบกลุ่ม", {"photoId": cur.lastrowid, "bytes": len(image)})
+        added += 1
+    return {"added": added, "skipped": skipped}, 201
+
+
 def handle(db: sqlite3.Connection, method: str, path: str, body: dict):
+    if path == "/api/assets/bulk/photos":
+        if method != "POST":
+            raise PhotoError("ไม่รองรับคำสั่งนี้", 405)
+        return _bulk_upload(db, body)
     match = re.fullmatch(r"/api/assets/(\d+)/photos(?:/(\d+)/(primary|remove))?", path)
     if not match:
         return None

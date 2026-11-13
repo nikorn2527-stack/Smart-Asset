@@ -292,7 +292,8 @@ const statusClass = status => ['พร้อมใช้','ทะเบียน
 function badge(status) { return `<span class="gov-badge ${statusClass(status)}">${esc(status)}</span>`; }
 function assetNameCell(item, withPhoto=false) {
   const modelText = [item.model, item.serialNumber ? `S/N: ${item.serialNumber}` : ''].filter(Boolean).join(' · ');
-  const text = `<div class="asset-info-cell"><div class="asset-primary-name" title="${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}">${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}</div><div class="asset-secondary-meta" title="${esc(modelText || item.detail || '—')}">${esc(modelText || item.detail || '—')}</div></div>`;
+  const noteHtml = item.notes ? `<div class="asset-note-tag" style="font-size:11px;color:#92400e;background:#fef3c7;padding:1px 6px;border-radius:4px;margin-top:2px;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(item.notes)}">📝 ${esc(item.notes)}</div>` : '';
+  const text = `<div class="asset-info-cell"><div class="asset-primary-name" title="${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}">${esc(item.name || 'ไม่ระบุชื่อพัสดุ')}</div><div class="asset-secondary-meta" title="${esc(modelText || item.detail || '—')}">${esc(modelText || item.detail || '—')}</div>${noteHtml}</div>`;
   if(!withPhoto) return text;
   const photo = item.photoUrl
     ? `<button type="button" class="asset-thumb" data-asset-photo-preview title="ดูรูปขนาดใหญ่" aria-label="ดูรูปขนาดใหญ่ ${esc(item.name || '')}"><img src="${esc(item.photoUrl)}" alt="รูป ${esc(item.name || '')}" loading="lazy"></button>`
@@ -307,7 +308,7 @@ function renderAssets() {
   document.dispatchEvent(new CustomEvent('govasset:inventory-rendering'));
 
   const search=($('#assetSearch')?.value||'').trim().toLowerCase(), status=$('#statusFilter')?.value||'all', catVal=$('#categoryFilter')?.value||'';
-  const filtered=inventoryRows!==null?inventoryRows:assets.filter(item=>`${item.name} ${item.code} ${item.group} ${item.location} ${item.status}`.toLowerCase().includes(search)&&(status==='all'||item.status===status));
+  const filtered=inventoryRows!==null?inventoryRows:assets.filter(item=>`${item.name} ${item.code} ${item.group} ${item.location} ${item.status}`.toLowerCase().includes(search)&&(status==='all'||(status==='active_only'?item.status!=='จำหน่ายแล้ว':item.status===status)));
   const rows=$('#assetRows');
   if(rows) {
     rows.innerHTML=filtered.length?filtered.map(item=>{
@@ -410,11 +411,16 @@ function renderAssets() {
 function updateInventoryPrintToolbar(canPrint=true) {
   const toolbar=$('#inventoryPrintToolbar'),count=$('#inventoryPrintSelectionCount'),print=$('#printInventorySelection');
   if(!toolbar||!count||!print)return;
-  toolbar.hidden=!canPrint;
+  const canEdit=!window.govAssetAccess?.session?.required||Boolean(window.govAssetAccess.session.permissions?.edit);
+  toolbar.hidden=!canPrint&&!canEdit;
   count.textContent=selectedPrintAssets.size
     ? `เลือกแล้ว ${selectedPrintAssets.size.toLocaleString('th-TH')} รายการ · เลือกข้ามหน้าได้`
-    : 'เลือกรายการในทะเบียนเพื่อพิมพ์หลายฉลากพร้อมกัน';
+    : 'ติ๊กเลือกรายการเพื่อพิมพ์ฉลาก ใส่รูป หรือย้ายหมวดหมู่ทั้งชุด';
   print.disabled=!canPrint||selectedPrintAssets.size===0;
+  const bulkCat=$('#bulkCategoryBtn');if(bulkCat){bulkCat.hidden=!canEdit;bulkCat.disabled=!canEdit;}
+  const bulkNote=$('#bulkNoteBtn');if(bulkNote){bulkNote.hidden=!canEdit;bulkNote.disabled=!canEdit||selectedPrintAssets.size===0;}
+  const bulkStatus=$('#bulkStatusBtn');if(bulkStatus){bulkStatus.hidden=!canEdit;bulkStatus.disabled=!canEdit||selectedPrintAssets.size===0;}
+  const bulkPhoto=$('#bulkPhotoBtn');if(bulkPhoto){bulkPhoto.hidden=!canEdit;bulkPhoto.disabled=!canEdit||selectedPrintAssets.size===0;}
   const clear=$('#clearInventoryPrintSelection');if(clear)clear.disabled=selectedPrintAssets.size===0;
 }
 async function loadInventory(offset=0){
@@ -928,6 +934,249 @@ function openLocationAssignDialog(targetItems){
   dlg.showModal();
 }
 
+function ensureCompactDialog(id){
+  let dlg=$(`#${id}`);
+  if(!dlg){
+    dlg=document.createElement('dialog');
+    dlg.id=id;
+    dlg.style.cssText='width:min(480px,92vw);max-width:480px;margin:auto;padding:0;border:1px solid #cbd5e1;border-radius:14px;background:#ffffff;color:#0f172a;box-shadow:0 20px 50px rgba(15,23,42,.22);overflow:auto;max-height:90vh;';
+    document.body.append(dlg);
+  }
+  return dlg;
+}
+
+function openBulkCategoryDialog(){
+  const selected=[...selectedPrintAssets.values()];
+  const totalFiltered=inventoryTotal||((inventoryRows||assets).length);
+  const cats=(liveCategories||[]).filter(c=>c&&c.isActive!==false&&Number(c.id)>0);
+  if(!cats.length){toast('ไม่พบหมวดหมู่ครุภัณฑ์ในระบบ');return;}
+  const dlg=ensureCompactDialog('bulkCategoryDialog');
+  const searchVal=($('#assetSearch')?.value||'').trim();
+  const hasSelected=selected.length>0;
+  dlg.innerHTML=`<form id="bulkCategoryForm" style="padding:18px 20px;">
+    <h2 style="margin:0 0 4px;font-size:17px;color:#123d56;">📦 ย้ายหมวดหมู่ครุภัณฑ์หลายรายการ</h2>
+    <p style="margin:0 0 12px;font-size:12.5px;color:#475569;">เปลี่ยนหมวดหมู่ครุภัณฑ์ทั้งชุดพร้อมบันทึกประวัติการย้ายหมวดอัตโนมัติ</p>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:12.5px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;${hasSelected?'':'opacity:.55;'}">
+        <input type="radio" name="scope" value="selected" ${hasSelected?'checked':'disabled'}>
+        <span>รายการที่ติ๊กเลือกไว้ (<b>${selected.length.toLocaleString('th-TH')} รายการ</b>)</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="radio" name="scope" value="filtered" ${!hasSelected?'checked':''}>
+        <span>ทุกรายการตามคำค้นหา/ตัวกรองปัจจุบัน${searchVal?` (“${esc(searchVal)}”)`:''} (<b>สูงสุด 500 จาก ${totalFiltered.toLocaleString('th-TH')} รายการ</b>)</span>
+      </label>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">
+      <label for="bulkCatSelect" style="font-size:12.5px;font-weight:600;">ย้ายไปหมวดหมู่ปลายทาง</label>
+      <select id="bulkCatSelect" name="categoryId" required style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;">
+        <option value="">— เลือกหมวดหมู่ใหม่ —</option>
+        ${cats.map(c=>`<option value="${Number(c.id)}">${esc(c.name)}</option>`).join('')}
+      </select>
+    </div>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;margin-bottom:14px;">หมายเหตุ / เหตุผล (ถ้ามี)
+      <input name="reason" maxlength="250" placeholder="เช่น ย้ายเวทีย้ายได้จากครุภัณฑ์การศึกษาไปครุภัณฑ์สำนักงาน" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;">
+    </label>
+    <p id="bulkCategoryStatus" style="margin:0 0 10px;font-size:12px;color:#0f766e;"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="button outline" data-close-bcat>ยกเลิก</button>
+      <button type="submit" class="button primary">ยืนยันย้ายหมวดหมู่</button>
+    </div>
+  </form>`;
+  dlg.querySelector('[data-close-bcat]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();
+    const form=e.currentTarget,fd=new FormData(form),statusEl=$('#bulkCategoryStatus',dlg),submitBtn=$('[type=submit]',form);
+    const scope=fd.get('scope');
+    submitBtn.disabled=true;
+    try{
+      let ids=[];
+      if(scope==='selected'){
+        ids=selected.map(x=>Number(x.id));
+      }else{
+        statusEl.textContent='กำลังรวบรวมรายการที่ตรงตามตัวกรอง…';
+        const params=inventoryQueryParams(0);
+        params.set('limit','500');
+        const found=await api(`/api/inventory?${params}`);
+        ids=(found.items||[]).map(x=>Number(x.id));
+      }
+      if(!ids.length){statusEl.textContent='ไม่พบรายการครุภัณฑ์ที่จะย้าย';submitBtn.disabled=false;return;}
+      statusEl.textContent=`กำลังย้ายหมวดหมู่ ${ids.length.toLocaleString('th-TH')} รายการ…`;
+      const res=await api('/api/inventory/bulk-category',{method:'POST',body:JSON.stringify({assetIds:ids,categoryId:Number(fd.get('categoryId')),reason:String(fd.get('reason')||'').trim(),actor:currentRole})});
+      selectedPrintAssets.clear();
+      dlg.close();
+      await loadLocationFacets();
+      await loadInventory(inventoryOffset);
+      toast(`ย้ายหมวดหมู่เป็น “${res.categoryName}” แล้ว (${res.updated} รายการ)`);
+    }catch(err){statusEl.textContent=err.message||'ย้ายหมวดหมู่ไม่สำเร็จ';submitBtn.disabled=false;}
+  };
+  dlg.showModal();
+}
+
+function openBulkNoteDialog(){
+  const selected=[...selectedPrintAssets.values()];
+  if(!selected.length){toast('กรุณาติ๊กเลือกรายการครุภัณฑ์ที่ต้องการบันทึกหมายเหตุก่อน');return;}
+  const dlg=ensureCompactDialog('bulkNoteDialog');
+  const presets=['มีครุภัณฑ์ แต่ไม่มีเลข','มีเลข แต่หาครุภัณฑ์ไม่เจอ','รอติดสติกเกอร์ใหม่','รอตรวจสอบสภาพ'];
+  dlg.innerHTML=`<form method="dialog" style="padding:18px 20px;">
+    <h3 style="margin:0 0 6px;">📝 บันทึกหมายเหตุตรวจนับ (${selected.length.toLocaleString('th-TH')} รายการ)</h3>
+    <p style="margin:0 0 12px;color:#475569;font-size:13px;">ใช้บันทึกข้อสังเกตจากการลงพื้นที่ เช่น พบของไม่มีเลข หรือมีเลขแต่หาของไม่เจอ และสามารถค้นหาจากข้อความหมายเหตุได้ทันที</p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+      ${presets.map(p=>`<button type="button" class="button outline mini-action" data-note-preset="${esc(p)}" style="font-size:12px;">＋ ${esc(p)}</button>`).join('')}
+    </div>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;margin-bottom:10px;">ข้อความหมายเหตุตรวจนับ
+      <textarea name="notes" rows="3" maxlength="1000" placeholder="พิมพ์หมายเหตุ หรือกดปุ่มด้านบนเพื่อใส่ข้อความด่วน…" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;">${selected.length===1?esc(selected[0].notes||''):''}</textarea>
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;margin-bottom:12px;cursor:pointer;">
+      <input type="checkbox" name="appendMode" ${selected.length>1?'checked':''}> ต่อท้ายหมายเหตุเดิม (ถ้าไม่ติ๊กจะเขียนทับของเดิม)
+    </label>
+    <p id="bulkNoteStatus" style="margin:0 0 10px;font-size:12px;color:#0f766e;"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="button outline" data-close-bnote>ยกเลิก</button>
+      <button type="submit" class="button primary">บันทึกหมายเหตุ</button>
+    </div>
+  </form>`;
+  dlg.querySelector('[data-close-bnote]').onclick=()=>dlg.close();
+  const ta=dlg.querySelector('textarea[name="notes"]');
+  dlg.querySelectorAll('[data-note-preset]').forEach(btn=>{
+    btn.onclick=()=>{
+      const val=btn.dataset.notePreset;
+      ta.value=ta.value.trim()?`${ta.value.trim()} · ${val}`:val;
+      ta.focus();
+    };
+  });
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();
+    const form=e.currentTarget,fd=new FormData(form),statusEl=$('#bulkNoteStatus',dlg),submitBtn=$('[type=submit]',form);
+    submitBtn.disabled=true;
+    statusEl.textContent='กำลังบันทึกหมายเหตุ…';
+    try{
+      const ids=selected.map(x=>Number(x.id));
+      const res=await api('/api/inventory/bulk-notes',{method:'POST',body:JSON.stringify({assetIds:ids,notes:String(fd.get('notes')||'').trim(),mode:fd.get('appendMode')?'append':'replace',actor:currentRole})});
+      selectedPrintAssets.clear();
+      dlg.close();
+      await loadInventory(inventoryOffset);
+      toast(`บันทึกหมายเหตุแล้ว (${res.updated} รายการ)`);
+    }catch(err){statusEl.textContent=err.message||'บันทึกหมายเหตุไม่สำเร็จ';submitBtn.disabled=false;}
+  };
+  dlg.showModal();
+}
+
+function openBulkStatusDialog(){
+  const selected=[...selectedPrintAssets.values()];
+  if(!selected.length){toast('กรุณาติ๊กเลือกรายการครุภัณฑ์ที่ต้องการเปลี่ยนสถานะก่อน');return;}
+  const dlg=ensureCompactDialog('bulkStatusDialog');
+  const statuses=['พร้อมใช้','รอตรวจสอบ','สำรวจแล้ว','ทะเบียนแล้ว','จำหน่ายแล้ว','ไม่อนุมัติ'];
+  dlg.innerHTML=`<form method="dialog" style="padding:18px 20px;">
+    <h3 style="margin:0 0 6px;font-size:17px;color:#123d56;">🏷️ เปลี่ยนสถานะ / ระบุจำหน่ายแล้ว (${selected.length.toLocaleString('th-TH')} รายการ)</h3>
+    <p style="margin:0 0 12px;color:#475569;font-size:12.5px;background:#f8fafc;border-left:3px solid #0f766e;padding:8px 10px;border-radius:4px;">ตามมาตรฐานทะเบียนครุภัณฑ์ภาครัฐ ระบบจะไม่ลบรายการที่จำหน่ายแล้วออกจากฐานข้อมูล เพื่อรักษาประวัติการตรวจสอบและค่าเสื่อมราคา แต่จะเปลี่ยนสถานะเป็น <b>“จำหน่ายแล้ว”</b> พร้อมบันทึกเหตุผลอ้างอิง</p>
+    <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">
+      <label for="bulkStatusSelect" style="font-size:12.5px;font-weight:600;">สถานะใหม่</label>
+      <select id="bulkStatusSelect" name="status" required style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;">
+        ${statuses.map(s=>`<option value="${esc(s)}" ${s==='จำหน่ายแล้ว'?'selected':''}>${esc(s)}</option>`).join('')}
+      </select>
+    </div>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;margin-bottom:14px;">เหตุผล / เลขที่เอกสารอ้างอิง (ถ้ามี)
+      <input name="note" maxlength="500" placeholder="เช่น จำหน่ายแล้วตามคำสั่ง/อนุมัติจำหน่าย ปี 2569" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;">
+    </label>
+    <p id="bulkStatusMsg" style="margin:0 0 10px;font-size:12px;color:#0f766e;"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="button outline" data-close-bstatus>ยกเลิก</button>
+      <button type="submit" class="button primary">ยืนยันเปลี่ยนสถานะ</button>
+    </div>
+  </form>`;
+  dlg.querySelector('[data-close-bstatus]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();
+    const form=e.currentTarget,fd=new FormData(form),statusEl=$('#bulkStatusMsg',dlg),submitBtn=$('[type=submit]',form);
+    submitBtn.disabled=true;
+    statusEl.textContent='กำลังอัปเดตสถานะ…';
+    try{
+      const ids=selected.map(x=>Number(x.id));
+      const res=await api('/api/inventory/bulk-status',{method:'POST',body:JSON.stringify({assetIds:ids,status:String(fd.get('status')),note:String(fd.get('note')||'').trim(),actor:currentRole})});
+      selectedPrintAssets.clear();
+      dlg.close();
+      await loadInventory(inventoryOffset);
+      toast(`เปลี่ยนสถานะเป็น “${res.status}” แล้ว (${res.updated} รายการ)`);
+    }catch(err){statusEl.textContent=err.message||'เปลี่ยนสถานะไม่สำเร็จ';submitBtn.disabled=false;}
+  };
+  dlg.showModal();
+}
+
+function shrinkBulkImage(img,maxSide,quality){
+  const scale=Math.min(1,maxSide/Math.max(img.naturalWidth,img.naturalHeight,1));
+  const width=Math.max(1,Math.round(img.naturalWidth*scale)),height=Math.max(1,Math.round(img.naturalHeight*scale));
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,width,height);ctx.drawImage(img,0,0,width,height);
+  return {dataUrl:canvas.toDataURL('image/jpeg',quality),width,height};
+}
+
+function loadImageFile(file){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error(`อ่านไฟล์ ${file.name} ไม่ได้`));};
+    img.src=url;
+  });
+}
+
+function openBulkPhotoDialog(){
+  const selected=[...selectedPrintAssets.values()];
+  if(!selected.length){toast('กรุณาติ๊กเลือกรายการครุภัณฑ์ในตารางก่อนใส่รูป');return;}
+  if(selected.length>200){toast('เลือกใส่รูปพร้อมกันได้ครั้งละไม่เกิน 200 รายการ');return;}
+  const dlg=ensureCompactDialog('bulkPhotoDialog');
+  dlg.innerHTML=`<form id="bulkPhotoForm" style="padding:18px 20px;">
+    <h2 style="margin:0 0 6px;font-size:18px;color:#123d56;">📷 เพิ่มรูปให้ครุภัณฑ์ที่เลือก (${selected.length.toLocaleString('th-TH')} รายการ)</h2>
+    <p style="margin:0 0 12px;font-size:12.5px;color:#475569;">เลือกรูปภาพ 1 รูปหรือหลายรูป ระบบจะย่อขนาดอัตโนมัติและผูกเข้ากับครุภัณฑ์ที่ติ๊กไว้ทั้งหมด</p>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;margin-bottom:10px;">เลือกรูปภาพ (เลือกได้หลายรูปพร้อมกัน)
+      <input id="bulkPhotoInput" type="file" accept="image/*" multiple required style="padding:8px;border:1px dashed #94a3b8;border-radius:8px;background:#f8fafc;">
+    </label>
+    <div id="bulkPhotoPreview" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;margin-bottom:12px;">คำอธิบายรูป (ถ้ามี)
+      <input name="caption" maxlength="200" placeholder="เช่น ภาพถ่ายครุภัณฑ์ล็อตปี 2569" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;">
+    </label>
+    <p id="bulkPhotoStatus" style="margin:0 0 10px;font-size:12px;color:#0f766e;"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="button outline" data-close-bphoto>ยกเลิก</button>
+      <button type="submit" class="button primary">อัปโหลดใส่ ${selected.length.toLocaleString('th-TH')} รายการ</button>
+    </div>
+  </form>`;
+  dlg.querySelector('[data-close-bphoto]').onclick=()=>dlg.close();
+  const input=$('#bulkPhotoInput',dlg),preview=$('#bulkPhotoPreview',dlg);
+  input.onchange=()=>{
+    preview.replaceChildren();
+    [...input.files].slice(0,12).forEach(file=>{
+      const url=URL.createObjectURL(file),img=document.createElement('img');
+      img.src=url;img.alt=file.name;img.style.cssText='width:54px;height:54px;object-fit:cover;border-radius:6px;border:1px solid #cbd5e1;';
+      img.onload=()=>URL.revokeObjectURL(url);
+      preview.append(img);
+    });
+  };
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();
+    const files=[...input.files];
+    if(!files.length)return;
+    const form=e.currentTarget,fd=new FormData(form),statusEl=$('#bulkPhotoStatus',dlg),submitBtn=$('[type=submit]',form);
+    const ids=selected.map(x=>Number(x.id)),caption=String(fd.get('caption')||'').trim();
+    submitBtn.disabled=true;
+    let totalAdded=0,totalSkipped=0;
+    try{
+      for(const [idx,file] of files.entries()){
+        statusEl.textContent=`กำลังย่อและอัปโหลดรูป ${idx+1}/${files.length} ให้ ${ids.length} รายการ…`;
+        const img=await loadImageFile(file);
+        let full=shrinkBulkImage(img,1600,0.82);
+        if(full.dataUrl.length>3_200_000)full=shrinkBulkImage(img,1280,0.7);
+        const thumb=shrinkBulkImage(img,320,0.72);
+        const res=await api('/api/assets/bulk/photos',{method:'POST',body:JSON.stringify({assetIds:ids,image:full.dataUrl,thumb:thumb.dataUrl,width:full.width,height:full.height,caption,actor:currentRole})});
+        totalAdded+=res.added||0;totalSkipped+=res.skipped||0;
+      }
+      dlg.close();
+      await loadInventory(inventoryOffset);
+      toast(`เพิ่มรูป ${files.length} รูปให้ครุภัณฑ์แล้ว (${totalAdded} รายการ${totalSkipped?`, ข้ามที่รูปเต็ม ${totalSkipped}`:''})`);
+    }catch(err){statusEl.textContent=err.message||'อัปโหลดรูปไม่สำเร็จ';submitBtn.disabled=false;}
+  };
+  dlg.showModal();
+}
+
 $$('.nav-item[data-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.view)));
 document.addEventListener('click',event=>{const quick=event.target.closest('[data-quick-repair]');if(quick){const item=(inventoryRows||assets).find(a=>a.id===Number(quick.dataset.quickRepair));if(item)openRepairDialog(item);return;}const locBtn=event.target.closest('[data-assign-location]');if(locBtn){const item=(inventoryRows||assets).find(a=>a.id===Number(locBtn.dataset.assignLocation));if(item)openLocationAssignDialog([item]);}});
 document.addEventListener('change',event=>{
@@ -950,13 +1199,17 @@ document.addEventListener('click',event=>{
   const printOne=event.target.closest('[data-print-sticker]');
   if(printOne){window.govAssetSticker?.printAssets([Number(printOne.dataset.printSticker)]);return;}
   if(event.target.closest('#printInventorySelection')){window.govAssetSticker?.printAssets([...selectedPrintAssets.keys()].map(Number));return;}
+  if(event.target.closest('#bulkCategoryBtn')){openBulkCategoryDialog();return;}
+  if(event.target.closest('#bulkNoteBtn')){openBulkNoteDialog();return;}
+  if(event.target.closest('#bulkStatusBtn')){openBulkStatusDialog();return;}
+  if(event.target.closest('#bulkPhotoBtn')){openBulkPhotoDialog();return;}
   if(event.target.closest('#clearInventoryPrintSelection')){selectedPrintAssets.clear();renderAssets();}
 });
 document.addEventListener('click',event=>{const target=event.target.closest('[data-go-view]');if(target)switchView(target.dataset.goView);const record=event.target.closest('[data-register-id]');if(record)window.govAssetApp.openRegister(Number(record.dataset.registerId));const chip=event.target.closest('[data-remove-filter]');if(chip){const key=chip.dataset.removeFilter,value=chip.dataset.filterValue;if(smartFilterMultiKeys.includes(key))smartFilterCommitted[key]=smartFilterCommitted[key].filter(item=>item!==value);else if(key==='account'){smartFilterCommitted.account='';smartFilterCommitted.branch='';}else smartFilterCommitted.branch='';smartFilterDraft=cloneSmartFilter(smartFilterCommitted);applySmartFilterDraft();}});
 $$('[data-open-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.openView)));
 $('#assetSearch')?.addEventListener('input',()=>{++inventoryRequest;clearTimeout(inventorySearchTimer);inventorySearchTimer=setTimeout(()=>loadInventory(0),220);});
 $('#categoryFilter')?.addEventListener('change',()=>loadInventory(0));
-$('#bulkLocationBtn')?.addEventListener('click',()=>openLocationAssignDialog(inventoryRows||[]));
+$('#bulkLocationBtn')?.addEventListener('click',()=>openLocationAssignDialog(selectedPrintAssets.size?[...selectedPrintAssets.values()]:(inventoryRows||[])));
 $('#clearAssetFilter')?.addEventListener('click',()=>{
   const search=$('#assetSearch');if(search)search.value='';
   smartFilterMultiKeys.forEach(key=>smartFilterCommitted[key]=[]);
