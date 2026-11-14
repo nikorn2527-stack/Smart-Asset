@@ -361,16 +361,20 @@
 
 /* Operational Master Picker & Hint */
 .om-picker {
-  display: flex !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: center !important;
-  gap: 3px !important;
+  gap: 4px !important;
   position: relative !important;
   width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
 }
 
 .om-picker > input {
-  flex: 1 !important;
+  width: 100% !important;
   min-width: 0 !important;
+  max-width: 100% !important;
 }
 
 .om-add {
@@ -568,12 +572,17 @@
 }
 
 #view-supply .om-add {
-  width: 36px !important;
-  min-width: 36px !important;
-  max-width: 36px !important;
-  height: 40px !important;
-  min-height: 40px !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+  height: 36px !important;
+  min-height: 36px !important;
   font-size: 14px !important;
+}
+
+#view-supply .supply-lines-table td {
+  min-width: 0 !important;
+  overflow: hidden !important;
 }
 
 #view-supply .supply-keyboard-hint {

@@ -6,6 +6,10 @@
 /* The forced display:flex on the asset workspace dialog must not keep it on screen after close(). */
 dialog:not([open]),
 .asset-dialog.smart-dialog:not([open]) { display: none !important; }
+dialog[open] {
+  max-height: min(calc(94 * var(--vh, 1vh)), calc(100dvh - 24px)) !important;
+  margin: auto !important;
+}
 dialog .dialog-close {
   display: inline-grid !important;
   place-items: center !important;
@@ -119,7 +123,10 @@ dialog .dialog-actions { flex-wrap: wrap !important; }
 
 /* ---------- Asset workspace (smart.js openAsset) ---------- */
 /* Fixed height so the tab row does not jump when switching to a short tab. */
-.asset-dialog.smart-dialog:not(.qr-simulator-modal) { height: min(calc(92 * var(--vh, 1vh)), 840px) !important; }
+.asset-dialog.smart-dialog:not(.qr-simulator-modal) {
+  height: min(calc(92 * var(--vh, 1vh)), calc(100dvh - 24px), 840px) !important;
+  max-height: min(calc(92 * var(--vh, 1vh)), calc(100dvh - 24px), 840px) !important;
+}
 .asset-dialog.smart-dialog:not(.qr-simulator-modal) .smart-tabs {
   flex-wrap: nowrap !important;
   overflow-x: auto !important;
@@ -263,11 +270,11 @@ dialog .dialog-actions { flex-wrap: wrap !important; }
 /* Keep Ticket printing reachable while its details and workflow remain scrollable. */
 #ticketDialog {
   width: min(1120px, calc(calc(100 * var(--vw, 1vw)) - 28px)) !important;
-  max-height: min(calc(94 * var(--vh, 1vh)), 900px) !important;
+  max-height: min(calc(94 * var(--vh, 1vh)), calc(100dvh - 24px), 900px) !important;
 }
 #ticketDialog > #ticketDialogContent {
-  height: min(calc(94 * var(--vh, 1vh)), 900px) !important;
-  max-height: min(calc(94 * var(--vh, 1vh)), 900px) !important;
+  height: min(calc(94 * var(--vh, 1vh)), calc(100dvh - 24px), 900px) !important;
+  max-height: min(calc(94 * var(--vh, 1vh)), calc(100dvh - 24px), 900px) !important;
   overflow: hidden !important;
 }
 #ticketDialog .ticket-dialog-inner {

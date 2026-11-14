@@ -429,6 +429,9 @@ class Handler(BaseHTTPRequestHandler):
     def read_json(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            raise ApiError("ขนาดข้อมูลไม่ถูกต้อง", 400)
+        try:
             if length < 0 or length > (asset_photos.UPLOAD_BODY_LIMIT if asset_photos.UPLOAD_PATH.fullmatch(self.path) else ticket_photos.UPLOAD_BODY_LIMIT if ticket_photos.UPLOAD_PATH.fullmatch(self.path) else 35_000_000 if self.path.startswith("/api/imports/") else 9_000_000 if self.path.startswith("/api/supply/") else 35_000_000 if self.path == "/api/backups/sources" else 750_000 if self.path == "/api/branding" else 100_000):
                 raise ApiError("ข้อมูลที่ส่งมายาวเกินกำหนด", 413)
             data = json.loads(self.rfile.read(length) or b"{}")
@@ -786,7 +789,7 @@ class Handler(BaseHTTPRequestHandler):
             if type(work_id) is not int:
                 raise ApiError("รหัสงาน PM/ตรวจนับไม่ถูกต้อง")
             work = db.execute("SELECT * FROM scheduled_work WHERE id=?", (work_id,)).fetchone()
-            if not work or work["status"] != "completed" or work["result"] not in ("needs_repair", "damaged") or work["asset_id"] != body.get("assetId"):
+            if not work or work["status"] != "completed" or work["result"] not in ("needs_repair", "damaged") or isinstance(body.get("assetId"), bool) or str(work["asset_id"]) != str(body.get("assetId")):
                 raise ApiError("ไม่พบผลตรวจที่ต้องแจ้งซ่อมสำหรับครุภัณฑ์นี้")
             if work["repair_ticket_id"]:
                 return ticket_dict(db.execute("SELECT * FROM tickets WHERE id=?", (work["repair_ticket_id"],)).fetchone())
@@ -1066,8 +1069,12 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
         if path in ("/api/auth/line/start", "/api/auth/line/callback", "/api/auth/google/start", "/api/auth/google/callback", "/api/auth/apple/start"):
-            with managed_connection() as db:
-                location = access.oauth_redirect(db, self, path, parse_qs(parsed.query))
+            try:
+                with managed_connection() as db:
+                    location = access.oauth_redirect(db, self, path, parse_qs(parsed.query))
+            except (ApiError, GovernanceError) as exc:
+                self.send_json({"error": str(exc)}, exc.status)
+                return
             self.send_response(302)
             self.send_header("Location", location)
             self.send_header("Cache-Control", "no-store")
@@ -1139,7 +1146,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 with output.open("rb") as stream: shutil.copyfileobj(stream, self.wfile)
-            except GovernanceError as exc:
+            except (ApiError, GovernanceError) as exc:
                 self.send_json({"error": str(exc)}, exc.status)
             finally:
                 if folder: shutil.rmtree(folder)
@@ -1220,7 +1227,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 with output.open("rb") as stream: shutil.copyfileobj(stream, self.wfile)
-            except GovernanceError as exc:
+            except (ApiError, GovernanceError) as exc:
                 self.send_json({"error": str(exc)}, exc.status)
             finally:
                 if folder: shutil.rmtree(folder)

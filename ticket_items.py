@@ -1,6 +1,7 @@
 """Parts, materials, and outside-contractor lines attached to a repair ticket."""
 from __future__ import annotations
 
+import math
 import re
 
 from governance import ident, text
@@ -44,7 +45,7 @@ def _money(value, label):
         number = float(value if value not in (None, "") else 0)
     except (TypeError, ValueError):
         fail(label + "ต้องเป็นตัวเลข")
-    if number < 0 or number > 100_000_000:
+    if not math.isfinite(number) or number < 0 or number > 100_000_000:
         fail(label + "ไม่ถูกต้อง")
     return round(number, 2)
 

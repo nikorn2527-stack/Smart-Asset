@@ -111,8 +111,8 @@
     $('#workAssetPrevious').onclick=()=>loadCandidates(Math.max(0,offset-50));$('#workAssetNext').onclick=()=>loadCandidates(offset+50);
     $('#selectVisibleWorkAssets').onclick=()=>{for(const a of candidates){if(selected.size<500)selected.set(a.id,a);}renderCandidates();};$('#clearSelectedWorkAssets').onclick=()=>{selected.clear();renderCandidates();};
     $('#workPlanForm').onsubmit=async event=>{
-      event.preventDefault();const b=event.submitter;b.disabled=true;
-      try{const raw=Object.fromEntries(new FormData(event.target));await post('/api/work/plans',{...raw,intervalCount:Number(raw.intervalCount),assignees:raw.assignees.split('\n').map(s=>s.trim()).filter(Boolean),checklist:raw.kind==='pm'?raw.checklist.split('\n').map(s=>s.trim()).filter(Boolean):[],assetIds:[...selected.keys()]});dialog.close();await load();app.toast('บันทึกแผนและสร้างงานตามรอบแล้ว');}catch(error){$('#workPlanError').textContent=error.message;b.disabled=false;}
+      event.preventDefault();const b=event.submitter||event.target.querySelector('[type="submit"]'),label=b?.textContent;if(b){b.disabled=true;b.textContent='กำลังบันทึก…';}
+      try{const raw=Object.fromEntries(new FormData(event.target));await post('/api/work/plans',{...raw,intervalCount:Number(raw.intervalCount),assignees:raw.assignees.split('\n').map(s=>s.trim()).filter(Boolean),checklist:raw.kind==='pm'?raw.checklist.split('\n').map(s=>s.trim()).filter(Boolean):[],assetIds:[...selected.keys()]});dialog.close();await load();app.toast('บันทึกแผนและสร้างงานตามรอบแล้ว');}catch(error){$('#workPlanError').textContent=error.message;if(b){b.disabled=false;b.textContent=label;}}
     };
     dialog.showModal();await loadCandidates(0);
   };
@@ -179,15 +179,15 @@
         $('#workScanRef').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();confirmScan(id);}};
       }
       $('#completeScheduledWork').elements.result.onchange=e=>$('#workCreateRepairLabel').hidden=!['needs_repair','damaged'].includes(e.target.value);
-      $('#workReassign').onclick=async()=>{try{await post(`/api/work/items/${id}/assign`,{assignee:$('#workNewAssignee').value});dialog.close();await load();app.toast('บันทึกผู้รับผิดชอบแล้ว');}catch(error){$('#workDetailError').textContent=error.message;}};
-      if($('#startScheduledWork'))$('#startScheduledWork').onclick=async()=>{try{await post(`/api/work/items/${id}/start`);dialog.close();await load();app.toast('เริ่มงานแล้ว');}catch(error){$('#workDetailError').textContent=error.message;}};
+      $('#workReassign').onclick=async e=>{const b=e.currentTarget,label=b.textContent;b.disabled=true;b.textContent='กำลังบันทึก…';try{await post(`/api/work/items/${id}/assign`,{assignee:$('#workNewAssignee').value});dialog.close();await load();app.toast('บันทึกผู้รับผิดชอบแล้ว');}catch(error){$('#workDetailError').textContent=error.message;b.disabled=false;b.textContent=label;}};
+      if($('#startScheduledWork'))$('#startScheduledWork').onclick=async e=>{const b=e.currentTarget,label=b.textContent;b.disabled=true;b.textContent='กำลังเริ่ม…';try{await post(`/api/work/items/${id}/start`);dialog.close();await load();app.toast('เริ่มงานแล้ว');}catch(error){$('#workDetailError').textContent=error.message;b.disabled=false;b.textContent=label;}};
       $('#completeScheduledWork').onsubmit=async event=>{
-        event.preventDefault();const b=event.submitter;b.disabled=true;const form=event.target,raw=Object.fromEntries(new FormData(form)),createRepair=w.kind==='pm'&&raw.result==='needs_repair'&&$('#workCreateRepair').checked;
-        try{await post(`/api/work/items/${id}/complete`,{...raw,checks:w.checklist.map((_,i)=>form.elements['check-'+i].checked)});if(createRepair){try{await repairFromWork({...w,observed_location:raw.observedLocation},raw.note);}catch(error){dialog.close();await load();app.toast('บันทึกผลตรวจแล้ว แต่สร้างใบซ่อมไม่สำเร็จ: '+error.message+' · เปิดผลตรวจเพื่อส่งใหม่');}}else{dialog.close();await load();app.toast(w.kind==='inventory'&&['not_found','moved','damaged'].includes(raw.result)?'ส่งผลตรวจนับเข้าคิวทวนสอบแล้ว':'บันทึกผลตรวจและอัปเดตยอดแล้ว');}}catch(error){$('#workDetailError').textContent=error.message;b.disabled=false;}
+        event.preventDefault();const b=event.submitter||event.target.querySelector('[type="submit"]'),label=b?.textContent;if(b){b.disabled=true;b.textContent='กำลังบันทึก…';}const form=event.target,raw=Object.fromEntries(new FormData(form)),createRepair=w.kind==='pm'&&raw.result==='needs_repair'&&$('#workCreateRepair').checked;
+        try{await post(`/api/work/items/${id}/complete`,{...raw,checks:w.checklist.map((_,i)=>form.elements['check-'+i].checked)});if(createRepair){try{await repairFromWork({...w,observed_location:raw.observedLocation},raw.note);}catch(error){dialog.close();await load();app.toast('บันทึกผลตรวจแล้ว แต่สร้างใบซ่อมไม่สำเร็จ: '+error.message+' · เปิดผลตรวจเพื่อส่งใหม่','warning');}}else{dialog.close();await load();app.toast(w.kind==='inventory'&&['not_found','moved','damaged'].includes(raw.result)?'ส่งผลตรวจนับเข้าคิวทวนสอบแล้ว':'บันทึกผลตรวจและอัปเดตยอดแล้ว');}}catch(error){$('#workDetailError').textContent=error.message;if(b){b.disabled=false;b.textContent=label;}}
       };
     }
     if($('#openWorkRepairTicket'))$('#openWorkRepairTicket').onclick=()=>{dialog.close();app.openTicket(w.repair_ticket_id);};
-    if($('#createWorkRepair'))$('#createWorkRepair').onclick=async()=>{try{await repairFromWork(w,w.note);}catch(error){$('#workDetailError').textContent=error.message;}};
+    if($('#createWorkRepair'))$('#createWorkRepair').onclick=async e=>{const b=e.currentTarget,label=b.textContent;b.disabled=true;b.textContent='กำลังสร้าง…';try{await repairFromWork(w,w.note);}catch(error){$('#workDetailError').textContent=error.message;b.disabled=false;b.textContent=label;}};
     dialog.showModal();
   }
   function openReview(id){

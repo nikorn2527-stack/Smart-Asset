@@ -25,12 +25,24 @@
   const scoped=()=>/^[0-9]+$/.test($('#entryAccount').value);
   function payload(){if(!scoped())return {};return {expectedSelection:current?.selectionVersion,accountId:Number($('#entryAccount').value),branchId:$('#entryBranch').value?Number($('#entryBranch').value):null,numberDate:$('#entryNumberDate').value,categoryId:Number($('#assetCategoryId').value),catalogId:$('#entryCatalog').value?Number($('#entryCatalog').value):null,values:Object.fromEntries([...root.querySelectorAll('[data-entry-variable]')].map(i=>[i.dataset.entryVariable,i.value.trim()])),purchasePrice:$('#entryCost').value,acquisitionDate:$('#entryAcquired').value,model:$('#entryModel').value,serialNumber:$('#entrySerial').value,custodian:$('#entryCustodian').value,warrantyEnd:$('#entryWarranty').value,policyOverrideId:$('#entryPolicyOverride').value?Number($('#entryPolicyOverride').value):null,overrideReason:$('#entryOverrideReason').value,fsnCode:'',assetType:catalog.find(c=>c.id===Number($('#entryCatalog').value))?.name||''};}
   function render(){
-    const yes=scoped();$('#scopedEntry').hidden=!yes;$('#entryVariableDetails').open=yes&&!$('#entryCatalog').value&&$('#assetNumberMode').value!=='manual';
-    if(!yes)return;
+    const yes=scoped(),submitBtn=form.querySelector('button[type=submit]');$('#scopedEntry').hidden=!yes;$('#entryVariableDetails').open=yes&&!$('#entryCatalog').value&&$('#assetNumberMode').value!=='manual';
+    if(!yes){if(submitBtn){delete submitBtn.dataset.actionBlocked;delete submitBtn.dataset.disabledReason;}return;}
     legacyIds.forEach(id=>$('#'+id).hidden=true);$('#generatedCode').parentElement.hidden=true;
     $('#assetClassification').required=false;
     $('#manualAssetCodeField').hidden=$('#assetNumberMode').value!=='manual';$('#manualAssetCode').required=$('#assetNumberMode').value==='manual';
-    form.querySelector('button[type=submit]').disabled=loading||!current;
+    if(submitBtn){
+      let nextStep='';
+      if(loading)nextStep='กำลังคำนวณเลขครุภัณฑ์…';
+      else if(!current){
+        if(!$('#assetCategoryId').value)nextStep='เลือกหมวดครุภัณฑ์ก่อนบันทึก';
+        else if($('#assetNumberMode').value==='manual'&&!$('#manualAssetCode').value.trim())nextStep='กรอกเลขครุภัณฑ์เดิมก่อนบันทึก';
+        else if(!profile)nextStep='หมวดนี้ยังไม่มีแบบเลขที่ผูกไว้ (ตั้งค่าได้ที่ ตั้งค่า > ข้อมูลหลัก)';
+        else nextStep='เลือกชนิด / คุณลักษณะ หรือกรอกตัวแปรเลขให้ครบเพื่อสร้างเลขครุภัณฑ์';
+      }
+      if(nextStep){submitBtn.dataset.actionBlocked=nextStep;submitBtn.dataset.disabledReason=nextStep;}
+      else{delete submitBtn.dataset.actionBlocked;delete submitBtn.dataset.disabledReason;}
+      submitBtn.disabled=loading||!current;
+    }
     $('#entryPolicyException').hidden=app.getRole()!=='เจ้าหน้าที่พัสดุ';
   }
   async function context(){

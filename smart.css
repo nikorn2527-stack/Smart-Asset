@@ -390,6 +390,7 @@ body{background:#f3f6fa}.panel{border-radius:16px;box-shadow:0 3px 16px #16354a0
 .ticket-item-form input,.ticket-item-form select{min-height:34px;padding:0 8px;border:1px solid var(--line);border-radius:6px;font:inherit;color:var(--ink)}
 .ticket-item-form [hidden]{display:none}
 .ticket-item-form #ticketItemError{flex-basis:100%;margin:0;color:#b42318;font-size:12px}
-@media (max-width:860px){.reports-layout{grid-template-columns:1fr}.reports-list{flex-direction:row;overflow-x:auto}.reports-item{min-width:200px}}
+@media (max-width:860px){.reports-layout{grid-template-columns:1fr}.reports-list{flex-direction:row;overflow-x:auto;scroll-padding-inline:12px}.reports-item{min-width:200px}}
+@media (max-width:640px){.reports-list{flex-direction:column;overflow-x:visible}.reports-item{min-width:0;width:100%}}
 .smart-usage-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .smart-usage-summary span { padding: 6px 10px; border-radius: 9px; background: #edf7f6; color: #155e63; font-size: 13px; }

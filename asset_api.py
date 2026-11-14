@@ -338,15 +338,30 @@ def inventory_facets(db: sqlite3.Connection, query: dict) -> dict[str, Any]:
     return {"buildings": buildings, "floors": floors, "rooms": rooms, "fiscalYears": fiscal_years, "categories": categories, "statuses": statuses}
 
 
-def bulk_update_location(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tuple[dict[str, str], int]:
-    ensure_location_hierarchy(db)
-    raw_ids = body.get("assetIds") or []
+def _parse_asset_ids(raw_ids: Any) -> list[int]:
+    """Validate and deduplicate 1-500 positive integer asset IDs."""
     if not isinstance(raw_ids, list) or not raw_ids or len(raw_ids) > 500:
-        return {"error": "กรุณาเลือกครุภัณฑ์ 1–500 รายการ"}, 400
+        raise ValueError("กรุณาเลือกครุภัณฑ์ 1–500 รายการ")
+    ids: list[int] = []
+    for x in raw_ids:
+        if isinstance(x, bool):
+            raise ValueError("ข้อมูลรหัสครุภัณฑ์ไม่ถูกต้อง")
+        val = int(x)
+        if val <= 0:
+            raise ValueError("ข้อมูลรหัสครุภัณฑ์ไม่ถูกต้อง")
+        ids.append(val)
+    return list(dict.fromkeys(ids))
+
+
+def bulk_update_location(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tuple[dict[str, str], int]:
+    actor = str(body.get("actor") or "").strip()[:160]
+    if actor == "ผู้แจ้ง":
+        return {"error": "ย้ายที่ตั้งครุภัณฑ์ได้เฉพาะเจ้าหน้าที่"}, 403
+    ensure_location_hierarchy(db)
     try:
-        ids = [int(x) for x in raw_ids]
-    except (TypeError, ValueError):
-        return {"error": "รหัสครุภัณฑ์ไม่ถูกต้อง"}, 400
+        ids = _parse_asset_ids(body.get("assetIds") or [])
+    except (TypeError, ValueError) as exc:
+        return {"error": str(exc) if "เลือกครุภัณฑ์" in str(exc) else "รหัสครุภัณฑ์ไม่ถูกต้อง"}, 400
     building = str(body.get("building") or "").strip()[:120]
     floor = str(body.get("floor") or "").strip()[:60]
     room = str(body.get("room") or "").strip()[:120]
@@ -356,6 +371,7 @@ def bulk_update_location(db: sqlite3.Connection, body: dict) -> dict[str, Any] |
     composed_loc = " · ".join(parts)
     placeholders = ",".join("?" for _ in ids)
     scope = scope_sql(db, "assets")
+    db.execute("BEGIN IMMEDIATE")
     if update_display and composed_loc:
         cur = db.execute(f"UPDATE assets SET building=?,floor=?,room=?,sub_unit=?,location=?,updated_at=CURRENT_TIMESTAMP WHERE id IN ({placeholders}) AND {scope}", [building, floor, room, sub_unit, composed_loc, *ids])
     else:
@@ -367,20 +383,21 @@ def bulk_update_category(db: sqlite3.Connection, body: dict) -> dict[str, Any] |
     actor = str(body.get("actor") or "").strip()[:160]
     if actor == "ผู้แจ้ง":
         return {"error": "ย้ายหมวดหมู่ได้เฉพาะเจ้าหน้าที่"}, 403
-    raw_ids = body.get("assetIds") or []
-    if not isinstance(raw_ids, list) or not raw_ids or len(raw_ids) > 500:
-        return {"error": "กรุณาเลือกครุภัณฑ์ 1–500 รายการ"}, 400
     try:
-        ids = list(dict.fromkeys(int(x) for x in raw_ids))
-        category_id = int(body.get("categoryId"))
-    except (TypeError, ValueError):
-        return {"error": "ข้อมูลรหัสครุภัณฑ์หรือหมวดหมู่ไม่ถูกต้อง"}, 400
+        ids = _parse_asset_ids(body.get("assetIds") or [])
+        raw_cat = body.get("categoryId")
+        if isinstance(raw_cat, bool):
+            raise ValueError("หมวดหมู่ไม่ถูกต้อง")
+        category_id = int(raw_cat)
+    except (TypeError, ValueError) as exc:
+        return {"error": str(exc) if "เลือกครุภัณฑ์" in str(exc) else "ข้อมูลรหัสครุภัณฑ์หรือหมวดหมู่ไม่ถูกต้อง"}, 400
     cat = db.execute("SELECT id,category_name FROM asset_categories WHERE id=?", (category_id,)).fetchone()
     if not cat:
         return {"error": "ไม่พบหมวดหมู่ครุภัณฑ์ที่เลือก"}, 404
     reason = str(body.get("reason") or "").strip()[:300]
     placeholders = ",".join("?" for _ in ids)
     scope = scope_sql(db, "a")
+    db.execute("BEGIN IMMEDIATE")
     rows = db.execute(f"SELECT a.id,a.status,a.group_name,a.numbering_account_id FROM assets a WHERE a.id IN ({placeholders}) AND {scope}", ids).fetchall()
     if not rows:
         return {"error": "ไม่พบรายการครุภัณฑ์ในขอบเขตสิทธิ์"}, 404
@@ -406,19 +423,17 @@ def bulk_update_status(db: sqlite3.Connection, body: dict) -> dict[str, Any] | t
     actor = str(body.get("actor") or "").strip()[:160]
     if actor == "ผู้แจ้ง":
         return {"error": "เปลี่ยนสถานะครุภัณฑ์ได้เฉพาะเจ้าหน้าที่"}, 403
-    raw_ids = body.get("assetIds") or []
-    if not isinstance(raw_ids, list) or not raw_ids or len(raw_ids) > 500:
-        return {"error": "กรุณาเลือกครุภัณฑ์ 1–500 รายการ"}, 400
     try:
-        ids = list(dict.fromkeys(int(x) for x in raw_ids))
-    except (TypeError, ValueError):
-        return {"error": "ข้อมูลรหัสครุภัณฑ์ไม่ถูกต้อง"}, 400
+        ids = _parse_asset_ids(body.get("assetIds") or [])
+    except (TypeError, ValueError) as exc:
+        return {"error": str(exc) if "เลือกครุภัณฑ์" in str(exc) else "ข้อมูลรหัสครุภัณฑ์ไม่ถูกต้อง"}, 400
     status = str(body.get("status") or "").strip()
     if status not in ALLOWED_ASSET_STATUSES:
         return {"error": "สถานะที่เลือกไม่ถูกต้อง"}, 400
     reason = str(body.get("note") or body.get("reason") or "").strip()[:1000]
     placeholders = ",".join("?" for _ in ids)
-    scope = scope_sql(db, "assets")
+    scope = scope_sql(db, "a")
+    db.execute("BEGIN IMMEDIATE")
     rows = db.execute(f"SELECT a.id,a.status,a.notes FROM assets a WHERE a.id IN ({placeholders}) AND {scope}", ids).fetchall()
     if not rows:
         return {"error": "ไม่พบรายการครุภัณฑ์ในขอบเขตสิทธิ์"}, 404
@@ -441,17 +456,15 @@ def bulk_update_notes(db: sqlite3.Connection, body: dict) -> dict[str, Any] | tu
     actor = str(body.get("actor") or "").strip()[:160]
     if actor == "ผู้แจ้ง":
         return {"error": "บันทึกหมายเหตุตรวจนับได้เฉพาะเจ้าหน้าที่"}, 403
-    raw_ids = body.get("assetIds") or []
-    if not isinstance(raw_ids, list) or not raw_ids or len(raw_ids) > 500:
-        return {"error": "กรุณาเลือกครุภัณฑ์ 1–500 รายการ"}, 400
     try:
-        ids = list(dict.fromkeys(int(x) for x in raw_ids))
-    except (TypeError, ValueError):
-        return {"error": "ข้อมูลรหัสครุภัณฑ์ไม่ถูกต้อง"}, 400
+        ids = _parse_asset_ids(body.get("assetIds") or [])
+    except (TypeError, ValueError) as exc:
+        return {"error": str(exc) if "เลือกครุภัณฑ์" in str(exc) else "ข้อมูลรหัสครุภัณฑ์ไม่ถูกต้อง"}, 400
     notes = str(body.get("notes") or "").strip()[:1000]
     mode = str(body.get("mode") or "replace").strip()
     placeholders = ",".join("?" for _ in ids)
-    scope = scope_sql(db, "assets")
+    scope = scope_sql(db, "a")
+    db.execute("BEGIN IMMEDIATE")
     rows = db.execute(f"SELECT a.id,a.status,a.notes FROM assets a WHERE a.id IN ({placeholders}) AND {scope}", ids).fetchall()
     if not rows:
         return {"error": "ไม่พบรายการครุภัณฑ์ในขอบเขตสิทธิ์"}, 404

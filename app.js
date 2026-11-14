@@ -118,7 +118,7 @@ async function api(path, options={}) {
 function toast(message, type = 'info') { const el=$('#toast'); if(!el) return; el.setAttribute('data-type', type); const icon = type === 'error' ? '✕' : type === 'warning' ? '⚠' : '✓'; el.innerHTML=`<span class="toast-icon">${icon}</span> <span>${esc(message)}</span> <button class="toast-close" onclick="this.closest('#toast').classList.remove('show');clearTimeout(toast.timer)">×</button>`; if(typeof el.showPopover==='function'){el.popover='manual';if(el.matches(':popover-open'))el.hidePopover();el.showPopover();} el.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('show'), type === 'error' ? 8000 : type === 'warning' ? 6000 : 5000); }
 function showError(error) { const message=error?.message || 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้'; toast(message, 'error'); const badge=$('#dbIndicator'); if(badge){badge.textContent='เชื่อมต่อระบบไม่ได้';badge.classList.add('offline');} }
 function setConnected() { const badge=$('#dbIndicator'); if(badge){badge.innerHTML='<i></i> ระบบพร้อมใช้งาน';badge.classList.remove('offline');} }
-function confirmDialog(message, title = 'ยืนยันการดำเนินการ') { return new Promise((resolve) => { document.getElementById('confirm-title').textContent = title; document.getElementById('confirm-message').textContent = message; const dlg = document.getElementById('confirm-dialog'); window.confirmDialogResult = (value) => { dlg.close(); delete window.confirmDialogResult; resolve(value); }; window.closeConfirmDialog = (value) => { dlg.close(); delete window.confirmDialogResult; resolve(value === true); }; dlg.showModal(); }); }
+function confirmDialog(message, title = 'ยืนยันการดำเนินการ') { return new Promise((resolve) => { document.getElementById('confirm-title').textContent = title; document.getElementById('confirm-message').textContent = message; const dlg = document.getElementById('confirm-dialog'); let settled = false; const finish = (value) => { if (settled) return; settled = true; delete window.confirmDialogResult; delete window.closeConfirmDialog; if (dlg.open) dlg.close(); resolve(value === true); }; window.confirmDialogResult = finish; window.closeConfirmDialog = finish; dlg.addEventListener('close', () => finish(false), { once: true }); dlg.showModal(); }); }
 function populateAssetCategoryOptions(rows) {
   const categories=(Array.isArray(rows)?rows:[]).filter(item=>item&&item.isActive!==false&&Number.isInteger(Number(item.id))&&Number(item.id)>0);
   const select=$('#assetCategoryId');
@@ -667,7 +667,7 @@ async function runTicketAction(id,action) {
   const buttons=[...document.querySelectorAll('#ticketDialog [data-ticket-action]')];buttons.forEach(button=>button.disabled=true);
   if(action === 'cancel') {
     const confirmed = await confirmDialog('คุณแน่ใจหรือไม่ที่จะยกเลิก Ticket นี้? การยกเลิกไม่สามารถกู้คืนได้', 'ยืนยันการยกเลิก Ticket');
-    if(!confirmed) { delete panel.dataset.saving; buttons.forEach(button=>button.disabled=false); return; }
+    if(!confirmed) { if(panel) delete panel.dataset.saving; buttons.forEach(button=>button.disabled=false); updateTicketActionReadiness(); return; }
   }
   const data={action,actor:currentRole};
   if(action==='review') Object.assign(data,{estimateCost:$('#estimateCost')?.value||0,requiresPurchase:$('#requiresPurchase')?.checked,requiresExternal:$('#requiresExternal')?.checked,requiresReplacement:$('#requiresReplacement')?.checked,approvalRequired:$('#approvalRequired')?.checked,note:$('#reviewNote')?.value||''});
@@ -689,7 +689,7 @@ async function handleAssetApproval(id,action) {
   let note='';if(action==='reject'){note=window.prompt('เหตุผลที่ไม่อนุมัติรายการนี้:')||'';if(!note.trim())return;}
   assetApprovalsInFlight.add(key);const buttons=$$(`[data-asset-id="${Number(id)}"]`);buttons.forEach(button=>button.disabled=true);
   try{await api(`/api/assets/${id}/action`,{method:'POST',body:JSON.stringify({action,actor:currentRole,note})});await refreshData();toast(action==='approve'?'อนุมัติรายการเข้าทะเบียนแล้ว':'ไม่อนุมัติรายการ');}
-  catch(error){toast(error.message);}
+  catch(error){toast(error.message,'error');}
   finally{assetApprovalsInFlight.delete(key);buttons.forEach(button=>button.disabled=false);}
 }
 function openRepairPrintDialog(id) {
@@ -1389,7 +1389,7 @@ document.addEventListener('change',event=>{
 new MutationObserver(records=>records.forEach(record=>{
   if(record.type==='attributes'&&record.target.form)updateFormReadiness(record.target.form);
   record.addedNodes.forEach(guardFormsWithin);
-})).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['required']});
+})).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['required','data-action-blocked']});
 applyFontScale(fontScale);
 window.govAssetApp={api,toast,showError,refreshData,switchView,openCategory,goBack,fmtDate,formatQuantity,openTicket,openRepairDialog,getRole:()=>currentRole,canManageSettings:()=>{const s=window.govAssetAccess?.session;return s?.required?Boolean(s.isAdmin):currentRole===ROLE_OFFICER;},loadFsn,loadLocationFacets,loadInventory,setSmartFilterAccountChoices:syncSmartFilterAccountChoices,openAssetDialog};
 refreshData();

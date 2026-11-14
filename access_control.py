@@ -7,12 +7,12 @@ from governance import GovernanceError,ident,text,dump
 PERMISSIONS=('view','create','edit','approve','export','manage','work')
 ACTORS=('ผู้แจ้ง','เจ้าหน้าที่พัสดุ','ผู้อนุมัติ','ช่าง')
 SCHEMA='''
-CREATE TABLE IF NOT EXISTS app_users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL UNIQUE,name TEXT NOT NULL,password_hash TEXT NOT NULL,global_role TEXT NOT NULL DEFAULT 'user',is_active INTEGER NOT NULL DEFAULT 1,revision INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS app_users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL UNIQUE,name TEXT NOT NULL,email TEXT NOT NULL DEFAULT '',password_hash TEXT NOT NULL,global_role TEXT NOT NULL DEFAULT 'user',is_active INTEGER NOT NULL DEFAULT 1,revision INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS user_memberships(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL REFERENCES app_users(id),account_id INTEGER NOT NULL REFERENCES asset_accounts(id),branch_id INTEGER REFERENCES account_branches(id),permissions_json TEXT NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_membership_scope ON user_memberships(user_id,account_id,COALESCE(branch_id,0));
 CREATE TABLE IF NOT EXISTS app_sessions(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES app_users(id),csrf TEXT NOT NULL,expires_at INTEGER NOT NULL,account_id INTEGER REFERENCES asset_accounts(id),branch_id INTEGER REFERENCES account_branches(id),actor TEXT NOT NULL DEFAULT 'ผู้แจ้ง');
 CREATE TABLE IF NOT EXISTS login_attempts(key TEXT PRIMARY KEY,failures INTEGER NOT NULL,blocked_until INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS access_requests(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL,name TEXT NOT NULL,department TEXT NOT NULL DEFAULT '',contact TEXT NOT NULL DEFAULT '',requested_role TEXT NOT NULL DEFAULT 'ผู้แจ้ง',password_hash TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',account_id INTEGER REFERENCES asset_accounts(id),line_user_id TEXT NOT NULL DEFAULT '',oauth_provider TEXT NOT NULL DEFAULT '',oauth_subject TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'pending',reviewed_by TEXT NOT NULL DEFAULT '',review_note TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,reviewed_at TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS access_requests(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL,name TEXT NOT NULL,department TEXT NOT NULL DEFAULT '',contact TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',requested_role TEXT NOT NULL DEFAULT 'ผู้แจ้ง',password_hash TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',account_id INTEGER REFERENCES asset_accounts(id),line_user_id TEXT NOT NULL DEFAULT '',oauth_provider TEXT NOT NULL DEFAULT '',oauth_subject TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'pending',reviewed_by TEXT NOT NULL DEFAULT '',review_note TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,reviewed_at TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS login_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL,ip TEXT NOT NULL,user_agent TEXT NOT NULL DEFAULT '',success INTEGER NOT NULL,reason TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS user_identities(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL REFERENCES app_users(id),provider TEXT NOT NULL,subject TEXT NOT NULL,display_name TEXT NOT NULL DEFAULT '',picture_url TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(provider,subject));
 CREATE TABLE IF NOT EXISTS oauth_states(state TEXT PRIMARY KEY,expires_at INTEGER NOT NULL);
@@ -23,8 +23,11 @@ def required():return os.environ.get('ASSET_AUTH_REQUIRED','1')!='0'
 def initialize(path):
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA)
+        ucols={r[1] for r in db.execute('PRAGMA table_info(app_users)')}
+        if 'email' not in ucols:
+            db.execute("ALTER TABLE app_users ADD COLUMN email TEXT NOT NULL DEFAULT ''")
         cols={r[1] for r in db.execute('PRAGMA table_info(access_requests)')}
-        for col in ('line_user_id','oauth_provider','oauth_subject'):
+        for col in ('email','line_user_id','oauth_provider','oauth_subject'):
             if col not in cols:
                 db.execute(f"ALTER TABLE access_requests ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
         center=db.execute("SELECT id FROM asset_accounts WHERE code='MEDCENTER' AND is_active=1").fetchone() if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='asset_accounts'").fetchone() else None
@@ -202,6 +205,8 @@ def auth_api(db,handler,method,path,body):
         name=text(body.get('name'),'ชื่อ-นามสกุล',160)
         department=text(body.get('department',''),'แผนก/ตำแหน่ง',160,False)
         contact=text(body.get('contact',''),'เบอร์โทร/LINE',120,False)
+        email=text(body.get('email',''),'อีเมล',160,False).lower()
+        if email and not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email):fail('รูปแบบอีเมลไม่ถูกต้อง',400)
         req_role=str(body.get('requestedRole') or 'ผู้แจ้ง').strip()
         if req_role not in ACTORS:req_role='ผู้แจ้ง'
         reason=text(body.get('reason',''),'เหตุผล/หมายเหตุ',400,False)
@@ -215,7 +220,7 @@ def auth_api(db,handler,method,path,body):
         failures=(attempt['failures'] if attempt and attempt['blocked_until']>now-600 else 0)+1
         db.execute('INSERT INTO login_attempts VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET failures=excluded.failures,blocked_until=excluded.blocked_until',(key,failures,now+600 if failures>=10 else now))
         db.execute('BEGIN IMMEDIATE')
-        db.execute("INSERT INTO access_requests(username,name,department,contact,requested_role,password_hash,reason,account_id,line_user_id,oauth_provider,oauth_subject,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending')",(username,name,department,contact,req_role,hashed,reason,aid,line_uid,oauth_provider,oauth_subject))
+        db.execute("INSERT INTO access_requests(username,name,department,contact,email,requested_role,password_hash,reason,account_id,line_user_id,oauth_provider,oauth_subject,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'pending')",(username,name,department,contact,email,req_role,hashed,reason,aid,line_uid,oauth_provider,oauth_subject))
         return {'ok':True,'message':'ส่งคำขอเข้าใช้งานแล้ว กรุณารอผู้ดูแลระบบอนุมัติ'},201
     user,s=session_user(db,handler)
     if method!='GET':
@@ -249,7 +254,7 @@ def requests_api(db,ctx,method,body):
     if not ctx['permissions']['manage']:fail('ต้องได้รับสิทธิ์จัดการผู้ใช้งาน')
     if method!='GET':fail('ไม่รองรับคำสั่ง',405)
     where="1=1" if ctx['isAdmin'] else f"(r.account_id IS NULL OR r.account_id={int(ctx['accountId'])})"
-    rows=db.execute("SELECT r.id,r.username,r.name,r.department,r.contact,r.requested_role AS requestedRole,r.reason,r.account_id AS accountId,r.status,r.reviewed_by AS reviewedBy,r.review_note AS reviewNote,r.created_at AS createdAt,r.reviewed_at AS reviewedAt,a.name AS accountName FROM access_requests r LEFT JOIN asset_accounts a ON a.id=r.account_id WHERE "+where+" ORDER BY CASE WHEN r.status='pending' THEN 0 ELSE 1 END, r.id DESC LIMIT 50").fetchall()
+    rows=db.execute("SELECT r.id,r.username,r.name,r.department,r.contact,r.email,r.requested_role AS requestedRole,r.reason,r.account_id AS accountId,r.status,r.reviewed_by AS reviewedBy,r.review_note AS reviewNote,r.created_at AS createdAt,r.reviewed_at AS reviewedAt,a.name AS accountName FROM access_requests r LEFT JOIN asset_accounts a ON a.id=r.account_id WHERE "+where+" ORDER BY CASE WHEN r.status='pending' THEN 0 ELSE 1 END, r.id DESC LIMIT 50").fetchall()
     return {'items':[dict(r) for r in rows]}
 
 
@@ -280,8 +285,10 @@ def requests_review_api(db,ctx,method,body):
     perms={p:bool(preset_map.get(role_preset,preset_map['ผู้แจ้ง']).get(p,False)) for p in PERMISSIONS}
     if not ctx['isAdmin'] and any(perms[p] and not ctx['permissions'][p] for p in PERMISSIONS):fail('ให้สิทธิ์เกินกว่าที่ตนเองมีไม่ได้')
     aid=ident(body.get('accountId'),True) or req['account_id'] or ctx['accountId']
+    if not ctx['isAdmin'] and aid!=ctx['accountId']:fail('ไม่มีสิทธิ์อนุมัติเข้าองค์กรอื่น',403)
     if not aid or not db.execute('SELECT 1 FROM asset_accounts WHERE id=? AND is_active=1',(aid,)).fetchone():fail('กรุณาระบุองค์กรที่อนุมัติสิทธิ์',400)
-    uid=db.execute("INSERT INTO app_users(username,name,password_hash,global_role,is_active) VALUES(?,?,?,'user',1)",(req['username'],req['name'],req['password_hash'])).lastrowid
+    req_email=req['email'] if 'email' in req.keys() else ''
+    uid=db.execute("INSERT INTO app_users(username,name,email,password_hash,global_role,is_active) VALUES(?,?,?,?,'user',1)",(req['username'],req['name'],req_email,req['password_hash'])).lastrowid
     db.execute('INSERT INTO user_memberships(user_id,account_id,branch_id,permissions_json) VALUES(?,?,NULL,?)',(uid,aid,dump(perms)))
     if 'oauth_provider' in req.keys() and req['oauth_provider'] and req['oauth_subject']:
         db.execute("INSERT OR IGNORE INTO user_identities(user_id,provider,subject,display_name) VALUES(?,?,?,?)",(uid,req['oauth_provider'],req['oauth_subject'],req['name']))
@@ -421,7 +428,7 @@ def users_api(db,ctx,method,body):
     if not ctx['permissions']['manage']:fail('ต้องได้รับสิทธิ์จัดการผู้ใช้งาน')
     if method=='GET':
         where='1=1' if ctx['isAdmin'] else "u.global_role='user' AND EXISTS(SELECT 1 FROM user_memberships m WHERE m.user_id=u.id AND m.account_id="+str(int(ctx['accountId']))+')'
-        return {'items':[{**dict(u),'memberships':memberships(db,u['id']) if ctx['isAdmin'] else [m for m in memberships(db,u['id']) if m['account_id']==ctx['accountId']]} for u in db.execute('SELECT u.id,u.username,u.name,u.global_role,u.is_active,u.revision FROM app_users u WHERE '+where+' ORDER BY u.id')]}
+        return {'items':[{**dict(u),'memberships':memberships(db,u['id']) if ctx['isAdmin'] else [m for m in memberships(db,u['id']) if m['account_id']==ctx['accountId']]} for u in db.execute('SELECT u.id,u.username,u.name,u.email,u.global_role,u.is_active,u.revision FROM app_users u WHERE '+where+' ORDER BY u.id')]}
     if method not in ('POST','PUT'):fail('ไม่รองรับคำสั่ง',405)
     uid=ident(body.get('id'),True);old=db.execute('SELECT * FROM app_users WHERE id=?',(uid,)).fetchone() if uid else None
     if uid and not old:fail('ไม่พบผู้ใช้',404)
@@ -452,16 +459,19 @@ def users_api(db,ctx,method,body):
         seen.add((aid,bid));checked.append((aid,bid,dump(perms)))
     username=text(body.get('username',old['username'] if old else None),'ชื่อผู้ใช้',80).casefold();name=text(body.get('name'),'ชื่อ',160)
     if not re.fullmatch(r'[a-z0-9ก-๙._@-]{3,80}',username):fail('ชื่อผู้ใช้ไม่ถูกต้อง',400)
+    old_email=(old['email'] if old and 'email' in old.keys() else '')
+    email=text(body.get('email',old_email),'อีเมล',160,False).lower() if ('email' in body or not old) else old_email
+    if email and not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email):fail('รูปแบบอีเมลไม่ถูกต้อง',400)
     if old and not ctx['isAdmin'] and (username!=old['username'] or name!=old['name']):fail('ผู้ดูแลองค์กรแก้ได้เฉพาะสิทธิ์ในองค์กร ชื่อบัญชีให้ผู้ดูแลระบบแก้ไข')
     hashed=password_hash(body.get('password')) if body.get('password') or not old else old['password_hash']
     db.execute('BEGIN IMMEDIATE')
     if old:
         if not ctx['isAdmin'] and active!=bool(old['is_active']):fail('ผู้ดูแลองค์กรแก้ได้เฉพาะสิทธิ์องค์กร การเปิด/ปิดบัญชีให้ผู้ดูแลระบบจัดการ')
-        db.execute('UPDATE app_users SET username=?,name=?,password_hash=?,global_role=?,is_active=?,revision=revision+1 WHERE id=?',(username,name,hashed,global_role,int(active),uid))
+        db.execute('UPDATE app_users SET username=?,name=?,email=?,password_hash=?,global_role=?,is_active=?,revision=revision+1 WHERE id=?',(username,name,email,hashed,global_role,int(active),uid))
         if ctx['isAdmin']:db.execute('DELETE FROM user_memberships WHERE user_id=?',(uid,))
         else:db.execute('DELETE FROM user_memberships WHERE user_id=? AND account_id=?'+(' AND branch_id=?' if ctx['branchId'] else ''),[uid,ctx['accountId']]+([ctx['branchId']] if ctx['branchId'] else []))
         db.execute('DELETE FROM app_sessions WHERE user_id=?',(uid,))
-    else:uid=db.execute('INSERT INTO app_users(username,name,password_hash,global_role,is_active) VALUES(?,?,?,?,?)',(username,name,hashed,global_role,int(active))).lastrowid
+    else:uid=db.execute('INSERT INTO app_users(username,name,email,password_hash,global_role,is_active) VALUES(?,?,?,?,?,?)',(username,name,email,hashed,global_role,int(active))).lastrowid
     db.executemany('INSERT INTO user_memberships(user_id,account_id,branch_id,permissions_json) VALUES(?,?,?,?)',[(uid,*g) for g in checked])
     db.execute('INSERT INTO account_events(actor,kind,entity_id,before_json,after_json) VALUES(?,?,?,?,?)',(ctx['user']['username'],'user-access',uid,dump({'revision':old['revision']} if old else {}),dump({'name':name,'globalRole':global_role,'isActive':active,'memberships':grants})))
     return {'id':uid},200 if old else 201
