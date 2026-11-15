@@ -65,7 +65,8 @@
   font-size: 11px !important;
   color: #64748b !important;
   margin: 0 0 3px !important;
-  line-height: 1.25 !important;
+  line-height: 1.48 !important;
+  padding-top: 1px !important;
 }
 
 /* Compact fields with labels and inputs sized to text */
@@ -83,16 +84,18 @@
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  line-height: 1.2 !important;
+  line-height: 1.48 !important;
+  padding-top: 1px !important;
 }
 
 .supply-detail input:not([type=checkbox]):not([type=file]),
 .supply-detail select {
   font-family: inherit !important;
   font-size: 12px !important;
-  height: 28px !important;
-  min-height: 28px !important;
-  padding: 2px 7px !important;
+  line-height: 1.45 !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 4px 8px !important;
   border: 1px solid #cbdbe4 !important;
   border-radius: 5px !important;
   background: #ffffff !important;
@@ -483,7 +486,8 @@
   white-space: normal !important;
   overflow: visible !important;
   text-overflow: clip !important;
-  line-height: 1.35 !important;
+  line-height: 1.48 !important;
+  padding-top: 1px !important;
 }
 
 #view-supply .supply-detail input:not([type="checkbox"]):not([type="file"]):not([type="hidden"]),

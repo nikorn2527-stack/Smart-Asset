@@ -84,7 +84,7 @@ def _selected_account(db, query):
         selected = next((account for account in accounts if account["id"] == current), None)
         selected = selected or (accounts[0] if accounts else None)
     else:
-        if not raw.isdigit():
+        if not re.fullmatch(r"\d+", raw):
             fail("บัญชีข้อมูลไม่ถูกต้อง")
         selected = next((account for account in accounts if account["id"] == int(raw)), None)
         if selected is None:
@@ -110,7 +110,7 @@ def _asset_filter(db, query):
         params.append("%" + re.sub(r"([!%_])", r"!\1", _one(query, "location")) + "%")
     department_id = _one(query, "departmentUnitId")
     if department_id:
-        if not department_id.isdigit():
+        if not re.fullmatch(r"\d+", department_id):
             fail("หน่วยงานไม่ถูกต้อง")
         exists = db.execute(
             "SELECT 1 FROM assets a JOIN org_units u ON u.id=a.department_unit_id WHERE "
@@ -251,7 +251,12 @@ def _movements(db, query):
 
 
 def _repair_items(db, query):
-    where, params = [_scope_ticket(db)], []
+    account_id = _selected_account(db, query)
+    where, params = [
+        _scope_ticket(db),
+        "(a.numbering_account_id=? OR (t.asset_id IS NULL AND t.location_point_id IS NOT NULL AND "
+        "EXISTS(SELECT 1 FROM service_locations s WHERE s.id=t.location_point_id AND s.account_id=?)))",
+    ], [account_id, account_id]
     clauses, dparams = _dates(query, "w.created_at")
     where += clauses
     params += dparams

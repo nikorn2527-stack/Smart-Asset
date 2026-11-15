@@ -30,17 +30,19 @@
 .access-overlay form.access-panel input[aria-invalid="true"]{border-color:rgba(151,209,204,.42)!important;box-shadow:none!important}
 .access-panel input::placeholder{color:rgba(233,246,247,.7)}
 .access-panel input:focus{outline:0;background:transparent;border-color:rgba(126,219,210,.82);box-shadow:0 0 0 3px rgba(47,181,169,.2)}
-.access-panel input:-webkit-autofill,.access-panel input:-webkit-autofill:hover,.access-panel input:-webkit-autofill:focus{background-color:rgba(7,40,55,.84)!important;-webkit-text-fill-color:#fff!important;-webkit-box-shadow:0 0 0 1000px rgba(7,40,55,.84) inset!important;caret-color:#fff;transition:background-color 9999s ease-out}
+.access-panel input:-webkit-autofill,.access-panel input:-webkit-autofill:hover,.access-panel input:-webkit-autofill:focus{background-color:transparent!important;-webkit-text-fill-color:#fff!important;-webkit-box-shadow:0 0 0 1000px transparent inset!important;caret-color:#fff;transition:background-color 9999s ease-out}
 .access-password{position:relative;display:block}
 .access-password input{padding-right:76px}
 .access-reveal{position:absolute;top:50%;right:8px;transform:translateY(-50%);height:34px;padding:0 12px;border:1px solid rgba(151,209,204,.35);border-radius:9px;background:transparent;color:#e8f7f6;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
-.access-reveal:hover{background:transparent}
+.access-reveal:hover{background:transparent;border-color:rgba(126,219,210,.82)}
 .access-caps{margin:-4px 0 4px;font-size:12px;font-weight:700;color:#ffe0a3;text-shadow:0 1px 6px rgba(0,0,0,.45)}
-.access-panel .access-submit,.access-panel .access-submit[data-action-tone]{width:100%;height:50px;margin-top:10px;justify-content:center;font-size:15.5px;font-weight:800;border-radius:12px;background:linear-gradient(135deg,#0c7f82,#0c5f62);border:0;color:#fff;box-shadow:0 12px 24px rgba(12,95,98,.28);cursor:pointer}
-.access-panel .access-submit:hover,.access-panel .access-submit[data-action-tone]:hover{filter:brightness(1.06);background:linear-gradient(135deg,#0c7f82,#0c5f62);color:#fff}
+.access-panel .access-submit,.access-panel .access-submit[data-action-tone]{width:100%;height:48px;margin-top:10px;justify-content:center;font-size:15.5px;font-weight:800;border-radius:12px!important;background:transparent!important;background-image:none!important;border:1px solid rgba(151,209,204,.48)!important;color:#fff!important;text-shadow:0 1px 6px rgba(0,0,0,.35);box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;cursor:pointer}
+.access-panel .access-submit:hover:not(:disabled),.access-panel .access-submit[data-action-tone]:hover:not(:disabled){filter:none;background:transparent!important;background-image:none!important;border-color:rgba(126,219,210,.82)!important;box-shadow:0 0 0 3px rgba(47,181,169,.2)!important;color:#fff!important}
+.access-panel .button.outline,.access-panel .button.outline[data-action-tone],#accessShowRequestBtn,#accessShowRequestBtn[data-action-tone]{height:48px;border-radius:12px!important;background:transparent!important;background-image:none!important;border:1px solid rgba(151,209,204,.48)!important;color:#fff!important;font-size:14.5px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,.35);box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.access-panel .button.outline:hover:not(:disabled),.access-panel .button.outline[data-action-tone]:hover:not(:disabled),#accessShowRequestBtn:hover:not(:disabled),#accessShowRequestBtn[data-action-tone]:hover:not(:disabled){background:transparent!important;background-image:none!important;border-color:rgba(126,219,210,.82)!important;box-shadow:0 0 0 3px rgba(47,181,169,.2)!important;color:#fff!important;filter:none}
 .access-reveal[data-action-tone]{background:transparent;color:#e8f7f6;border:1px solid rgba(151,209,204,.35);min-height:0;box-shadow:none}
 .access-panel .access-submit[data-action-tone]:disabled{background:transparent!important;background-image:none!important;border:1px solid rgba(151,209,204,.42);color:#e4f2f4;opacity:1;cursor:progress;box-shadow:none}
-.access-panel .access-submit.is-loading{background:#3d8f91}
+.access-panel .access-submit.is-loading{background:transparent!important;background-image:none!important}
 .access-panel #accessLoginStatus{min-height:0;margin:12px 0 0;font-size:13px;font-weight:600;color:#ffd2ce;text-align:center;text-shadow:0 1px 6px rgba(0,0,0,.4)}
 .access-panel #accessLoginStatus:empty{display:none}
 .access-panel .form-readiness{padding:0;border:0;border-radius:0;background:transparent;color:#ffe0a3;font-size:12px;line-height:1.5;text-align:center;text-shadow:0 1px 6px rgba(0,0,0,.5)}

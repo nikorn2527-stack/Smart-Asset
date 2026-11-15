@@ -27,6 +27,63 @@ MAX_PAGE_SIZE = 200
 MAX_PRINT_BATCH = 500
 ELEMENT_TYPES = {"text", "image", "qr", "rect"}
 
+SEARCH_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "แอร์": ("เครื่องปรับอากาศ",),
+    "แอร์คอนดิชั่น": ("เครื่องปรับอากาศ",),
+    "aircon": ("เครื่องปรับอากาศ",),
+    "air con": ("เครื่องปรับอากาศ",),
+    "ทีวี": ("โทรทัศน์", "ทีวี"),
+    "tv": ("โทรทัศน์", "ทีวี"),
+    "โน้ตบุ๊ก": ("โน้ตบุ๊ก", "notebook"),
+    "โน๊ตบุ๊ค": ("โน้ตบุ๊ก", "notebook"),
+    "โน้ตบุค": ("โน้ตบุ๊ก", "notebook"),
+    "โน๊ตบุค": ("โน้ตบุ๊ก", "notebook"),
+    "แล็ปท็อป": ("โน้ตบุ๊ก", "notebook"),
+    "laptop": ("โน้ตบุ๊ก", "notebook"),
+    "notebook": ("โน้ตบุ๊ก", "notebook"),
+    "ปริ้นเตอร์": ("เครื่องพิมพ์", "ปริ้น", "printer"),
+    "เครื่องปริ้น": ("เครื่องพิมพ์", "ปริ้น", "printer"),
+    "ปรินเตอร์": ("เครื่องพิมพ์", "ปริ้น", "printer"),
+    "พรินเตอร์": ("เครื่องพิมพ์", "ปริ้น", "printer"),
+    "printer": ("เครื่องพิมพ์", "ปริ้น", "printer"),
+    "คอม": ("คอมพิวเตอร์",),
+    "เครื่องคอม": ("คอมพิวเตอร์",),
+    "พีซี": ("คอมพิวเตอร์",),
+    "pc": ("คอมพิวเตอร์",),
+    "โปรเจคเตอร์": ("เครื่องฉายภาพ", "โปรเจคเตอร์", "projector"),
+    "โปรเจกเตอร์": ("เครื่องฉายภาพ", "โปรเจคเตอร์", "projector"),
+    "projector": ("เครื่องฉายภาพ", "โปรเจคเตอร์", "projector"),
+    "กล้องวงจรปิด": ("โทรทัศน์วงจรปิด", "กล้องวงจรปิด", "cctv"),
+    "cctv": ("โทรทัศน์วงจรปิด", "กล้องวงจรปิด", "cctv"),
+    "เครื่องสำรองไฟ": ("สำรองไฟ", "ups"),
+    "ups": ("สำรองไฟ", "ups"),
+    "เครื่องกระตุกหัวใจ": ("กระตุกหัวใจ", "defibrillator"),
+    "เครื่องปั๊มหัวใจ": ("กระตุกหัวใจ", "defibrillator"),
+    "aed": ("กระตุกหัวใจ", "defibrillator"),
+    "defib": ("กระตุกหัวใจ", "defibrillator"),
+}
+
+
+def expand_search_terms(text: str) -> tuple[list[str], str]:
+    """Return expanded SQL search terms and the primary UI display keyword."""
+    clean = re.sub(r"\s+", " ", (text or "").strip())
+    if not clean:
+        return [], ""
+    low = clean.casefold()
+    if low in SEARCH_SYNONYMS:
+        terms = list(SEARCH_SYNONYMS[low])
+        return terms, terms[0]
+    for alias, targets in sorted(SEARCH_SYNONYMS.items(), key=lambda kv: -len(kv[0])):
+        if len(targets) == 1 and re.match(rf"^{re.escape(alias)}(?:\s+|$)", low):
+            rest = clean[len(alias):].strip()
+            canonical = f"{targets[0]} {rest}".strip() if rest else targets[0]
+            return [canonical], canonical
+    return [clean], clean
+
+
+def _like_pattern(value: str) -> str:
+    return "%" + value.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+
 
 def _one(query: dict, key: str, default: str = "") -> str:
     value = query.get(key, default)
@@ -241,16 +298,20 @@ def _where(query: dict) -> tuple[str, list[Any]]:
         terms.append("(" + " OR ".join(room_terms) + ")")
     text = _one(query, "q").strip()
     if text:
-        like = f"%{text}%"
+        expanded_terms, _primary = expand_search_terms(text)
         searchable = ["a.fsn_code", "a.name", "a.detail", "a.code", "a.old_asset_code", "a.group_name", "a.location", "a.building", "a.floor", "a.room", "a.sub_unit", "a.notes", "a.gfmis_no", "a.po_no", "a.model", "a.serial_number", "a.asset_type", "c.category_name", "org.name", "dept.name", "responsible.name", "account.name", "branch.name", "category_label.name"]
-        searchable_terms = [f"COALESCE({column},'') LIKE ?" for column in searchable]
-        searchable_terms.append("EXISTS(SELECT 1 FROM asset_register_details rr WHERE rr.asset_id=a.id AND (rr.vendor_name LIKE ? OR rr.description LIKE ?))")
-        values.extend([like] * len(searchable))
-        values.extend([like, like])
-        if len(text) >= 3:
-            searchable_terms.append("a.id IN (SELECT sr.asset_id FROM source_row_search fts JOIN source_row_records sr ON sr.id=fts.rowid WHERE fts.raw_data_json LIKE ?)")
-            values.append(like)
-        terms.append("(" + " OR ".join(searchable_terms) + ")")
+        term_clauses = []
+        for search_word in expanded_terms:
+            like = _like_pattern(search_word)
+            searchable_terms = [f"COALESCE({column},'') LIKE ? ESCAPE '!'" for column in searchable]
+            searchable_terms.append("EXISTS(SELECT 1 FROM asset_register_details rr WHERE rr.asset_id=a.id AND (rr.vendor_name LIKE ? ESCAPE '!' OR rr.description LIKE ? ESCAPE '!'))")
+            values.extend([like] * len(searchable))
+            values.extend([like, like])
+            if len(search_word) >= 3:
+                searchable_terms.append("a.id IN (SELECT sr.asset_id FROM source_row_search fts JOIN source_row_records sr ON sr.id=fts.rowid WHERE fts.raw_data_json LIKE ? ESCAPE '!')")
+                values.append(like)
+            term_clauses.append("(" + " OR ".join(searchable_terms) + ")")
+        terms.append("(" + " OR ".join(term_clauses) + ")")
     statuses = [value for value in _many(query, "status") if value != "all"]
     if statuses:
         if "active_only" in statuses:
@@ -274,8 +335,8 @@ def _where(query: dict) -> tuple[str, list[Any]]:
             try:
                 category_ids.append(int(category))
             except ValueError:
-                category_terms.append("COALESCE(category_label.name,c.category_name,a.group_name) LIKE ?")
-                values.append(f"%{category}%")
+                category_terms.append("COALESCE(category_label.name,c.category_name,a.group_name) LIKE ? ESCAPE '!'")
+                values.append(_like_pattern(category))
         if category_ids:
             category_terms.append(f"a.category_id IN ({','.join('?' for _ in category_ids)})")
             values.extend(category_ids)
@@ -1262,8 +1323,8 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
         q=_one(query,"q").strip();limit=_safe_limit(query);offset=_safe_offset(query)
         official=int(db.execute("SELECT COUNT(*) FROM fsn_catalog_items").fetchone()[0])
         if official==0:
-            where=" WHERE r.type_name LIKE ? OR r.fsn_code LIKE ? OR c.category_name LIKE ?" if q else ""
-            args=[f"%{q}%"]*3 if q else []
+            where=" WHERE r.type_name LIKE ? ESCAPE '!' OR r.fsn_code LIKE ? ESCAPE '!' OR c.category_name LIKE ? ESCAPE '!'" if q else ""
+            args=[_like_pattern(q)]*3 if q else []
             total=int(db.execute("SELECT COUNT(*) FROM starter_catalog_rows r JOIN asset_categories c ON c.id=r.category_id"+where,args).fetchone()[0])
             rows=db.execute(
                 """SELECT r.rowid AS id, NULL AS page, '' AS groupNo, c.category_name AS groupTitle,
@@ -1284,8 +1345,8 @@ def handle(db: sqlite3.Connection, method: str, path: str, query: dict, body: di
                 item["reference"]=""
                 items.append(item)
             return {"items":items,"total":total,"limit":limit,"offset":offset}
-        where=" WHERE f.item_name LIKE ? OR f.category_code LIKE ? OR f.type_code LIKE ? OR f.canonical_fsn_code LIKE ?" if q else ""
-        args=[f"%{q}%"]*4 if q else []
+        where=" WHERE f.item_name LIKE ? ESCAPE '!' OR f.category_code LIKE ? ESCAPE '!' OR f.type_code LIKE ? ESCAPE '!' OR f.canonical_fsn_code LIKE ? ESCAPE '!'" if q else ""
+        args=[_like_pattern(q)]*4 if q else []
         total=int(db.execute("SELECT COUNT(*) FROM fsn_catalog_items f"+where,args).fetchone()[0])
         rows=db.execute("SELECT f.id,f.source_page AS page,f.group_no AS groupNo,f.group_title AS groupTitle,f.category_code AS categoryCode,f.type_code AS typeCode,f.item_name AS name,f.canonical_fsn_code AS fullCode,s.title AS sourceTitle,s.source_kind AS sourceKind,f.raw_line AS referenceData FROM fsn_catalog_items f JOIN source_documents s ON s.id=f.source_document_id"+where+" ORDER BY f.category_code,f.type_code,f.item_name LIMIT ? OFFSET ?",(*args,limit,offset)).fetchall()
         items=[]

@@ -88,7 +88,7 @@ body{font-size:16px}.brand strong{font-size:16px}.brand span{font-size:12px}.wor
 .topbar-divider{width:1px;height:20px;background:#e2e8f0;margin:0 2px;flex:none}
 .environment#dbIndicator{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:11.5px;font-weight:600;color:#475569;letter-spacing:.2px;white-space:nowrap;box-sizing:border-box}
 .environment#dbIndicator i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 0 2px #d1fae5;margin:0;flex:none}
-.font-controls{display:inline-flex;align-items:center;height:34px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;box-sizing:border-box}
+.font-controls{display:inline-flex;align-items:center;flex:0 0 auto;flex-shrink:0;height:34px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;box-sizing:border-box}
 .font-controls .icon-button{display:inline-flex;align-items:center;justify-content:center;height:100%;padding:0 11px;background:transparent;border:none;border-radius:0;color:#334155;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s ease,color .15s ease}
 .font-controls .icon-button:hover{background:#f1f5f9;color:#0f172a}
 .font-controls #fontScaleLabel{display:inline-flex;align-items:center;justify-content:center;height:100%;padding:0 9px;font-size:11px;font-weight:700;color:#475569;background:#f8fafc;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;min-width:46px;user-select:none}
@@ -308,8 +308,18 @@ body :is(.supply-toolbar,.workspace-toolbar,.admin-account-bar)>.button{margin-t
 }
 .dialog-content-scroll {
   flex: 1 1 auto !important;
+  min-height: 0 !important;
   overflow-y: auto !important;
   padding: 18px 24px !important;
+}
+#ticketDialog > #ticketDialogContent,
+#manualDialog > .ticket-dialog-inner,
+.work-dialog > form,
+.work-dialog > div,
+.guidance-dialog > form,
+#numberingDetailDialog,
+.numbering-detail-dialog {
+  overflow-y: auto !important;
 }
 .dialog-actions {
   flex: none !important;

@@ -544,6 +544,8 @@ def authorize(db,ctx,method,path,query,body):
     if path.startswith('/api/sticker/'):
         if not perms['export']:fail('ไม่ได้รับสิทธิ์ส่งออกหรือพิมพ์')
         return
+    if path=='/api/assistant/query':
+        return
     if re.fullmatch(r'/api/tickets/\d+/tracking-link',path):
         if not perms['export']:fail('ไม่ได้รับสิทธิ์ส่งออกหรือพิมพ์')
         return

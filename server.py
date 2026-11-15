@@ -28,6 +28,7 @@ import ticket_photos
 import reports
 import ticket_items
 import dashboard_api
+from ai_assistant import handle_assistant
 from smart_assets import base_url, branding, public_asset, public_receipt, qr_url, token_for
 from qr_smart import (
     initialize as initialize_qr_smart,
@@ -486,6 +487,8 @@ class Handler(BaseHTTPRequestHandler):
             if workspace is not None: return workspace
             governed = handle_governance(db, method, path, query, body)
             if governed is not None: return governed
+            assistant = handle_assistant(db, method, path, query, body)
+            if assistant is not None: return assistant
             backups = handle_backups(db, DB_PATH, method, path, query, body)
             if backups is not None: return backups
             if method == "GET" and path == "/api/work/status":
@@ -519,16 +522,34 @@ class Handler(BaseHTTPRequestHandler):
             if extended is not None:
                 return extended
             if method == "GET" and path == "/api/assets/search":
+                from asset_api import expand_search_terms
                 text = clean_text(query.get("q", [""])[0], 200, "คำค้น", required=False)
                 if not text:
                     return {"items": [], "hasMore": False}
-                like = "%" + text.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
-                rows = db.execute("SELECT a.id,a.name,a.code,a.location,a.status,account.name AS accountName,branch.name AS branchName FROM assets a LEFT JOIN asset_accounts account ON account.id=a.numbering_account_id LEFT JOIN account_branches branch ON branch.id=a.branch_id WHERE "+access.scope_sql(db)+" AND (a.name LIKE ? ESCAPE '!' OR a.code LIKE ? ESCAPE '!' OR a.old_asset_code LIKE ? ESCAPE '!') ORDER BY CASE WHEN a.code=? THEN 0 ELSE 1 END,a.code,a.id LIMIT 13", (like,like,like,text)).fetchall()
+                expanded, _primary = expand_search_terms(text)
+                term_sql = []
+                term_vals: list = []
+                for term in expanded:
+                    like = "%" + term.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+                    term_sql.append("(a.name LIKE ? ESCAPE '!' OR a.code LIKE ? ESCAPE '!' OR a.old_asset_code LIKE ? ESCAPE '!' OR a.detail LIKE ? ESCAPE '!')")
+                    term_vals.extend([like, like, like, like])
+                rows = db.execute(
+                    "SELECT a.id,a.name,a.code,a.location,a.status,account.name AS accountName,branch.name AS branchName "
+                    "FROM assets a LEFT JOIN asset_accounts account ON account.id=a.numbering_account_id "
+                    "LEFT JOIN account_branches branch ON branch.id=a.branch_id "
+                    f"WHERE {access.scope_sql(db)} AND ({' OR '.join(term_sql)}) "
+                    "ORDER BY CASE WHEN a.code=? THEN 0 ELSE 1 END,a.code,a.id LIMIT 13",
+                    (*term_vals, text),
+                ).fetchall()
                 return {"items": [dict(r) for r in rows[:12]], "hasMore": len(rows)>12}
             if method == "GET" and path == "/api/assets/pending":
                 return [asset_dict(row) for row in db.execute("SELECT * FROM assets a WHERE status='รออนุมัติ' AND "+access.scope_sql(db)+" ORDER BY id DESC")]
             if method == "GET" and path == "/api/assets":
-                return [asset_dict(row) for row in db.execute("SELECT * FROM assets a WHERE "+access.scope_sql(db)+" ORDER BY id DESC LIMIT 150")]
+                try:
+                    limit = max(1, min(500, int(query.get("limit", ["150"])[0])))
+                except (TypeError, ValueError):
+                    limit = 150
+                return [asset_dict(row) for row in db.execute("SELECT * FROM assets a WHERE "+access.scope_sql(db)+" ORDER BY id DESC LIMIT ?", (limit,))]
             if method == "GET" and path == "/api/survey":
                 return [survey_dict(row) for row in db.execute("SELECT * FROM survey_items ORDER BY id")]
             if method == "GET" and path == "/api/tickets":
@@ -1182,7 +1203,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}", flush=True)
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css",         "/qr-smart.js", "/reports.js", "/ticket-items.js", "/ui-scale.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css",         "/qr-smart.js", "/reports.js", "/ticket-items.js", "/ui-scale.js", "/assistant.js", "/assistant.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -1244,7 +1265,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css", "/qr-smart.js", "/reports.js", "/ticket-items.js", "/ui-scale.js"}
+        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css", "/qr-smart.js", "/reports.js", "/ticket-items.js", "/ui-scale.js", "/assistant.js", "/assistant.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return

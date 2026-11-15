@@ -146,5 +146,17 @@
   $('#supplySettingsForm').onsubmit=async e=>{e.preventDefault();const f=e.target,b=$('[type=submit]',f);b.disabled=true;try{const payload={accountId:Number($('#supplySettingsAccount').value),revision:rules.revision};for(const k of Object.keys(rules)){const n=f.elements[k];if(n)payload[k]=n.type==='checkbox'?n.checked:n.value;}rules=await call('settings',payload,'PUT');$('#supplySettingsStatus').textContent='บันทึกแล้ว ใช้กับใบงานที่สร้างใหม่';}catch(err){$('#supplySettingsStatus').textContent=err.message;}finally{b.disabled=false;}};
   document.addEventListener('govasset:view-changed',e=>{if(e.detail.name==='supply')load().catch(app.showError);if(e.detail.name==='approvals')approvalQueue().catch(app.showError);if(e.detail.name==='supply-settings')loadSettings().catch(app.showError);});
   document.addEventListener('govasset:role-changed',()=>{if($('#view-approvals').classList.contains('active'))approvalQueue().catch(app.showError);if(current&&!draftChanged()&&!$('.supply-stage-form'))renderDetail();if($('.supply-stage-form'))$('.supply-form-status',$('.supply-stage-form')).textContent='เปลี่ยนบทบาทแล้ว ระบบจะตรวจสิทธิ์อีกครั้งเมื่อยืนยัน';if(settingsView.classList.contains('active'))loadSettings().catch(app.showError);});
-  window.govAssetSupply={open:async id=>{await init();app.switchView('supply');await open(id);}};
+  window.govAssetSupply={
+    open:async id=>{await init();app.switchView('supply');await open(id);},
+    openView:async(opts={})=>{
+      await init();
+      app.switchView('supply');
+      if(opts.kind==='receipt'||opts.kind==='issue')setKind(opts.kind);
+      await load();
+      if(opts.createKind==='receipt'||opts.createKind==='issue'){
+        setKind(opts.createKind);
+        await editor(null);
+      }
+    }
+  };
 })();

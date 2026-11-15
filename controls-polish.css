@@ -37,7 +37,8 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.48;
+  padding-top: 1px;
   letter-spacing: 0;
   overflow-wrap: anywhere;
 }

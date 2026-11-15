@@ -85,7 +85,16 @@ const defaultRepairs = [
 ];
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+const normalizeThaiText = window.normalizeThaiText || (value => String(value ?? '')
+  .replace(/\u0e4d([\u0e48-\u0e4b]?)\u0e32/g, '$1\u0e33')
+  .replace(/([\u0e48-\u0e4b])[\u0e48-\u0e4b]+/g, '$1')
+  .replace(/([\u0e4c])\1+/g, '$1')
+  .replace(/([\u0e31\u0e34-\u0e3a\u0e47])\1+/g, '$1')
+  .replace(/([\u0e48-\u0e4b])([\u0e31\u0e34-\u0e3a])/g, '$2$1')
+  .replace(/([\u0e48-\u0e4b])[\u0e48-\u0e4b]+/g, '$1')
+  .replace(/(^|\s)[\u0e31\u0e34-\u0e3a\u0e47-\u0e4e]+/g, '$1'));
+window.normalizeThaiText = normalizeThaiText;
+const esc = value => normalizeThaiText(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const ROLE_REQUESTER='ผู้แจ้ง', ROLE_OFFICER='เจ้าหน้าที่พัสดุ', ROLE_APPROVER='ผู้อนุมัติ', ROLE_TECHNICIAN='ช่าง';
 let assets=[], approvalAssets=[], sheet=[], repairs=[], appConfig={approvalThreshold:5000};
 let inventoryRows=null, inventoryTotal=0, inventoryOffset=0, inventoryLimit=50;
@@ -136,10 +145,20 @@ function populateAssetCategoryOptions(rows) {
   }
   renderSmartFilterCatalog(smartFilterFacets);
 }
+function defaultSelectValue(el){return el&&[...el.options].some(o=>o.value==='all')?'all':'';}
+function syncFilterSelectsFromCommitted(){
+  [['status','#statusFilter'],['building','#buildingFilter'],['floor','#floorFilter'],['room','#roomFilter'],['category','#categoryFilter']].forEach(([key,sel])=>{
+    const el=$(sel);if(!el)return;
+    const vals=smartFilterCommitted[key]||[];
+    if(vals.length===1&&[...el.options].some(o=>o.value===vals[0]))el.value=vals[0];
+    else if(!vals.length)el.value=defaultSelectValue(el);
+  });
+}
 function inventoryQueryParams(offset=0) {
+  syncFilterSelectsFromCommitted();
   const params=new URLSearchParams({...window.govAssetAccountFilters?.(),q:($('#assetSearch')?.value||'').trim(),limit:String(inventoryLimit),offset:String(Math.max(0,offset))});
   const category=$('#categoryFilter')?.value;
-  if(category)params.append('category',category);
+  if(category&&!smartFilterCommitted.category.includes(category))params.append('category',category);
   smartFilterMultiKeys.forEach(key=>smartFilterCommitted[key].forEach(value=>params.append(key,value)));
   return params;
 }
@@ -418,6 +437,7 @@ function updateInventoryPrintToolbar(canPrint=true) {
     : 'ติ๊กเลือกรายการเพื่อพิมพ์ฉลาก ใส่รูป หรือย้ายหมวดหมู่ทั้งชุด';
   print.disabled=!canPrint||selectedPrintAssets.size===0;
   const bulkCat=$('#bulkCategoryBtn');if(bulkCat){bulkCat.hidden=!canEdit;bulkCat.disabled=!canEdit;}
+  const bulkLoc=$('#bulkLocationBtn');if(bulkLoc){bulkLoc.hidden=!canEdit;bulkLoc.disabled=!canEdit;}
   const bulkNote=$('#bulkNoteBtn');if(bulkNote){bulkNote.hidden=!canEdit;bulkNote.disabled=!canEdit||selectedPrintAssets.size===0;}
   const bulkStatus=$('#bulkStatusBtn');if(bulkStatus){bulkStatus.hidden=!canEdit;bulkStatus.disabled=!canEdit||selectedPrintAssets.size===0;}
   const bulkPhoto=$('#bulkPhotoBtn');if(bulkPhoto){bulkPhoto.hidden=!canEdit;bulkPhoto.disabled=!canEdit||selectedPrintAssets.size===0;}
@@ -1208,7 +1228,26 @@ document.addEventListener('click',event=>{
 document.addEventListener('click',event=>{const target=event.target.closest('[data-go-view]');if(target)switchView(target.dataset.goView);const record=event.target.closest('[data-register-id]');if(record)window.govAssetApp.openRegister(Number(record.dataset.registerId));const chip=event.target.closest('[data-remove-filter]');if(chip){const key=chip.dataset.removeFilter,value=chip.dataset.filterValue;if(smartFilterMultiKeys.includes(key))smartFilterCommitted[key]=smartFilterCommitted[key].filter(item=>item!==value);else if(key==='account'){smartFilterCommitted.account='';smartFilterCommitted.branch='';}else smartFilterCommitted.branch='';smartFilterDraft=cloneSmartFilter(smartFilterCommitted);applySmartFilterDraft();}});
 $$('[data-open-view]').forEach(button=>button.addEventListener('click',()=>switchView(button.dataset.openView)));
 $('#assetSearch')?.addEventListener('input',()=>{++inventoryRequest;clearTimeout(inventorySearchTimer);inventorySearchTimer=setTimeout(()=>loadInventory(0),220);});
-$('#categoryFilter')?.addEventListener('change',()=>loadInventory(0));
+$('#categoryFilter')?.addEventListener('change',()=>{
+  const val=$('#categoryFilter')?.value||'';
+  smartFilterCommitted.category=val?[val]:[];
+  smartFilterDraft=cloneSmartFilter(smartFilterCommitted);
+  renderSmartFilterMenu();
+  loadInventory(0);
+});
+[['status','#statusFilter'],['building','#buildingFilter'],['floor','#floorFilter'],['room','#roomFilter']].forEach(([key,sel])=>{
+  $(sel)?.addEventListener('change',()=>{
+    const val=$(sel)?.value||'';
+    smartFilterCommitted[key]=(val&&val!=='all')?[val]:[];
+    smartFilterDraft=cloneSmartFilter(smartFilterCommitted);
+    renderSmartFilterMenu();
+    loadInventory(0);
+  });
+});
+$('#clearAssetFilter')?.addEventListener('click',()=>{
+  if($('#categoryFilter'))$('#categoryFilter').value='';
+  ['#statusFilter','#buildingFilter','#floorFilter','#roomFilter'].forEach(sel=>{const el=$(sel);if(el)el.value=defaultSelectValue(el);});
+},{capture:true});
 $('#bulkLocationBtn')?.addEventListener('click',()=>openLocationAssignDialog(selectedPrintAssets.size?[...selectedPrintAssets.values()]:(inventoryRows||[])));
 $('#clearAssetFilter')?.addEventListener('click',()=>{
   const search=$('#assetSearch');if(search)search.value='';
@@ -1291,6 +1330,13 @@ $('#repairForm').addEventListener('submit',async event=>{
   try{data.photos=await Promise.all(repairPhotoFiles.map(photo=>encodeRepairPhoto(photo.file)));button.textContent='กำลังส่งคำขอ…';const ticket=await api('/api/tickets',{method:'POST',body:JSON.stringify(data)});form.reset();resetRepairPhotos();$('#repairForm input[name="assetId"]')?.remove();$('#repairDialog').close();await refreshData();toast(`เปิด Ticket ${ticket.ticketNo} แล้ว`);switchView('repairs');await openTicket(ticket.id);}catch(error){$('#repairFormError').textContent=error.message;}finally{repairSubmitting=false;button.textContent='ส่งคำขอแจ้งซ่อม';repairSelectionState();}
 });
 $('#newAssetTop')?.addEventListener('click',openAssetDialog); $('#newAssetList')?.addEventListener('click',openAssetDialog); $('#newSurvey')?.addEventListener('click',openAssetDialog);
+function syncCreateButtons(){
+  const s=window.govAssetAccess?.session;
+  const canCreate=!s?.required||Boolean(s.isAdmin||s.permissions?.create);
+  ['#newAssetTop','#newAssetList','#newSurvey','#newRepairButton'].forEach(sel=>{const el=$(sel);if(el)el.hidden=!canCreate;});
+}
+document.addEventListener('govasset:authenticated',syncCreateButtons);
+syncCreateButtons();
 $('#closeDialog').addEventListener('click',()=>$('#assetDialog').close()); $('#cancelDialog').addEventListener('click',()=>$('#assetDialog').close()); $('#assetDialog').addEventListener('click',event=>{if(event.target===$('#assetDialog'))$('#assetDialog').close();});
 $('#groupCode').addEventListener('input',updateCode); $('#typeCode').addEventListener('input',updateCode);$('#descriptionCode').addEventListener('input',updateCode);$('#assetNumberMode').addEventListener('change',updateCode);$('#manualAssetCode').addEventListener('input',updateCode);
 
@@ -1391,7 +1437,58 @@ new MutationObserver(records=>records.forEach(record=>{
   record.addedNodes.forEach(guardFormsWithin);
 })).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['required','data-action-blocked']});
 applyFontScale(fontScale);
-window.govAssetApp={api,toast,showError,refreshData,switchView,openCategory,goBack,fmtDate,formatQuantity,openTicket,openRepairDialog,getRole:()=>currentRole,canManageSettings:()=>{const s=window.govAssetAccess?.session;return s?.required?Boolean(s.isAdmin):currentRole===ROLE_OFFICER;},loadFsn,loadLocationFacets,loadInventory,setSmartFilterAccountChoices:syncSmartFilterAccountChoices,openAssetDialog};
+async function applyInventoryFilters(filters={}){
+  clearTimeout(inventorySearchTimer);
+  if($('#assetSearch'))$('#assetSearch').value=filters.q||'';
+  smartFilterMultiKeys.forEach(key=>{smartFilterCommitted[key]=[];});
+  if(filters.categoryId)smartFilterCommitted.category=[String(filters.categoryId)];
+  if(filters.status&&filters.status!=='all')smartFilterCommitted.status=[String(filters.status)];
+  if(filters.building)smartFilterCommitted.building=[String(filters.building)];
+  if(filters.floor)smartFilterCommitted.floor=[String(filters.floor)];
+  if(filters.room)smartFilterCommitted.room=[String(filters.room)];
+  if(filters.fiscalYear)smartFilterCommitted.fiscalYear=[String(filters.fiscalYear)];
+  smartFilterDraft=cloneSmartFilter(smartFilterCommitted);
+  if($('#categoryFilter'))$('#categoryFilter').value=filters.categoryId&&[...$('#categoryFilter').options].some(o=>o.value===String(filters.categoryId))?String(filters.categoryId):'';
+  syncFilterSelectsFromCommitted();
+  renderSmartFilterMenu();
+  switchView('assets');
+  await loadLocationFacets();
+  syncFilterSelectsFromCommitted();
+  await loadInventory(0);
+}
+function applyRepairFilters(filters={}){
+  switchView('repairs');
+  if($('#repairSearch'))$('#repairSearch').value=filters.q||'';
+  if($('#repairStatusFilter')){
+    const st=filters.status||'all';
+    $('#repairStatusFilter').value=[...$('#repairStatusFilter').options].some(o=>o.value===st)?st:'all';
+  }
+  renderRepairs();
+}
+function prefillRepairDialog(preset={}){
+  switchView('repairs');
+  const hasId=Number.isSafeInteger(Number(preset.assetId))&&Number(preset.assetId)>0;
+  openRepairDialog(hasId?{id:Number(preset.assetId),code:preset.assetCode||'',name:preset.assetName||'',location:preset.assetLocation||''}:null);
+  if(!hasId&&preset.assetQuery&&$('#repairAssetSearch'))$('#repairAssetSearch').value=preset.assetQuery;
+  if(preset.urgency&&$('#repairUrgency')){
+    $('#repairUrgency').value=[...$('#repairUrgency').options].some(o=>o.value===preset.urgency)?preset.urgency:'ปกติ';
+  }
+  if(preset.issue&&$('#repairIssue'))$('#repairIssue').value=preset.issue;
+  if(preset.reporterNote&&$('#repairReporterNote'))$('#repairReporterNote').value=preset.reporterNote;
+  updateFormReadiness();
+}
+function prefillAssetDialog(preset={}){
+  switchView('assets');
+  openAssetDialog({preset});
+  const setVal=(sel,val)=>{const el=$(sel);if(el&&val){el.value=String(val);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}};
+  if(preset.categoryId)setVal('#assetCategoryId',preset.categoryId);
+  if(preset.name)setVal('#itemName',preset.name);
+  if(preset.location)setVal('#location',preset.location);
+  if(preset.detail)setVal('#detailText',preset.detail);
+  if(preset.purchasePrice)setVal('#assetForm [name="purchasePrice"]',preset.purchasePrice);
+  updateFormReadiness();
+}
+window.govAssetApp={api,toast,showError,refreshData,switchView,openCategory,goBack,fmtDate,formatQuantity,openTicket,openRepairDialog,getRole:()=>currentRole,canManageSettings:()=>{const s=window.govAssetAccess?.session;return s?.required?Boolean(s.isAdmin):currentRole===ROLE_OFFICER;},loadFsn,loadLocationFacets,loadInventory,setSmartFilterAccountChoices:syncSmartFilterAccountChoices,openAssetDialog,applyInventoryFilters,applyRepairFilters,prefillRepairDialog,prefillAssetDialog};
 refreshData();
 
 (() => {

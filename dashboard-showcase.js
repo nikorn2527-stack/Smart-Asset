@@ -13,7 +13,15 @@ window.govAssetRenderOrganizationName = (target, value) => {
   if (!view) return;
   const app = window.govAssetApp || {};
   const api = path => (app.api ? app.api(path) : fetch(path).then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))));
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const normalizeThai = value => (window.normalizeThaiText ? window.normalizeThaiText(value) : String(value ?? '')
+    .replace(/\u0e4d([\u0e48-\u0e4b]?)\u0e32/g, '$1\u0e33')
+    .replace(/([\u0e48-\u0e4b])[\u0e48-\u0e4b]+/g, '$1')
+    .replace(/([\u0e4c])\1+/g, '$1')
+    .replace(/([\u0e31\u0e34-\u0e3a\u0e47])\1+/g, '$1')
+    .replace(/([\u0e48-\u0e4b])([\u0e31\u0e34-\u0e3a])/g, '$2$1')
+    .replace(/([\u0e48-\u0e4b])[\u0e48-\u0e4b]+/g, '$1')
+    .replace(/(^|\s)[\u0e31\u0e34-\u0e3a\u0e47-\u0e4e]+/g, '$1'));
+  const esc = value => normalizeThai(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = value => Number(value || 0).toLocaleString('th-TH');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
   const fineHover = matchMedia('(hover: hover) and (pointer: fine)');
@@ -106,8 +114,9 @@ window.govAssetRenderOrganizationName = (target, value) => {
   root.innerHTML = `
     <div class="dsc-stage">
       <div class="dsc-stage-title">
-        <span class="dsc-eyebrow"><i class="dsc-live" aria-hidden="true"></i><span id="dscCenterName">ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์</span></span>
+        <span class="dsc-eyebrow dsc-heading-eyebrow"><i class="dsc-live" aria-hidden="true"></i><span id="dscCenterName" class="dsc-heading-org">ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์</span></span>
         <h2 id="dscMainTitle">ครุภัณฑ์ที่ใช้งานจริง วันนี้</h2>
+        <p class="dsc-stage-sub">ทะเบียนครุภัณฑ์ งานซ่อม และ Smart QR ครบในที่เดียว</p>
       </div>
       <div class="dsc-demo-switch" role="group" aria-label="ชุดข้อมูลแดชบอร์ด">
         <button type="button" data-dsc-demo-mode="real" aria-pressed="true" disabled>ข้อมูลจริง</button>
@@ -208,6 +217,7 @@ window.govAssetRenderOrganizationName = (target, value) => {
   const anchor = view.querySelector(':scope > .stats-grid');
   if (anchor) anchor.before(root); else view.querySelector(':scope > .page-heading')?.after(root);
   const $ = selector => root.querySelector(selector);
+  window.govAssetRenderOrganizationName(root.querySelector('#dscCenterName'), 'ศูนย์แพทยศาสตรศึกษาชั้นคลินิก โรงพยาบาลสุรินทร์ (Medical Education Center, Surin Hospital)');
 
   const preview = document.createElement('div');
   preview.className = 'dsc-preview';
@@ -775,6 +785,13 @@ window.govAssetRenderOrganizationName = (target, value) => {
     root.classList.toggle('is-demo', demoMode);
     $('#dscMainTitle').textContent = demoMode ? 'ตัวอย่างภาพรวมครุภัณฑ์' : 'ครุภัณฑ์ที่ใช้งานจริง วันนี้';
     root.querySelectorAll('.dsc-actions button').forEach(button => { button.disabled = demoMode; });
+    const s = window.govAssetAccess?.session;
+    if (s?.required) {
+      const stk = root.querySelector('[data-dsc-action="stickers"]');
+      if (stk) stk.hidden = !s.isAdmin;
+      const rep = root.querySelector('[data-dsc-action="repair"]');
+      if (rep) rep.hidden = !(s.isAdmin || s.permissions?.create);
+    }
     $('.dsc-demo-switch').querySelectorAll('[data-dsc-demo-mode]').forEach(button => {
       button.disabled = !realData;
       button.setAttribute('aria-pressed', String(button.dataset.dscDemoMode === (demoMode ? 'sample' : 'real')));

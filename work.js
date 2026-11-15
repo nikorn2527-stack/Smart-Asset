@@ -205,5 +205,15 @@
   }
   document.addEventListener('govasset:authenticated',()=>{if(canReview())load();});
   app.openWork=async id=>{app.switchView('work');const work=await app.api(`/api/work/items/${id}`);items=items.filter(item=>item.id!==work.id).concat(work);openWork(work.id);};
+  window.govAssetWork={
+    openWork:app.openWork,
+    openView:async(opts={})=>{
+      app.switchView('work');
+      if(opts.kind!==undefined&&$('#workKind'))$('#workKind').value=opts.kind||'';
+      if(opts.status!==undefined&&$('#workStatus'))$('#workStatus').value=opts.status||'';
+      await load();
+      if(opts.openNewPlan&&$('#newWorkPlan'))$('#newWorkPlan').click();
+    }
+  };
   setInterval(()=>{if(view.classList.contains('active')&&!dialog.open)load();},60000);
 })();

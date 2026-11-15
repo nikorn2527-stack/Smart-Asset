@@ -100,15 +100,57 @@
     }
   }
 
-  function download(format) {
+  const canExport = () => !window.govAssetAccess?.session?.required || Boolean(window.govAssetAccess?.session?.isAdmin || window.govAssetAccess?.session?.permissions?.export);
+
+  function syncExportButtons() {
+    const allowed = canExport();
+    ['#reportsXlsx', '#reportsCsv', '#reportsPdf'].forEach(sel => {
+      const btn = $(sel);
+      if (btn) btn.hidden = !allowed;
+    });
+  }
+
+  async function download(format, triggerBtn) {
     if (!current) return;
+    if (!canExport()) {
+      app.toast('บัญชีนี้ไม่มีสิทธิ์ส่งออกรายงาน', 'error');
+      return;
+    }
     const query = params();
-    const link = document.createElement('a');
-    link.href = `/api/reports/${current.id}/export.${format}${query ? '?' + query : ''}`;
-    link.rel = 'noopener';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    const url = `/api/reports/${current.id}/export.${format}${query ? '?' + query : ''}`;
+    const orig = triggerBtn?.textContent;
+    if (triggerBtn) {
+      triggerBtn.disabled = true;
+      triggerBtn.textContent = 'กำลังส่งออก…';
+    }
+    try {
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (!res.ok) {
+        let err = {};
+        try { err = await res.json(); } catch {}
+        throw new Error(err.error || `ไม่สามารถส่งออกรายงานได้ (HTTP ${res.status})`);
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const utfMatch = cd.match(/filename\*=UTF-8''([^;]+)/i);
+      const asciiMatch = cd.match(/filename="?([^";]+)"?/i);
+      const filename = utfMatch ? decodeURIComponent(utfMatch[1]) : (asciiMatch ? asciiMatch[1] : `${current.id}.${format}`);
+      const objUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
+    } catch (error) {
+      app.toast(error.message, 'error');
+    } finally {
+      if (triggerBtn) {
+        triggerBtn.disabled = false;
+        triggerBtn.textContent = orig;
+      }
+    }
   }
 
   function printHtml(data) {
@@ -184,6 +226,7 @@
   }
 
   async function open() {
+    syncExportButtons();
     try {
       const data = await app.api('/api/reports');
       catalog = data.items;
@@ -213,9 +256,37 @@
     if (button) select(button.dataset.report);
   });
   $('#reportsRun').addEventListener('click', run);
-  $('#reportsXlsx').addEventListener('click', () => download('xlsx'));
-  $('#reportsCsv').addEventListener('click', () => download('csv'));
+  $('#reportsXlsx').addEventListener('click', e => download('xlsx', e.currentTarget));
+  $('#reportsCsv').addEventListener('click', e => download('csv', e.currentTarget));
   $('#reportsPdf').addEventListener('click', printPdf);
+  document.addEventListener('govasset:authenticated', syncExportButtons);
+  syncExportButtons();
+  async function openReport({ reportId, filters = {}, accountId } = {}) {
+    app.switchView('reports');
+    if (accountId) selectedAccountId = String(accountId);
+    await open();
+    if (accountId && accounts.some(a => String(a.id) === String(accountId))) {
+      selectedAccountId = String(accountId);
+    }
+    const targetId = reportId && catalog.some(item => item.id === reportId) ? reportId : catalog[0]?.id;
+    if (targetId) {
+      current = catalog.find(item => item.id === targetId) || null;
+      drawList();
+      drawFilters();
+    }
+    if (current?.id === 'assets' && departmentAccountId !== selectedAccountId) {
+      await loadDepartments();
+    }
+    Object.entries(filters || {}).forEach(([k, v]) => {
+      if (!v) return;
+      const el = $('#reportsFilters')?.querySelector(`[name="${CSS.escape(k)}"]`);
+      if (el) el.value = String(v);
+    });
+    await run();
+  }
+
+  window.govAssetReports = { openReport };
+
   document.querySelectorAll('[data-view="reports"]').forEach(button => button.addEventListener('click', open));
   document.addEventListener('click', event => {
     if (event.target.closest('[data-go-view="reports"]')) open();
