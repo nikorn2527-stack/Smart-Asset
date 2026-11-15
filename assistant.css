@@ -404,15 +404,15 @@ body > .assistant-panel {
 @media (max-width: 780px) {
   body > .assistant-fab {
     right: 12px;
-    bottom: 20px;
-    padding: 10px 14px;
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+    padding: 9px 13px;
     font-size: 13px;
   }
 
   body > .assistant-panel {
     width: calc(100vw - 16px);
-    max-height: var(--assistant-max-h, min(480px, calc(100dvh - 24px)));
+    max-height: var(--assistant-max-h, min(460px, calc(100dvh - 150px)));
     right: 8px;
-    bottom: 72px;
+    bottom: calc(128px + env(safe-area-inset-bottom, 0px));
   }
 }

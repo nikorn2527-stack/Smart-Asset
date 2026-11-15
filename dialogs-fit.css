@@ -203,7 +203,7 @@ dialog .dialog-actions { flex-wrap: wrap !important; }
   .asset-dialog.notification-dialog > div { max-height: none !important; }
   .asset-dialog:not(.smart-dialog) .dialog-head, .equipment-dialog .dialog-head, .om-dialog .dialog-head,
   .master-data-dialog .dialog-head, .ticket-dialog .dialog-head { padding: 10px 8px 10px 16px !important; gap: 8px; }
-  .dialog-content-scroll { padding: 14px 16px !important; }
+  .dialog-content-scroll { padding: 14px 16px !important; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   dialog:not(.smart-dialog) .dialog-actions { padding: 10px 16px !important; }
   dialog .dialog-actions > .button { flex: 1 1 auto; justify-content: center; }
   .asset-dialog.manual-dialog > .ticket-dialog-inner > .manual-content { padding: 12px 16px 18px; }
