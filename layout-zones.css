@@ -4250,16 +4250,71 @@ footer.footer {
     padding: 8px 12px 0 !important;
   }
 
-  .view.active {
+  .view.active,
+  #view-assets.active,
+  #view-settings.active,
+  #view-work.active,
+  #view-repairs.active,
+  #view-approvals.active,
+  #view-supply.active,
+  #view-reports.active,
+  #view-depreciation.active,
+  #view-equipment.active,
+  #view-operational-master.active {
     min-height: 0 !important;
     overflow-y: auto !important;
+    overflow-x: hidden !important;
     overscroll-behavior-y: contain;
     scrollbar-width: thin;
     padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
+  .view.active > .listing-panel,
+  .view.active > .depreciation-panel,
+  #view-work .work-scroll-body,
+  #view-approvals .approvals-scroll-body,
+  #view-settings .settings-scroll-body,
+  #view-supply .supply-layout,
+  #view-reports .reports-layout {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .listing-panel > .table-wrap,
+  .depreciation-panel > .table-wrap,
+  #view-assets .table-wrap,
+  #view-repairs .table-wrap,
+  #view-work .table-wrap,
+  #view-approvals .table-wrap,
+  #view-reports .table-wrap {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #view-supply .supply-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #view-supply .supply-list {
+    height: auto !important;
+    max-height: 280px !important;
+  }
+
+  #view-work .work-filters {
+    padding: 8px 10px !important;
+    gap: 6px !important;
+  }
+
   #view-settings .settings-scroll-body {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .settings-tabs-bar,

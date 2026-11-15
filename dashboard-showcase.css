@@ -205,6 +205,8 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   padding: 12px 14px 14px;
   border-radius: 18px;
   border: 1px solid var(--dsc-line);
@@ -808,7 +810,42 @@
   max-width: none !important;
 }
 @media (max-width: 780px) {
-  .view > .page-heading.dsc-view-stage p { white-space: normal !important; }
+  .view > .page-heading.dsc-view-stage {
+    padding: 10px 12px !important;
+    gap: 8px !important;
+    border-radius: 12px !important;
+  }
+  .view > .page-heading.dsc-view-stage > div:first-child {
+    flex: 1 1 100% !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    column-gap: 0 !important;
+    row-gap: 3px !important;
+  }
+  .view > .page-heading.dsc-view-stage .dsc-heading-eyebrow {
+    display: none !important;
+  }
+  .view > .page-heading.dsc-view-stage :is(h1, h2) {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+  }
+  .view > .page-heading.dsc-view-stage p {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    white-space: normal !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    line-height: 1.4 !important;
+  }
+  .view > .page-heading.dsc-view-stage > :not(:first-child) {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-start !important;
+  }
 }
 .view > .page-heading.dsc-view-stage > :not(:first-child) {
   display: flex;
@@ -1193,7 +1230,7 @@
 }
 #view-assets > .listing-panel > .panel-foot { display: none !important; }
 
-@media (max-width: 720px) {
+@media (max-width: 780px) {
   #view-assets {
     overflow-y: auto !important;
   }
@@ -1356,6 +1393,56 @@
 #view-work .work-filters :is(select, input, button) { height: 34px !important; min-height: 34px !important; font-size: 12px !important; line-height: 1.45 !important; padding-top: 2px !important; padding-bottom: 2px !important; }
 #view-repairs .filter-row { padding: 6px 10px !important; gap: 6px !important; }
 #view-repairs .filter-row :is(input, select, .search-field) { height: 34px !important; min-height: 34px !important; font-size: 12px !important; line-height: 1.45 !important; padding-top: 2px !important; padding-bottom: 2px !important; }
+
+@media (max-width: 780px) {
+  .view > .notice {
+    padding: 8px 10px !important;
+    align-items: flex-start !important;
+  }
+  .view > .notice > div {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 2px !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+  .view > .notice b {
+    white-space: normal !important;
+    flex: 0 0 auto !important;
+  }
+  .view > .notice p {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    width: 100% !important;
+  }
+  :is(#view-work, #view-approvals, #view-repairs, #view-depreciation) .table-wrap {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+  }
+  #view-repairs > .listing-panel {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  .repair-summary,
+  .approval-summary,
+  #view-work .work-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+  .repair-summary .stat-card,
+  .approval-summary .stat-card,
+  #view-work .work-stat-card {
+    min-height: 0 !important;
+    padding: 8px 10px !important;
+  }
+}
 
 /* Stickers: let the asset list breathe */
 #view-stickers .sticker-search-form {
