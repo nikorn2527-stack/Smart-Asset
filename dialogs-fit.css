@@ -9,6 +9,8 @@ dialog:not([open]),
 dialog[open] {
   max-height: min(calc(94 * var(--vh, 1vh)), calc(100dvh - 24px)) !important;
   margin: auto !important;
+  scroll-padding-top: 84px;
+  scroll-padding-bottom: 72px;
 }
 dialog .dialog-close {
   display: inline-grid !important;
@@ -40,7 +42,7 @@ dialog .dialog-actions { flex-wrap: wrap !important; }
 }
 
 /* ---------- New asset (#assetDialog): the owner/category block sat outside the scroll area ---------- */
-#assetDialog > form { overflow-y: auto !important; overscroll-behavior: contain; }
+#assetDialog > form { overflow-y: auto !important; overscroll-behavior: contain; scroll-padding-top: 84px; scroll-padding-bottom: 72px; }
 #assetDialog > form > .dialog-content-scroll { flex: none !important; overflow: visible !important; }
 
 /* ---------- Notification center: header/toolbar were stacked as columns and the list was clipped ---------- */

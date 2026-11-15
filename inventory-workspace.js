@@ -8,7 +8,7 @@
   function permission(){document.querySelectorAll('.inventory-editor-dialog [type=submit]').forEach(b=>b.disabled=!allowed());}
   function field(key,name,value,type='text'){return `<label>${name}<input data-edit-field="${key}" type="${type}" ${type==='number'?'min="0" step="0.01"':''} ${['name','code'].includes(key)?'required':''} value="${esc(value??'')}"></label>`;}
   async function edit(id){
-    const old=$(`.inventory-editor-dialog[data-asset-id="${id}"]`);if(old){$('input',old)?.focus();return;}
+    const old=$(`.inventory-editor-dialog[data-asset-id="${id}"]`);if(old){$('input',old)?.focus({preventScroll:true});return;}
     const anchor=$(`#assetRows [data-workspace-edit="${id}"]`)?.closest('tr');if(!anchor)return;
     const tr=document.createElement('dialog');tr.className='workspace-editor-dialog inventory-editor-dialog';tr.dataset.assetId=id;tr.setAttribute('aria-label','แก้ไขครุภัณฑ์');tr.innerHTML='<p role="status">กำลังเปิดข้อมูลครุภัณฑ์…</p>';document.body.append(tr);tr.addEventListener('close',()=>tr.remove());tr.showModal();
     try{
@@ -33,7 +33,7 @@
         try{await app.api(`/api/workspace/assets/${id}`,{method:'PUT',body:JSON.stringify({version:data.version,changes,policyAction:form.elements.policyAction.value,policyId:form.elements.policyId.value?Number(form.elements.policyId.value):null,reason:form.elements.reason.value,actor:app.getRole()})});close();await app.refreshData();$(`#assetRows [data-workspace-edit="${id}"]`)?.focus({preventScroll:true});app.toast('บันทึกการแก้ไขแล้ว ประวัติและ QR เดิมยังอยู่');}
         catch(e){status.textContent=e.message;}finally{b.disabled=!allowed();}
       };
-      permission();$('input',form)?.focus();
+      permission();$('input',form)?.focus({preventScroll:true});
     }catch(error){tr.innerHTML=`<p role="alert">${esc(error.message)}</p><button type="button" class="button outline" data-dismiss-row>ปิด</button>`;$('[data-dismiss-row]',tr).onclick=()=>tr.close();}
   }
   async function copy(id){const sequence=++request;try{const data=await app.api(`/api/workspace/assets/${id}`);if(sequence!==request)return;const a=data.fields;window.govAssetAccountRegistration.openWith({accountId:a.accountId,branchId:a.branchId,categoryId:a.categoryId,catalogId:data.copyCatalogId,values:data.numbering?.values||{},fsnCode:data.fsnCode||'',assetType:a.assetType,name:a.name,detail:a.detail,location:a.location,purchasePrice:a.purchasePrice,model:a.model});app.toast('คัดลอกชนิดและข้อมูลพื้นฐานแล้ว ระบบออกเลขใหม่เมื่อบันทึก ไม่คัดลอก Serial หรือประวัติ');}catch(e){app.showError(e);}}
