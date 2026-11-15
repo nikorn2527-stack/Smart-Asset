@@ -1190,6 +1190,56 @@ class Handler(BaseHTTPRequestHandler):
             except (ApiError, GovernanceError) as exc:
                 self.send_json({"error": str(exc)}, exc.status)
             return
+        if path == "/api/branding/icon.png":
+            with managed_connection() as db:
+                b = branding(db)
+            logo_val = b.get("logo") or ""
+            m_logo = re.fullmatch(r"data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)", logo_val)
+            if m_logo:
+                mime = f"image/{m_logo[1]}"
+                payload = base64.b64decode(m_logo[2])
+            else:
+                mime = "image/png"
+                payload = (ROOT / "assets" / "govasset-icon-optimized.png").read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if path == "/manifest.webmanifest":
+            with managed_connection() as db:
+                b = branding(db)
+            rev = b.get("revision") or 1
+            app_name = b.get("appName") or "Smart Asset"
+            org = b.get("organization") or "ระบบบริหารจัดการทะเบียนครุภัณฑ์ ค่าเสื่อม และแจ้งซ่อม"
+            icon_src = f"/api/branding/icon.png?v={rev}"
+            manifest_bytes = json.dumps({
+                "id": "/",
+                "name": f"{app_name} — {org}" if org and org != app_name else app_name,
+                "short_name": app_name[:24],
+                "description": org,
+                "start_url": "/index.html",
+                "scope": "/",
+                "display": "standalone",
+                "background_color": "#0c3448",
+                "theme_color": "#123d56",
+                "icons": [
+                    {"src": icon_src, "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                    {"src": icon_src, "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                    {"src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                ],
+            }, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/manifest+json; charset=utf-8")
+            self.send_header("Content-Length", str(len(manifest_bytes)))
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(manifest_bytes)
+            return
         if path.startswith("/api/"):
             try:
                 result = self.handle_api("GET", path, parse_qs(parsed.query), {})
