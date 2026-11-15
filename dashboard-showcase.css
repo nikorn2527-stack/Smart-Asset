@@ -811,12 +811,16 @@
 }
 @media (max-width: 780px) {
   .view > .page-heading.dsc-view-stage {
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
     padding: 10px 12px !important;
     gap: 8px !important;
     border-radius: 12px !important;
   }
   .view > .page-heading.dsc-view-stage > div:first-child {
-    flex: 1 1 100% !important;
+    flex: 0 0 auto !important;
+    width: 100% !important;
     grid-template-columns: minmax(0, 1fr) !important;
     grid-template-rows: auto auto !important;
     column-gap: 0 !important;
@@ -1231,8 +1235,10 @@
 #view-assets > .listing-panel > .panel-foot { display: none !important; }
 
 @media (max-width: 780px) {
-  #view-assets {
+  #view-assets,
+  #view-assets.view.active {
     overflow-y: auto !important;
+    overflow-x: hidden !important;
   }
   #view-assets .listing-panel {
     flex: 0 0 auto !important;
