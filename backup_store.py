@@ -29,7 +29,9 @@ def snapshot_database(db_path,label='manual'):
     db_path=Path(db_path);folder=backup_dir(db_path);folder.mkdir(parents=True,exist_ok=True)
     target=folder/f'{label}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:8]}.sqlite3'
     try:
-        with closing(sqlite3.connect(db_path)) as src,closing(sqlite3.connect(target)) as dst:src.backup(dst)
+        with closing(sqlite3.connect(db_path,timeout=15)) as src,closing(sqlite3.connect(target,timeout=15)) as dst:
+            src.execute('PRAGMA busy_timeout=15000')
+            src.backup(dst,pages=200,sleep=0.02)
         os.chmod(target,0o600)
     except BaseException:
         target.unlink(missing_ok=True);raise
@@ -78,7 +80,9 @@ def create_bundle(db_path,actor):
     folder=Path(tempfile.mkdtemp(prefix='smart-asset-backup-'))
     try:
         snapshot=folder/'smart-asset.sqlite3'
-        with closing(sqlite3.connect(db_path)) as src,closing(sqlite3.connect(snapshot)) as dst:src.backup(dst)
+        with closing(sqlite3.connect(db_path,timeout=15)) as src,closing(sqlite3.connect(snapshot,timeout=15)) as dst:
+            src.execute('PRAGMA busy_timeout=15000')
+            src.backup(dst,pages=200,sleep=0.02)
         with closing(sqlite3.connect(snapshot.resolve().as_uri()+'?mode=ro',uri=True)) as check:
             check.row_factory=sqlite3.Row
             if check.execute('PRAGMA quick_check').fetchone()[0]!='ok' or check.execute('PRAGMA foreign_key_check').fetchone():raise GovernanceError('ฐานข้อมูลตรวจสอบไม่ผ่าน ไม่สร้างชุดสำรอง',409)

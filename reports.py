@@ -274,12 +274,95 @@ def _repair_items(db, query):
     return cols, out, f"{len(out):,} รายการ · มูลค่ารวมที่ไม่ยกเลิก {total:,.2f} บาท"
 
 
+def _work_items(db, query):
+    account_id = _selected_account(db, query)
+    where, params = [_scope(db, "a"), "a.numbering_account_id=?"], [account_id]
+    dc, dp = _dates(query, "w.due_on")
+    where += dc
+    params += dp
+    if _one(query, "status"):
+        where.append("w.status=?")
+        params.append(_one(query, "status"))
+    rows = db.execute(
+        "SELECT w.id, p.name, p.kind, a.code, a.name, a.location, w.due_on, w.assignee, w.status, w.result, w.observed_location, w.review_status, w.completed_by, substr(w.completed_at,1,10), w.note "
+        "FROM scheduled_work w JOIN work_plans p ON p.id=w.plan_id JOIN assets a ON a.id=w.asset_id WHERE "
+        + " AND ".join(where) + " ORDER BY w.due_on DESC, w.id DESC",
+        params,
+    ).fetchall()
+    kind_map = {"pm": "บำรุงรักษา (PM)", "audit": "ตรวจนับ"}
+    status_map = {"pending": "รอดำเนินการ", "completed": "เสร็จแล้ว", "overdue": "เกินกำหนด"}
+    result_map = {"normal": "ปกติ", "found": "พบตามทะเบียน", "not_found": "ไม่พบ", "moved": "ย้ายที่ตั้ง", "needs_repair": "ต้องซ่อม", "damaged": "ชำรุด"}
+    review_map = {"pending": "รอทวนสอบ", "approved": "ทวนสอบแล้ว", "rejected": "ส่งกลับ"}
+    out = [
+        [
+            r[0], r[1], kind_map.get(r[2], r[2]), r[3], r[4], r[5], r[6], r[7],
+            status_map.get(r[8], r[8]), result_map.get(r[9], r[9] or ""), r[10] or "",
+            review_map.get(r[11], r[11] or ""), r[12] or "", r[13] or "", r[14] or "",
+        ]
+        for r in rows
+    ]
+    done = sum(1 for r in rows if r[8] == "completed")
+    cols = ["รหัสงาน", "แผนงาน", "ประเภท", "เลขครุภัณฑ์", "ชื่อครุภัณฑ์", "ที่ตั้งในทะเบียน", "กำหนดเสร็จ", "ผู้รับผิดชอบ", "สถานะ", "ผลตรวจ", "ที่ตั้งที่พบ", "สถานะทวนสอบ", "ผู้ตรวจ", "วันที่เสร็จ", "หมายเหตุ"]
+    return cols, out, f"{len(out):,} งาน · เสร็จแล้ว {done:,} งาน"
+
+
+def _supply_documents(db, query):
+    import json as _json
+    account_id = _selected_account(db, query)
+    where, params = ["d.account_id=?"], [account_id]
+    dc, dp = _dates(query, "d.created_at")
+    where += dc
+    params += dp
+    if _one(query, "status"):
+        where.append("d.status=?")
+        params.append(_one(query, "status"))
+    rows = db.execute(
+        "SELECT d.number, d.kind, d.status, COALESCE(b.name,''), d.data_json, substr(d.created_at,1,10), substr(d.updated_at,1,10) "
+        "FROM supply_documents d LEFT JOIN account_branches b ON b.id=d.branch_id WHERE "
+        + " AND ".join(where) + " ORDER BY d.id DESC",
+        params,
+    ).fetchall()
+    kind_map = {"receipt": "ใบรับเข้า / ตรวจรับ", "issue": "ใบเบิก / จัดสรร"}
+    out = []
+    for r in rows:
+        try:
+            payload = _json.loads(r[4] or "{}")
+        except Exception:
+            payload = {}
+        party = payload.get("vendor") or payload.get("supplier") or payload.get("recipient") or payload.get("department") or ""
+        items = payload.get("items") or payload.get("assetIds") or []
+        note = payload.get("note") or payload.get("reference") or ""
+        out.append([r[0], kind_map.get(r[1], r[1]), r[2], r[3], party, len(items) if isinstance(items, list) else 0, r[5], r[6], note])
+    cols = ["เลขที่เอกสาร", "ประเภทเอกสาร", "สถานะ", "สาขา", "ผู้ส่งมอบ / ผู้รับมอบ", "จำนวนรายการ", "วันที่สร้าง", "อัปเดตล่าสุด", "หมายเหตุ"]
+    return cols, out, f"{len(out):,} เอกสาร"
+
+
+def _approvals(db, query):
+    where, params = _ticket_filters(db, query)
+    where.append("(t.approval_required=1 OR t.final_cost_approval_required=1)")
+    rows = db.execute(
+        "SELECT t.ticket_no, t.asset_code, t.asset_name, t.location, t.requester, t.status, t.approval_reason, "
+        "COALESCE(t.estimate_cost,0), COALESCE(t.actual_cost,0), COALESCE(t.approved_by,''), COALESCE(t.final_cost_status,''), substr(t.created_at,1,10) "
+        "FROM tickets t LEFT JOIN assets a ON a.id=t.asset_id WHERE "
+        + " AND ".join(where) + " ORDER BY t.id DESC",
+        params,
+    ).fetchall()
+    out = [[r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11]] for r in rows]
+    est = sum(r[7] for r in rows)
+    act = sum(r[8] for r in rows)
+    cols = ["เลขที่ใบแจ้ง", "เลขครุภัณฑ์", "ชื่อรายการ", "ที่ตั้ง", "ผู้แจ้ง", "สถานะ", "เหตุผลส่งอนุมัติ", "ยอดเสนอ (บาท)", "ยอดจริง (บาท)", "ผู้อนุมัติ", "สถานะยอดจริง", "วันที่แจ้ง"]
+    return cols, out, f"{len(out):,} รายการ · ยอดเสนอรวม {est:,.2f} บาท · ยอดจริงรวม {act:,.2f} บาท"
+
+
 REPORTS = {
     "assets": {"title": "ทะเบียนครุภัณฑ์", "desc": "รายการครุภัณฑ์ตามหน่วยงาน หมวด ที่ตั้ง และสถานะ", "filters": ["departmentUnitId", "status", "group", "location"], "run": _assets, "preview": _assets_preview},
     "by-location": {"title": "ครุภัณฑ์แยกตามที่ตั้ง", "desc": "จำนวนครุภัณฑ์และรายการชำรุดต่อที่ตั้ง", "filters": [], "run": _by_location},
     "repairs": {"title": "รายการงานซ่อม", "desc": "ใบแจ้งซ่อม ผู้รับผิดชอบ ประเภทช่าง และค่าใช้จ่าย", "filters": ["from", "to", "status"], "run": _repairs},
     "repair-summary": {"title": "สรุปงานซ่อมตามสถานะ", "desc": "จำนวนและค่าใช้จ่ายงานซ่อมแยกตามสถานะ", "filters": ["from", "to"], "run": _repair_summary},
     "repair-items": {"title": "อะไหล่ วัสดุ และช่างนอกในงานซ่อม", "desc": "รายการที่ผูกกับใบแจ้งซ่อม พร้อมมูลค่าและผู้รับจ้างภายนอก", "filters": ["from", "to", "itemKind"], "run": _repair_items},
+    "work-items": {"title": "งานตรวจนับและบำรุงรักษา (PM)", "desc": "รายการงานตรวจนับและ PM ตามรอบ กำหนดเสร็จ และผลตรวจ", "filters": ["from", "to", "status"], "run": _work_items},
+    "supply-documents": {"title": "เอกสารรับเข้าและเบิกจ่ายพัสดุ", "desc": "ทะเบียนใบรับเข้า ตรวจรับ และใบเบิกจัดสรรพัสดุ", "filters": ["from", "to", "status"], "run": _supply_documents},
+    "approvals": {"title": "รายการส่งอนุมัติงานซ่อมและงบประมาณ", "desc": "ประวัติและสถานะคำขออนุมัติวงเงินซ่อมและยอดค่าใช้จ่ายจริง", "filters": ["from", "to", "status"], "run": _approvals},
     "loans": {"title": "ครุภัณฑ์ที่ยืม/เบิกค้างคืน", "desc": "รายการที่ยังไม่คืนและเกินกำหนด", "filters": [], "run": _loans},
     "movements": {"title": "ประวัติการเคลื่อนไหวและการย้ายที่ตั้ง", "desc": "รับเข้า ยืม เบิก คืน และย้ายที่ตั้งด้วย QR", "filters": ["from", "to", "kind"], "run": _movements},
 }
@@ -355,14 +438,30 @@ def build_export(db, report_id, fmt, query):
         return ("\ufeff" + out.getvalue()).encode("utf-8"), "text/csv; charset=utf-8", name + ".csv"
     if fmt == "xlsx":
         from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
         wb = Workbook()
         ws = wb.active
         ws.title = spec["title"][:31]
         ws.append(columns)
+        header_fill = PatternFill(start_color="123D56", end_color="123D56", fill_type="solid")
+        header_font = Font(name="Sarabun", size=11, bold=True, color="FFFFFF")
+        cell_font = Font(name="Sarabun", size=10)
+        thin = Side(border_style="thin", color="CFDCE4")
+        cell_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = cell_border
+        ws.row_dimensions[1].height = 24
         for row in rows:
             ws.append(row)
+        for r_idx, row_cells in enumerate(ws.iter_rows(min_row=2), start=2):
+            for cell in row_cells:
+                cell.font = cell_font
+                cell.border = cell_border
         for col in ws.columns:
-            ws.column_dimensions[col[0].column_letter].width = min(48, max(10, max(len(str(c.value or "")) for c in col[:200]) + 2))
+            ws.column_dimensions[col[0].column_letter].width = min(48, max(12, max(len(str(c.value or "")) for c in col[:200]) + 3))
         ws.freeze_panes = "A2"
         buf = io.BytesIO()
         wb.save(buf)

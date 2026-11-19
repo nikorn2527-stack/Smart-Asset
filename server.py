@@ -48,7 +48,7 @@ from settings_guard import settings_editor
 from numbering import valid_for_category, next_code, classification_type_exists
 from starter_catalog import seed as seed_starter_catalog
 from governance import GovernanceError, handle as handle_governance, initialize as initialize_governance, create_asset as create_account_asset
-from backup_store import handle as handle_backups, create_bundle, prepared_file
+from backup_store import BACKUP_LOCK, handle as handle_backups, create_bundle, prepared_file, snapshot_database
 from workspace_api import handle as handle_workspace, initialize as initialize_workspace
 from supply_api import handle as handle_supply
 from operational_master import handle as handle_operational_master
@@ -414,6 +414,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "same-origin")
+        if (self.headers.get("X-Forwarded-Proto") or "").lower() == "https":
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         super().end_headers()
 
     def send_json(self, value, status: int = 200) -> None:
@@ -447,7 +449,10 @@ class Handler(BaseHTTPRequestHandler):
             authenticated = access.auth_api(db,self,method,path,body)
             if authenticated is not None: return authenticated
             ctx = access.authenticate(db,self,method,path,body)
-            if path == '/api/health' and access.required(): return {'ok':True,'database':'sqlite'}
+            if path == '/api/health':
+                db.execute("SELECT 1").fetchone()
+                if access.required():
+                    return {'ok': True, 'database': 'sqlite'}
             access.authorize(db,ctx,method,path,query,body)
             qr = handle_qr_smart(self, db, method, path, query, body, self.qr_origin())
             if qr is not None:
@@ -1253,7 +1258,7 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"API error: {exc!r}", flush=True)
                 self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css",         "/qr-smart.js", "/reports.js", "/ticket-items.js", "/ui-scale.js", "/assistant.js", "/assistant.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css",         "/qr-smart.js", "/reports.js", "/export-dialog.js", "/ticket-items.js", "/ui-scale.js", "/assistant.js", "/assistant.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -1297,7 +1302,6 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Disposition", 'attachment; filename="' + output.name + '"')
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
-                with output.open("rb") as stream: shutil.copyfileobj(stream, self.wfile)
             except (ApiError, GovernanceError) as exc:
                 self.send_json({"error": str(exc)}, exc.status)
             finally:
@@ -1315,7 +1319,7 @@ class Handler(BaseHTTPRequestHandler):
             except ApiError as exc:
                 self.send_error(exc.status, str(exc))
             return
-        allowed = {"/", "/index.html", "/scan.html", "/upload-db.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css", "/qr-smart.js", "/reports.js", "/ticket-items.js", "/ui-scale.js", "/assistant.js", "/assistant.css"}
+        allowed = {"/", "/index.html", "/scan.html", "/styles.css", "/repair-print.css", "/stickers.css", "/master-data.css", "/smart.css", "/app.js", "/action-buttons.js", "/action-buttons.css", "/asset-tools.js", "/master-data.js", "/smart.js", "/scan.js", "/work.js", "/work.css", "/register-form.css", "/register-form.js", "/MANUAL.md", "/notifications.js", "/notifications.css", "/line-settings.js", "/asset-numbering.js", "/catalog-guidance.js", "/page-layout.js", "/page-layout.css", "/governance.js", "/governance.css", "/account-registration.js", "/simple-workspace.js", "/inventory-workspace.js", "/simple-workspace.css", "/supply.js", "/supply.css", "/operational-master.js", "/access.js", "/access.css", "/equipment-workspace.js", "/equipment.css", "/asset-register.css", "/layout-zones.css", "/dialogs-fit.css", "/dashboard-showcase.css", "/dashboard-showcase.js", "/controls-polish.css", "/qr-smart.js", "/reports.js", "/export-dialog.js", "/ticket-items.js", "/ui-scale.js", "/assistant.js", "/assistant.css"}
         if path not in allowed and not re.fullmatch(r"/assets/(?:[A-Za-z0-9_-]+\.(?:png|svg|webp|jpg|ico)|fonts/(?:Sarabun-Regular.ttf|Sarabun-Bold.ttf|OFL.txt))", path):
             self.send_error(404)
             return
@@ -1350,12 +1354,20 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(result)
                 return
             if method == "POST" and unquote(parsed.path) == "/api/admin/upload-database":
+                if os.environ.get("ALLOW_ADMIN_DB_UPLOAD", "0") != "1":
+                    raise ApiError("ปิดการอัปโหลดทับฐานข้อมูลผ่านเว็บเพื่อความปลอดภัย", 403)
+                with managed_connection() as db:
+                    ctx = access.authenticate(db, self, "POST", "/api/admin/upload-database", {})
+                    if not ctx or ctx.get("user", {}).get("global_role") != "admin":
+                        raise ApiError("ต้องใช้สิทธิ์ผู้ดูแลระบบส่วนกลาง (Admin) เท่านั้น", 403)
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
                 except ValueError:
                     raise ApiError("ขนาดไฟล์ไม่ถูกต้อง")
                 if not 0 < length <= 2_000_000_000:
                     raise ApiError("ขนาดไฟล์ต้องไม่เกิน 2 GB", 413)
+                if not BACKUP_LOCK.acquire(blocking=False):
+                    raise ApiError("ระบบกำลังสำรองหรือจัดการฐานข้อมูล กรุณารอสักครู่", 409)
                 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
                 temp_upload = DB_PATH.parent / f"upload-{secrets.token_hex(6)}.tmp"
                 try:
@@ -1377,7 +1389,8 @@ class Handler(BaseHTTPRequestHandler):
                         if "assets" not in tables:
                             raise ApiError("ฐานข้อมูลไม่มีตาราง assets ของระบบ GovAsset")
                         asset_count = test_conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
-
+                    if DB_PATH.exists():
+                        snapshot_database(DB_PATH, "pre-upload")
                     shm = Path(str(DB_PATH) + "-shm")
                     wal = Path(str(DB_PATH) + "-wal")
                     shm.unlink(missing_ok=True)
@@ -1388,6 +1401,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 finally:
                     temp_upload.unlink(missing_ok=True)
+                    BACKUP_LOCK.release()
             body = self.read_json()
             result = self.handle_api(method, unquote(parsed.path), parse_qs(parsed.query), body)
             status = 200
@@ -1397,7 +1411,8 @@ class Handler(BaseHTTPRequestHandler):
         except (ApiError, NotificationError, GuidanceError, GovernanceError) as exc:
             self.send_json({"error": str(exc)}, exc.status)
         except sqlite3.IntegrityError as exc:
-            self.send_json({"error": "ข้อมูลซ้ำหรือไม่ผ่านข้อกำหนด: " + str(exc)}, 409)
+            print(f"SQLite IntegrityError: {exc!r}", flush=True)
+            self.send_json({"error": "ข้อมูลซ้ำหรือไม่ผ่านข้อกำหนดของระบบ กรุณาตรวจสอบข้อมูลอีกครั้ง"}, 409)
         except Exception as exc:
             print(f"API error: {exc!r}", flush=True)
             self.send_json({"error": "ระบบต้นแบบเกิดข้อผิดพลาด กรุณาตรวจ log ของ server"}, 500)

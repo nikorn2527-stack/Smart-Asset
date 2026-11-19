@@ -1,6 +1,6 @@
 [deploy]
 startCommand = "python server.py"
-healthcheckPath = "/"
+healthcheckPath = "/api/health"
 healthcheckTimeout = 100
 restartPolicyType = "always"
 restartPolicyMaxRetries = 10

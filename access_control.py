@@ -21,7 +21,8 @@ class Connection(sqlite3.Connection):pass
 
 def required():return os.environ.get('ASSET_AUTH_REQUIRED','1')!='0'
 def initialize(path):
-    with sqlite3.connect(path) as db:
+    with sqlite3.connect(path,timeout=15) as db:
+        db.execute('PRAGMA busy_timeout=15000')
         db.executescript(SCHEMA)
         ucols={r[1] for r in db.execute('PRAGMA table_info(app_users)')}
         if 'email' not in ucols:
@@ -36,8 +37,13 @@ def initialize(path):
 
 
 def _client_ip(handler):
-    xff=(handler.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
-    return xff[:64] if xff else handler.client_address[0]
+    parts=[p.strip() for p in (handler.headers.get('X-Forwarded-For') or '').split(',') if p.strip()]
+    return parts[-1][:64] if parts else handler.client_address[0]
+
+
+def _clear_session_cookie(handler):
+    secure='; Secure' if _is_https(handler) else ''
+    return f'smart_asset_session=; Path=/; HttpOnly; SameSite=Lax{secure}; Max-Age=0'
 
 
 def _is_https(handler):
@@ -227,7 +233,7 @@ def auth_api(db,handler,method,path,body):
         origin_check(handler)
         if not hmac.compare_digest(handler.headers.get('X-CSRF-Token',''),s['csrf']):fail('ข้อมูลยืนยันคำขอไม่ถูกต้อง')
     if path=='/api/auth/logout' and method=='POST':
-        db.execute('DELETE FROM app_sessions WHERE token_hash=?',(s['token_hash'],));handler.session_cookie='smart_asset_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';return {'ok':True}
+        db.execute('DELETE FROM app_sessions WHERE token_hash=?',(s['token_hash'],));handler.session_cookie=_clear_session_cookie(handler);return {'ok':True}
     if path=='/api/auth/scope' and method=='POST':
         aid=ident(body.get('accountId'),True);bid=ident(body.get('branchId'),True)
         if aid is not None and not db.execute('SELECT 1 FROM asset_accounts WHERE id=? AND is_active=1',(aid,)).fetchone():fail('ไม่พบองค์กร')
@@ -237,7 +243,7 @@ def auth_api(db,handler,method,path,body):
         db.execute('UPDATE app_sessions SET account_id=?,branch_id=?,actor=? WHERE token_hash=?',(aid,bid,changed['actor'],s['token_hash']));return new
     if path=='/api/auth/password' and method=='POST':
         if not check_password(body.get('currentPassword',''),user['password_hash']):fail('รหัสผ่านปัจจุบันไม่ถูกต้อง',400)
-        hashed=password_hash(body.get('password'));db.execute('BEGIN IMMEDIATE');db.execute('UPDATE app_users SET password_hash=?,revision=revision+1 WHERE id=?',(hashed,user['id']));db.execute('DELETE FROM app_sessions WHERE user_id=?',(user['id'],));return {'ok':True,'loginRequired':True}
+        hashed=password_hash(body.get('password'));db.execute('BEGIN IMMEDIATE');db.execute('UPDATE app_users SET password_hash=?,revision=revision+1 WHERE id=?',(hashed,user['id']));db.execute('DELETE FROM app_sessions WHERE user_id=?',(user['id'],));handler.session_cookie=_clear_session_cookie(handler);return {'ok':True,'loginRequired':True}
     ctx=context(db,user,s);db.access=ctx
     if path=='/api/auth/options' and method=='GET':
         aids={g['account_id'] for g in ctx['memberships']}
@@ -538,6 +544,9 @@ def authorize(db,ctx,method,path,query,body):
         if row and row[0]:fail('รายการนี้ใช้บัญชีกลางร่วมกัน กรุณาแก้ที่บัญชีอุปกรณ์กลาง')
     if bid is not None and method not in ('GET','HEAD') and path in ('/api/supply/settings','/api/workspace/categories'):fail('การตั้งค่าระดับองค์กรต้องใช้สิทธิ์ครอบคลุมทั้งองค์กร')
     if path=='/api/catalog/numbering' and aid is not None:fail('ใช้บัญชีอุปกรณ์และการออกเลขภายในองค์กรที่เลือก')
+    if re.fullmatch(r'/api/reports/[a-z-]+/export\.(csv|xlsx)',path):
+        if not perms['export']:fail('ไม่ได้รับสิทธิ์ส่งออกหรือพิมพ์')
+        return
     if method in ('GET','HEAD'):return
     if path=='/api/governance/preview':return
     if path=='/api/notifications/read':return

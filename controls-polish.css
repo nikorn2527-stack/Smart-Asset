@@ -235,14 +235,8 @@
 }
 
 select:not([multiple]):not(#actorRole) {
-  appearance: none;
-  -webkit-appearance: none;
   border-radius: 9px !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3 6 5 5 5-5' fill='none' stroke='%23566b77' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
-  background-repeat: no-repeat !important;
-  background-position: right 9px center !important;
-  background-size: 12px !important;
-  padding-right: 28px !important;
+  background-image: none !important;
   transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
 }
 
@@ -603,6 +597,48 @@ select:not([multiple]):not(#actorRole):focus-visible {
 #view-repairs .listing-panel table thead th:last-child,
 #view-qr-smart .qr-location-register-table thead th:last-child {
   text-align: center !important;
+}
+
+#view-qr-smart .qr-location-register-table th:first-child,
+#view-qr-smart .qr-location-register-table td:first-child {
+  min-width: 132px !important;
+  white-space: nowrap !important;
+}
+
+#view-assets .smart-asset-table th:last-child,
+#view-assets .smart-asset-table td:last-child {
+  border-left: 1px solid #e2ecf1 !important;
+}
+
+#view-supply .supply-toolbar select,
+#view-supply .supply-detail select {
+  color: #172b3a !important;
+  background-color: #ffffff !important;
+}
+
+@media (max-width: 900px) {
+  #view-assets .smart-asset-table th:last-child,
+  #view-assets .smart-asset-table td:last-child {
+    position: static !important;
+    box-shadow: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  #actorRole {
+    height: 34px !important;
+    line-height: 1.2 !important;
+    padding: 0 24px 0 10px !important;
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+  }
+  #view-repairs .panel-foot {
+    position: static !important;
+    margin-top: 8px !important;
+  }
+  main {
+    padding-bottom: 96px !important;
+  }
 }
 
 #view-repairs #repairRows > tr > td:last-child {
