@@ -49,7 +49,7 @@
     finally{saving=false;controls();}
   };
   $('#testLineConnection').onclick=async()=>{if(testing||!cfg)return;const recipient=cfg.recipients[Number($('#lineTestRecipient').value)];if(!recipient)return;testing=true;controls();try{const result=await app.api('/api/line/test',{method:'POST',body:JSON.stringify({actor:app.getRole(),revision:cfg.revision,role:recipient.role,targetId:recipient.targetId})});$('#lineFormStatus').textContent=`เข้าคิวข้อความทดสอบ #${result.id} แล้ว ดูผลส่งด้านล่าง`;await load(false);}catch(error){$('#lineFormStatus').textContent=error.message;}finally{testing=false;controls();}};
-  setInterval(()=>{if(root.open&&editable()&&!document.hidden&&!loading&&!saving)load(false);},10000);
+  setInterval(()=>{if(root.open&&editable()&&!document.hidden&&!loading&&!saving)load(false);},30000);
   access();
 
   async function openTask(){

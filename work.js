@@ -215,5 +215,5 @@
       if(opts.openNewPlan&&$('#newWorkPlan'))$('#newWorkPlan').click();
     }
   };
-  setInterval(()=>{if(view.classList.contains('active')&&!dialog.open)load();},60000);
+  setInterval(()=>{if(view.classList.contains('active')&&!dialog.open&&!document.hidden)load();},180000);
 })();

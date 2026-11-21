@@ -5,6 +5,7 @@ This demo intentionally has no authentication. UI roles are workflow-test actors
 """
 from __future__ import annotations
 
+import gzip
 import json
 import hashlib
 import secrets
@@ -420,8 +421,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def send_json(self, value, status: int = 200) -> None:
         body = json.dumps(value, ensure_ascii=False).encode("utf-8")
+        compressed = len(body) > 2048 and "gzip" in (self.headers.get("Accept-Encoding") or "")
+        if compressed:
+            body = gzip.compress(body, compresslevel=5)
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        if compressed:
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         if getattr(self,"session_cookie",None):
@@ -1269,13 +1276,33 @@ class Handler(BaseHTTPRequestHandler):
         if not target.is_file():
             self.send_error(404)
             return
+        st = target.stat()
+        etag = f'W/"{st.st_mtime_ns:x}-{st.st_size:x}"'
+        is_html = target.suffix == ".html"
+        has_version = "v=" in (parsed.query or "")
+        cache_ctrl = "no-cache" if is_html else ("public, max-age=31536000, immutable" if has_version else ("public, max-age=86400" if path.startswith("/assets/") else "public, max-age=300"))
+        if (self.headers.get("If-None-Match") or "").strip() == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", cache_ctrl)
+            self.end_headers()
+            return
         data = target.read_bytes()
         content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        compressible = content_type.startswith("text/") or target.suffix in (".js", ".json", ".svg", ".css")
         if content_type.startswith("text/") or target.suffix in (".js", ".json", ".svg"):
             content_type += "; charset=utf-8"
+        use_gzip = compressible and len(data) > 1024 and "gzip" in (self.headers.get("Accept-Encoding") or "")
+        if use_gzip:
+            data = gzip.compress(data, compresslevel=6)
         self.send_response(200)
         self.send_header("Content-Type", content_type)
+        if use_gzip:
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control", cache_ctrl)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(data)
@@ -1470,7 +1497,7 @@ def main() -> None:
     stop_scheduler = threading.Event()
     def run_scheduler():
         WORK_SCHEDULER["running"] = True
-        interval = max(1, int(os.environ.get("WORK_SCHEDULER_INTERVAL_SECONDS", "60")))
+        interval = max(1, int(os.environ.get("WORK_SCHEDULER_INTERVAL_SECONDS", "900")))
         while not stop_scheduler.is_set():
             try:
                 with managed_connection() as db:
@@ -1485,6 +1512,7 @@ def main() -> None:
     threading.Thread(target=run_scheduler, name="scheduled-work", daemon=True).start()
     def run_line():
         LINE_WORKER["running"] = True
+        line_interval = max(5, int(os.environ.get("LINE_WORKER_INTERVAL_SECONDS", "30")))
         while not stop_scheduler.is_set():
             try:
                 dispatch_line(connect)
@@ -1492,7 +1520,7 @@ def main() -> None:
             except Exception as exc:
                 LINE_WORKER["lastError"] = type(exc).__name__
                 print("LINE worker error: "+type(exc).__name__)
-            stop_scheduler.wait(5)
+            stop_scheduler.wait(line_interval)
         LINE_WORKER["running"] = False
     threading.Thread(target=run_line,name="line-notifications",daemon=True).start()
     print(f"SQLite prototype listening on http://{HOST}:{PORT}")
